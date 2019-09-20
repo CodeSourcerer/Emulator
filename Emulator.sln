@@ -1,6 +1,7 @@
-
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29123.88
+MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Emulator", "Emulator\Emulator.csproj", "{DEECF887-3B10-45A5-BAFF-9B9C0BE19A38}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CS6502", "CS6502\CS6502.csproj", "{44863BD3-D035-4EDA-A5CC-25B505DA8AEB}"
@@ -19,5 +20,11 @@ Global
 		{44863BD3-D035-4EDA-A5CC-25B505DA8AEB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{44863BD3-D035-4EDA-A5CC-25B505DA8AEB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{44863BD3-D035-4EDA-A5CC-25B505DA8AEB}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {075FE65F-3E11-475F-98E0-517CBDD7FF0E}
 	EndGlobalSection
 EndGlobal
