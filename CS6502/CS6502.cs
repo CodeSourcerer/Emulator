@@ -6,14 +6,38 @@ namespace CS6502
     [Flags]
     public enum FLAGS6502
     {
-        C = (1 << 0),   // Carry
-        Z = (1 << 1),   // Zero
-        I = (1 << 2),   // Interrupt enable
-        D = (1 << 3),   // Decimal mode (unused right now)
-        B = (1 << 4),   // Break
-        U = (1 << 5),   // Unused
-        V = (1 << 6),   // Overflow
-        N = (1 << 7)    // Negative
+        /// <summary>
+        /// Carry
+        /// </summary>
+        C = (1 << 0),
+        /// <summary>
+        /// Zero
+        /// </summary>
+        Z = (1 << 1),
+        /// <summary>
+        /// Interrupt enable
+        /// </summary>
+        I = (1 << 2),
+        /// <summary>
+        /// Decimal (unused right now)
+        /// </summary>
+        D = (1 << 3),
+        /// <summary>
+        /// Break
+        /// </summary>
+        B = (1 << 4),
+        /// <summary>
+        /// Unused
+        /// </summary>
+        U = (1 << 5),
+        /// <summary>
+        /// Overflow
+        /// </summary>
+        V = (1 << 6),
+        /// <summary>
+        /// Negative
+        /// </summary>
+        N = (1 << 7)
     }
 
     public class CS6502
@@ -45,10 +69,14 @@ namespace CS6502
 
         #endregion // Well-Known Addresses
 
-        public CS6502(IBus bus)
+        public CS6502()
+        {
+            build_lookup();
+        }
+
+        public void ConnectBus(IBus bus)
         {
             this.bus = bus;
-            build_lookup();
         }
 
         #region Register Properties
@@ -591,16 +619,67 @@ namespace CS6502
          * conditions combined with certain addressing modes. If that is the case, they return 1.
          *****/
 
+        /// <summary>
+        /// Instruction: Add with Carry In
+        /// </summary>
+        /// <returns></returns>
+        /// <remarks>
+        /// Function:    A = A + M + C
+        /// Flags Out:   C, V, N, Z
+        /// </remarks>
         private byte ADC()
         {
-            throw new NotImplementedException();
+            // Grab the data that we are adding to the accumulator
+            fetch();
+
+            // Add is performed in 16-bit domain for emulation to capture any
+            // carry bit, which will exist in bit 8 of the 16-bit word
+            temp = (ushort)(a + fetched + getFlag(FLAGS6502.C));
+
+            // The carry flag out exists in the high byte bit 0
+            setFlag(FLAGS6502.C, temp > 255);
+
+            // The Zero flag is set if the result is 0
+            setFlag(FLAGS6502.Z, (temp & 0x00FF) == 0);
+
+            // The signed Overflow flag is set based on all that up there! :D
+            setFlag(FLAGS6502.V, ((~(a ^ fetched) & (a ^ temp)) & 0x0080) == 1);
+
+            // The negative flag is set to the most significant bit of the result
+            setFlag(FLAGS6502.N, (temp & 0x80) != 0);
+
+            // Load the result into the accumulator (it's 8-bit dont forget!)
+            a = (byte)(temp & 0x00FF);
+
+            // This instruction has the potential to require an additional clock cycle
+            return 1;
         }
 
+        /// <summary>
+        /// Instruction: Bitwise Logic AND
+        /// </summary>
+        /// <returns></returns>
+        /// <remarks>
+        /// Function:    A = A & M
+        /// Flags Out:   N, Z
+        /// </remarks>
         private byte AND()
         {
-            throw new NotImplementedException();
+            fetch();
+            a = (byte)(a & fetched);
+            setFlag(FLAGS6502.Z, a == 0x00);
+            setFlag(FLAGS6502.N, (a & 0x80) != 0);
+            return 1;
         }
 
+        /// <summary>
+        /// Instruction: Arithmetic Shift Left
+        /// </summary>
+        /// <returns></returns>
+        /// <remarks>
+        /// Function:    A = C <- (A << 1) <- 0
+        /// Flags Out:   N, Z, C
+        /// </remarks>
         private byte ASL()
         {
             throw new NotImplementedException();
@@ -806,9 +885,31 @@ namespace CS6502
             throw new NotImplementedException();
         }
 
+        /// <summary>
+        /// Instruction: Subtraction with Borrow In
+        /// </summary>
+        /// <returns></returns>
+        /// <remarks>
+        /// Function:    A = A - M - (1 - C)
+        /// Flags Out:   C, V, N, Z
+        /// </remarks>
         private byte SBC()
         {
-            throw new NotImplementedException();
+            fetch();
+
+            // Operating in 16-bit domain to capture carry out
+
+            // We can invert the bottom 8 bits with bitwise xor
+            ushort value = (ushort)((fetched) ^ 0x00FF);
+
+            // Notice this is exactly the same as addition from here!
+            temp = (ushort)(a + value + getFlag(FLAGS6502.C));
+            setFlag(FLAGS6502.C, temp > 255);
+            setFlag(FLAGS6502.Z, ((temp & 0x00FF) == 0));
+            setFlag(FLAGS6502.V, ((temp ^ a) & (temp ^ value) & 0x0080) == 1); // not sure I translated this right
+            setFlag(FLAGS6502.N, (temp & 0x0080) != 0);
+            a = (byte)(temp & 0x00FF);
+            return 1;
         }
 
         private byte SEC()

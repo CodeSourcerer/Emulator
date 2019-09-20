@@ -1,4 +1,5 @@
 ﻿using System;
+using CS6502;
 
 namespace Emulator
 {
@@ -7,6 +8,9 @@ namespace Emulator
         static void Main(string[] args)
         {
             Console.WriteLine("Hello World!");
+            CS6502.CS6502 cpu = new CS6502.CS6502();
+            IBus nes = new Bus(cpu);
+            cpu.ConnectBus(nes);
         }
     }
 }
