@@ -255,7 +255,10 @@ namespace CS6502
         /// <returns></returns>
         private byte fetch()
         {
-            throw new NotImplementedException();
+            if (!(opcode_lookup[opcode].addr_mode == IMP))
+                fetched = read(addr_abs);
+
+            return fetched;
         }
 
         #region Flag Methods
