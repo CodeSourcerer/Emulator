@@ -682,7 +682,16 @@ namespace CS6502
         /// </remarks>
         private byte ASL()
         {
-            throw new NotImplementedException();
+            fetch();
+            temp = (ushort)(fetched << 1);
+            setFlag(FLAGS6502.C, (temp & 0xFF00) > 0);
+            setFlag(FLAGS6502.Z, (temp & 0x00FF) == 0x00);
+            setFlag(FLAGS6502.N, (temp & 0x80) != 0);
+            if (opcode_lookup[opcode].addr_mode == IMP)
+                a = (byte)(temp & 0x00FF);
+            else
+                write(addr_abs, (byte)(temp & 0x00FF));
+            return 0;
         }
 
         private byte BCC()
@@ -720,9 +729,25 @@ namespace CS6502
             throw new NotImplementedException();
         }
 
+        /// <summary>
+        /// Instruction: Break
+        /// Function:    Program Sourced Interrupt
+        /// </summary>
+        /// <returns></returns>
         private byte BRK()
         {
-            throw new NotImplementedException();
+            pc++;
+
+            setFlag(FLAGS6502.I, true);
+            push((byte)((pc >> 8) & 0x00FF));
+            push((byte)(pc & 0x00FF));
+
+            setFlag(FLAGS6502.B, true);
+            push((byte)status);
+            setFlag(FLAGS6502.B, false);
+
+            pc = (ushort)(read(0xFFFE) | (read(0xFFFF) << 8));
+            return 0;
         }
 
         private byte BVC()
@@ -832,17 +857,52 @@ namespace CS6502
 
         private byte LSR()
         {
-            throw new NotImplementedException();
+            fetch();
+            setFlag(FLAGS6502.C, (fetched & 0x0001) == 1);
+            temp = (ushort)(fetched >> 1);
+            setFlag(FLAGS6502.Z, (temp & 0x00FF) == 0x0000);
+            setFlag(FLAGS6502.N, (temp & 0x0080) != 0);
+            if (opcode_lookup[opcode].addr_mode == IMP)
+                a = (byte)(temp & 0x00FF);
+            else
+                write(addr_abs, (byte)(temp & 0x00FF));
+            return 0;
         }
 
         private byte NOP()
         {
-            throw new NotImplementedException();
+            // Sadly not all NOPs are equal, Ive added a few here
+            // based on https://wiki.nesdev.com/w/index.php/CPU_unofficial_opcodes
+            // and will add more based on game compatibility, and ultimately
+            // I'd like to cover all illegal opcodes too
+            switch (opcode)
+            {
+                case 0x1C:
+                case 0x3C:
+                case 0x5C:
+                case 0x7C:
+                case 0xDC:
+                case 0xFC:
+                    return 1;
+            }
+            return 0;
         }
 
+        /// <summary>
+        /// Instruction: Bitwise Logic OR
+        /// </summary>
+        /// <returns></returns>
+        /// <remarks>
+        /// Function:    A = A | M
+        /// Flags Out:   N, Z
+        /// </remarks>
         private byte ORA()
         {
-            throw new NotImplementedException();
+            fetch();
+            a |= fetched;
+            setFlag(FLAGS6502.Z, a == 0x00);
+            setFlag(FLAGS6502.N, (a & 0x80) != 0);
+            return 1;
         }
 
         private byte PHA()
