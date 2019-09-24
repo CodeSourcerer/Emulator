@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using CS6502;
 
@@ -8,18 +9,32 @@ namespace Emulator
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello World!");
             CS6502.CS6502 cpu = new CS6502.CS6502();
             Bus nes = new Bus(0xFFFF);
             cpu.ConnectBus(nes);
 
-            loadROM(nes, "./tests/1.Branch_Basics.nes");
+            string programStr = "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA";
+            ushort offset = 0x8000;
 
-            do
+            string[] prog = programStr.Split(" ".ToCharArray());
+
+            foreach (string instByte in prog)
             {
-                cpu.Clock();
+                nes.Write(offset, Convert.ToByte(instByte, 16));
+                offset++;
             }
-            while (true);
+
+            // Set reset vector
+            nes.Write(CS6502.CS6502.ADDR_PC, 0x00);
+            nes.Write(CS6502.CS6502.ADDR_PC + 1, 0x80);
+
+            // Extract disassembly
+            Dictionary<ushort, string> mapAsm = cpu.Disassemble(0x8000, (ushort)(0x8000 + prog.Length));
+
+            foreach(var m in mapAsm)
+            {
+                Console.WriteLine(m.Value);
+            }
         }
 
         private static void loadROM(Bus nes, string filename)

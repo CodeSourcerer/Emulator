@@ -15,8 +15,4 @@
     <ProjectReference Include="..\CS6502\CS6502.csproj" />
   </ItemGroup>
 
-  <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-    <Exec Command="xcopy /y /s /I $(ProjectDir)tests $(TargetDir)tests" />
-  </Target>
-
 </Project>
