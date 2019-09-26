@@ -763,13 +763,13 @@ namespace CS6502
             setFlag(FLAGS6502.C, temp > 255);
 
             // The Zero flag is set if the result is 0
-            setFlag(FLAGS6502.Z, (temp & 0x00FF) == 0);
+            testAndSet(FLAGS6502.Z, temp);
 
             // The signed Overflow flag is set based on all that up there! :D
             setFlag(FLAGS6502.V, ((~(a ^ fetched) & (a ^ temp)) & 0x0080) == 1);
 
             // The negative flag is set to the most significant bit of the result
-            setFlag(FLAGS6502.N, (temp & 0x80) != 0);
+            testAndSet(FLAGS6502.N, temp);
 
             // Load the result into the accumulator (it's 8-bit dont forget!)
             a = (byte)(temp & 0x00FF);
@@ -790,32 +790,67 @@ namespace CS6502
         {
             fetch();
             a = (byte)(a & fetched);
-            setFlag(FLAGS6502.Z, a == 0x00);
-            setFlag(FLAGS6502.N, (a & 0x80) != 0);
+            testAndSet(FLAGS6502.Z, a);
+            testAndSet(FLAGS6502.N, a);
             return 1;
         }
 
         /// <summary>
         /// Instruction: Arithmetic Shift Left
-        /// </summary>
-        /// <returns></returns>
-        /// <remarks>
         /// Function:    A = C <- (A << 1) <- 0
         /// Flags Out:   N, Z, C
-        /// </remarks>
+        /// </summary>
+        /// <returns></returns>
         private byte ASL()
         {
             fetch();
             temp = (ushort)(fetched << 1);
             setFlag(FLAGS6502.C, (temp & 0xFF00) > 0);
-            setFlag(FLAGS6502.Z, (temp & 0x00FF) == 0x00);
-            setFlag(FLAGS6502.N, (temp & 0x80) != 0);
+            testAndSet(FLAGS6502.Z, temp);
+            testAndSet(FLAGS6502.N, temp);
             if (opcode_lookup[opcode].addr_mode == IMP)
                 a = (byte)(temp & 0x00FF);
             else
                 write(addr_abs, (byte)(temp & 0x00FF));
             return 0;
         }
+
+        /// <summary>
+        /// Instruction: Test memory bits with accumulator
+        /// Flags Out:   Z, N, V
+        /// </summary>
+        /// <returns></returns>
+        private byte BIT()
+        {
+            fetch();
+            temp = (ushort)(a & fetched);
+            testAndSet(FLAGS6502.Z, temp);
+            testAndSet(FLAGS6502.N, fetched);
+            setFlag(FLAGS6502.V, (fetched & (1 << 6)) != 0);
+            return 0;
+        }
+
+        /// <summary>
+        /// Instruction: Shift one bit right
+        /// Function:    A = 0 -> (A >> 1) -> C
+        /// Flags Out:   C, Z, N
+        /// </summary>
+        /// <returns></returns>
+        private byte LSR()
+        {
+            fetch();
+            setFlag(FLAGS6502.C, (fetched & 0x0001) == 1);
+            temp = (ushort)(fetched >> 1);
+            testAndSet(FLAGS6502.Z, temp);
+            testAndSet(FLAGS6502.N, temp);
+            if (opcode_lookup[opcode].addr_mode == IMP)
+                a = (byte)(temp & 0x00FF);
+            else
+                write(addr_abs, (byte)(temp & 0x00FF));
+            return 0;
+        }
+
+        #region Branch instructions
 
         /// <summary>
         /// Instruction: Branch if Carry Clear
@@ -874,16 +909,6 @@ namespace CS6502
 
                 pc = addr_abs;
             }
-            return 0;
-        }
-
-        private byte BIT()
-        {
-            fetch();
-            temp = (ushort)(a & fetched);
-            setFlag(FLAGS6502.Z, (temp & 0x00FF) == 0x00);
-            setFlag(FLAGS6502.N, (fetched & (1 << 7)) != 0);
-            setFlag(FLAGS6502.V, (fetched & (1 << 6)) != 0);
             return 0;
         }
 
@@ -948,27 +973,6 @@ namespace CS6502
         }
 
         /// <summary>
-        /// Instruction: Break
-        /// Function:    Program Sourced Interrupt
-        /// </summary>
-        /// <returns></returns>
-        private byte BRK()
-        {
-            pc++;
-
-            setFlag(FLAGS6502.I, true);
-            push((byte)((pc >> 8) & 0x00FF));
-            push((byte)(pc & 0x00FF));
-
-            setFlag(FLAGS6502.B, true);
-            push((byte)status);
-            setFlag(FLAGS6502.B, false);
-
-            pc = (ushort)(read(0xFFFE) | (read(0xFFFF) << 8));
-            return 0;
-        }
-
-        /// <summary>
         /// Instruction: Branch if Overflow Clear
         /// Function:    if(V == 0) pc = address
         /// </summary>
@@ -1008,6 +1012,31 @@ namespace CS6502
             return 0;
         }
 
+        #endregion // Branch instructions
+
+        /// <summary>
+        /// Instruction: Break
+        /// Function:    Program Sourced Interrupt
+        /// </summary>
+        /// <returns></returns>
+        private byte BRK()
+        {
+            pc++;
+
+            setFlag(FLAGS6502.I, true);
+            push((byte)((pc >> 8) & 0x00FF));
+            push((byte)(pc & 0x00FF));
+
+            setFlag(FLAGS6502.B, true);
+            push((byte)status);
+            setFlag(FLAGS6502.B, false);
+
+            pc = (ushort)(read(0xFFFE) | (read(0xFFFF) << 8));
+            return 0;
+        }
+
+        #region Clear instructions
+
         /// <summary>
         /// Instruction: Clear Carry Flag
         /// Function:    C = 0
@@ -1030,26 +1059,68 @@ namespace CS6502
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Disable Interrupts / Clear Interrupt Flag
+        /// Function:    I = 0
+        /// </summary>
+        /// <returns></returns>
         private byte CLI()
         {
+            setFlag(FLAGS6502.I, false);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Clear Overflow Flag
+        /// Function:    V = 0
+        /// </summary>
+        /// <returns></returns>
         private byte CLV()
         {
+            setFlag(FLAGS6502.V, false);
             return 0;
         }
 
+        #endregion // Clear instructions
+
+        /// <summary>
+        /// Instruction: Compare Accumulator
+        /// Function:    C <- A >= M      Z <- (A - M) == 0
+        /// Flags Out:   N, C, Z
+        /// </summary>
+        /// <returns></returns>
         private byte CMP()
         {
-            return 0;
+            fetch();
+            temp = (ushort)(a - fetched);
+            setFlag(FLAGS6502.C, a >= fetched);
+            testAndSet(FLAGS6502.Z, temp);
+            testAndSet(FLAGS6502.N, temp);
+            return 1;
         }
 
+        /// <summary>
+        /// Instruction: Compare X Register
+        /// Function:    C <- X >= M      Z <- (X - M) == 0
+        /// Flags Out:   N, C, Z
+        /// </summary>
+        /// <returns></returns>
         private byte CPX()
         {
+            fetch();
+            temp = (ushort)(x - fetched);
+            setFlag(FLAGS6502.C, x >= fetched);
+            testAndSet(FLAGS6502.Z, temp);
+            testAndSet(FLAGS6502.N, temp);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Compare Y Register
+        /// Function:    C <- Y >= M      Z <- (Y - M) == 0
+        /// Flags Out:   N, C, Z
+        /// </summary>
+        /// <returns></returns>
         private byte CPY()
         {
             return 0;
@@ -1110,8 +1181,8 @@ namespace CS6502
         {
             fetch();
             a = fetched;
-            setFlag(FLAGS6502.Z, a == 0x00);
-            setFlag(FLAGS6502.N, (a & 0x80) != 0);
+            testAndSet(FLAGS6502.Z, a);
+            testAndSet(FLAGS6502.N, a);
             return 1;
         }
 
@@ -1125,8 +1196,8 @@ namespace CS6502
         {
             fetch();
             x = fetched;
-            setFlag(FLAGS6502.Z, x == 0x00);
-            setFlag(FLAGS6502.N, (x & 0x80) != 0);
+            testAndSet(FLAGS6502.Z, x);
+            testAndSet(FLAGS6502.N, x);
             return 1;
         }
 
@@ -1140,23 +1211,9 @@ namespace CS6502
         {
             fetch();
             y = fetched;
-            setFlag(FLAGS6502.Z, y == 0x00);
-            setFlag(FLAGS6502.N, (y & 0x80) != 0);
+            testAndSet(FLAGS6502.Z, y);
+            testAndSet(FLAGS6502.N, y);
             return 1;
-        }
-
-        private byte LSR()
-        {
-            fetch();
-            setFlag(FLAGS6502.C, (fetched & 0x0001) == 1);
-            temp = (ushort)(fetched >> 1);
-            setFlag(FLAGS6502.Z, (temp & 0x00FF) == 0x0000);
-            setFlag(FLAGS6502.N, (temp & 0x0080) != 0);
-            if (opcode_lookup[opcode].addr_mode == IMP)
-                a = (byte)(temp & 0x00FF);
-            else
-                write(addr_abs, (byte)(temp & 0x00FF));
-            return 0;
         }
 
         private byte NOP()
@@ -1190,8 +1247,8 @@ namespace CS6502
         {
             fetch();
             a |= fetched;
-            setFlag(FLAGS6502.Z, a == 0x00);
-            setFlag(FLAGS6502.N, (a & 0x80) != 0);
+            testAndSet(FLAGS6502.Z, a);
+            testAndSet(FLAGS6502.N, a);
             return 1;
         }
 
@@ -1257,7 +1314,7 @@ namespace CS6502
             setFlag(FLAGS6502.C, temp > 255);
             setFlag(FLAGS6502.Z, ((temp & 0x00FF) == 0));
             setFlag(FLAGS6502.V, ((temp ^ a) & (temp ^ value) & 0x0080) == 1); // not sure I translated this right
-            setFlag(FLAGS6502.N, (temp & 0x0080) != 0);
+            testAndSet(FLAGS6502.N, temp);
             a = (byte)(temp & 0x00FF);
             return 1;
         }
@@ -1598,6 +1655,31 @@ namespace CS6502
         {
             write((ushort)(ADDR_STACK + sp), data);
             sp--;
+        }
+
+        private void testAndSet(FLAGS6502 flag, ushort data)
+        {
+            switch (flag)
+            {
+                case FLAGS6502.B:
+                    break;
+                case FLAGS6502.C:
+                    break;
+                case FLAGS6502.D:
+                    break;
+                case FLAGS6502.I:
+                    break;
+                case FLAGS6502.N:
+                    setFlag(flag, (data & 0x0080) != 0);
+                    break;
+                case FLAGS6502.U:
+                    break;
+                case FLAGS6502.V:
+                    break;
+                case FLAGS6502.Z:
+                    setFlag(flag, (data & 0x00FF) == 0);
+                    break;
+            }
         }
 
 #if LOGMODE

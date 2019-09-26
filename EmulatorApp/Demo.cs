@@ -110,7 +110,7 @@ namespace EmulatorApp
 
         static void Main(string[] args)
         {
-            Demo demo = new Demo("Demo");
+            Demo demo = new Demo("NES Emulator");
             demo.Start();
         }
 
