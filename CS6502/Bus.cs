@@ -53,5 +53,13 @@ namespace CS6502
             if (ppu != null)
                 ((CS2C02)ppu).ConnectCartridge(cartridge);
         }
+
+        public void clock()
+        {
+            BusDevice ppu = _busDeviceList.Find((bd) => bd.DeviceType == BusDeviceType.PPU);
+            if (ppu != null)
+                ((CS2C02)ppu).clock();
+
+        }
     }
 }

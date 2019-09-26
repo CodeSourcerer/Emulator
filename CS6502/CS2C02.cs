@@ -16,9 +16,9 @@ namespace CS6502
         private Pixel[] _palScreen = new Pixel[0x40];
         private Sprite _screen = new Sprite(256, 240);
         private Sprite[] _nameTable = { new Sprite(256, 240), new Sprite(256, 240) };
-        private Sprite[] _patternTable = { new Sprite(128, 128), new Sprite(128, 128) };
+        // private Sprite[] _patternTable = { new Sprite(128, 128), new Sprite(128, 128) };
 
-        private ushort _scanline;
+        private short  _scanline;
         private ushort _cycle;
         private byte[][] _tblName = new byte[2][];
         //private byte[][] _tblPattern = new byte[2][];
@@ -34,6 +34,8 @@ namespace CS6502
             _tblName[1] = new byte[1024];
             //_tblPattern[0] = new byte[4096];
             //_tblPattern[1] = new byte[4096];
+
+            buildPalette();
         }
 
         #region Debugging utilities
@@ -51,13 +53,13 @@ namespace CS6502
             return null;
         }
 
-        public Sprite GetPatternTable(int i)
-        {
-            if (i < 2)
-                return _patternTable[i];
+        //public Sprite GetPatternTable(int i)
+        //{
+        //    if (i < 2)
+        //        return _patternTable[i];
 
-            return null;
-        }
+        //    return null;
+        //}
 
         public bool FrameComplete { get; set; }
 
@@ -147,6 +149,22 @@ namespace CS6502
         }
 
         public void clock()
+        {
+            _cycle++;
+
+            if (_cycle >= 341)
+            {
+                _cycle = 0;
+                _scanline++;
+                if(_scanline >= 261)
+                {
+                    _scanline = -1;
+                    FrameComplete = true;
+                }
+            }
+        }
+
+        private void buildPalette()
         {
 
         }

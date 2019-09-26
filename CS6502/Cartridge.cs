@@ -39,10 +39,10 @@ namespace CS6502
         {
             data = 0;
 
-            // TODO: Use mapper
-            if (addr >= 0x8000 && addr <= 0xFFFF)
+            uint mapped_addr;
+            if (mapper.cpuMapRead(addr, out mapped_addr))
             {
-                data = PRGMemory[addr - 0x8000];
+                data = PRGMemory[mapped_addr];
                 return true;
             }
 
@@ -51,10 +51,10 @@ namespace CS6502
 
         public bool Write(ushort addr, byte data)
         {
-            // TODO: Use mapper
-            if (addr >= 0x8000 && addr <= 0xFFFF)
+            uint mapped_addr;
+            if (mapper.cpuMapWrite(addr, out mapped_addr))
             {
-                PRGMemory[addr - 0x8000] = data;
+                PRGMemory[mapped_addr] = data;
                 return true;
             }
 
@@ -68,11 +68,25 @@ namespace CS6502
         {
             data = 0;
 
+            uint mapped_addr;
+            if (mapper.cpuMapRead(addr, out mapped_addr))
+            {
+                data = CHRMemory[mapped_addr];
+                return true;
+            }
+
             return false;
         }
 
         public bool ppuWrite(ushort addr, byte data)
         {
+            uint mapped_addr;
+            if (mapper.cpuMapWrite(addr, out mapped_addr))
+            {
+                CHRMemory[mapped_addr] = data;
+                return true;
+            }
+
             return false;
         }
 

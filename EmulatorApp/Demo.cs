@@ -37,6 +37,7 @@ namespace EmulatorApp
 
         public void Start(Cartridge cartridge)
         {
+            // System.Timers.Timer t = new System.Timers.Timer();
             ram = new Ram(0x07FF, 0x1FFF);
             busDevices = new BusDevice[] { ram };
             nesBus = new Bus(busDevices);

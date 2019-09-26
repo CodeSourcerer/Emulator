@@ -40,6 +40,7 @@
     <Compile Include="Ram.cs" />
     <Compile Include="CS2C02.cs" />
     <Compile Include="Mappers\Mapper_000.cs" />
+    <Compile Include="Clock.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="csPixelGameEngine">
