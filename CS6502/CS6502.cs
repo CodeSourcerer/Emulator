@@ -824,16 +824,56 @@ namespace CS6502
         /// <returns></returns>
         private byte BCC()
         {
+            if (getFlag(FLAGS6502.C) == 0)
+            {
+                cycles++;
+                addr_abs = (ushort)(pc + addr_rel);
+
+                if ((addr_abs & 0xFF00) != (pc & 0xFF00))
+                    cycles++;
+
+                pc = addr_abs;
+            }
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Branch if Carry Set
+        /// Function:    if(C == 1) pc = address
+        /// </summary>
+        /// <returns></returns>
         private byte BCS()
         {
+            if (getFlag(FLAGS6502.C) == 1)
+            {
+                cycles++;
+                addr_abs = (ushort)(pc + addr_rel);
+
+                if ((addr_abs & 0xFF00) != (pc & 0xFF00))
+                    cycles++;
+
+                pc = addr_abs;
+            }
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Branch if Equal
+        /// Function:    if(Z == 1) pc = address
+        /// </summary>
+        /// <returns></returns>
         private byte BEQ()
         {
+            if (getFlag(FLAGS6502.Z) == 1)
+            {
+                cycles++;
+                addr_abs = (ushort)(pc + addr_rel);
+
+                if ((addr_abs & 0xFF00) != (pc & 0xFF00))
+                    cycles++;
+
+                pc = addr_abs;
+            }
             return 0;
         }
 
