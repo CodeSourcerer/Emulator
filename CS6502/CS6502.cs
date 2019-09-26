@@ -262,7 +262,7 @@ namespace CS6502
         /// <returns></returns>
         public Dictionary<ushort, string> Disassemble(ushort start, ushort stop)
         {
-            ushort addr = start;
+            uint addr = start;
             byte value = 0x00, lo = 0x00, hi = 0x00;
             Dictionary<ushort, string> mapLines = new Dictionary<ushort, string>();
             ushort line_addr = 0;
@@ -278,12 +278,12 @@ namespace CS6502
             // with the readable output
             while (addr <= stop)
             {
-                line_addr = addr;
+                line_addr = (ushort)addr;
 
                 string hexAddr = addr.ToString("X4");
 
                 // Read instruction, and get its readable name
-                byte opcode = bus.Read(addr, true);
+                byte opcode = bus.Read((ushort)addr, true);
                 addr++;
 
                 // Get oprands from desired locations, and form the
@@ -298,80 +298,80 @@ namespace CS6502
                 }
                 else if (opcode_lookup[opcode].addr_mode == IMM)
                 {
-                    value = bus.Read(addr, true);
+                    value = bus.Read((ushort)addr, true);
                     addr++;
                     addressMode = string.Format("#${0} {{IMM}}", value.ToString("X2"));
                 }
                 else if (opcode_lookup[opcode].addr_mode == ZP0)
                 {
-                    lo = bus.Read(addr, true);
+                    lo = bus.Read((ushort)addr, true);
                     hi = 0x00;
                     addr++;
                     addressMode = string.Format("${0} {{ZP0}}", lo.ToString("X2"));
                 }
                 else if (opcode_lookup[opcode].addr_mode == ZPX)
                 {
-                    lo = bus.Read(addr, true);
+                    lo = bus.Read((ushort)addr, true);
                     hi = 0x00;
                     addr++;
                     addressMode = string.Format("${0}, X {{ZPX}}", lo.ToString("X2"));
                 }
                 else if (opcode_lookup[opcode].addr_mode == ZPY)
                 {
-                    lo = bus.Read(addr, true);
+                    lo = bus.Read((ushort)addr, true);
                     hi = 0x00;
                     addr++;
                     addressMode = string.Format("${0}, Y {{ZPY}}", lo.ToString("X2"));
                 }
                 else if (opcode_lookup[opcode].addr_mode == IZX)
                 {
-                    lo = bus.Read(addr, true);
+                    lo = bus.Read((ushort)addr, true);
                     hi = 0x00;
                     addr++;
                     addressMode = string.Format("(${0}, X) {{IZX}}", lo.ToString("X2"));
                 }
                 else if (opcode_lookup[opcode].addr_mode == IZY)
                 {
-                    lo = bus.Read(addr, true);
+                    lo = bus.Read((ushort)addr, true);
                     hi = 0x00;
                     addr++;
                     addressMode = string.Format("(${0}), Y {{IZY}}", lo.ToString("X2"));
                 }
                 else if (opcode_lookup[opcode].addr_mode == ABS)
                 {
-                    lo = bus.Read(addr, true);
+                    lo = bus.Read((ushort)addr, true);
                     addr++;
-                    hi = bus.Read(addr, true);
+                    hi = bus.Read((ushort)addr, true);
                     addr++;
                     addressMode = string.Format("${0} {{ABS}}", ((hi << 8) | lo).ToString("X4"));
                 }
                 else if (opcode_lookup[opcode].addr_mode == ABX)
                 {
-                    lo = bus.Read(addr, true);
+                    lo = bus.Read((ushort)addr, true);
                     addr++;
-                    hi = bus.Read(addr, true);
+                    hi = bus.Read((ushort)addr, true);
                     addr++;
                     addressMode = string.Format("${0}, X {{ABX}}", ((hi << 8) | lo).ToString("X4"));
                 }
                 else if (opcode_lookup[opcode].addr_mode == ABY)
                 {
-                    lo = bus.Read(addr, true);
+                    lo = bus.Read((ushort)addr, true);
                     addr++;
-                    hi = bus.Read(addr, true);
+                    hi = bus.Read((ushort)addr, true);
                     addr++;
                     addressMode = string.Format("${0}, Y {{ABY}}", ((hi << 8) | lo).ToString("X4"));
                 }
                 else if (opcode_lookup[opcode].addr_mode == IND)
                 {
-                    lo = bus.Read(addr, true);
+                    lo = bus.Read((ushort)addr, true);
                     addr++;
-                    hi = bus.Read(addr, true);
+                    hi = bus.Read((ushort)addr, true);
                     addr++;
                     addressMode = string.Format("(${0}) {{IND}}", ((hi << 8) | lo).ToString("X4"));
                 }
                 else if (opcode_lookup[opcode].addr_mode == REL)
                 {
-                    value = bus.Read(addr, true);
+                    value = bus.Read((ushort)addr, true);
                     addr++;
                     addressMode = string.Format("${0} [${1}] {{REL}}", value.ToString("X2"), (addr + (sbyte)value).ToString("X4"));
                 }
@@ -824,37 +824,37 @@ namespace CS6502
         /// <returns></returns>
         private byte BCC()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte BCS()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte BEQ()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte BIT()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte BMI()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte BNE()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte BPL()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         /// <summary>
@@ -880,107 +880,107 @@ namespace CS6502
 
         private byte BVC()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte BVS()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte CLC()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte CLD()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte CLI()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte CLV()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte CMP()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte CPX()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte CPY()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte DEC()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte DEX()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte DEY()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte EOR()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte INC()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte INX()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte INY()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte JMP()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte JSR()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte LDA()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte LDX()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte LDY()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte LSR()
@@ -1035,42 +1035,42 @@ namespace CS6502
 
         private byte PHA()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte PHP()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte PLA()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte PLP()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte ROL()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte ROR()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte RTI()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte RTS()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         /// <summary>
@@ -1102,62 +1102,62 @@ namespace CS6502
 
         private byte SEC()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte SED()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte SEI()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte STA()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte STX()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte STY()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte TAX()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte TAY()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte TSX()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte TXA()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte TXS()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         private byte TYA()
         {
-            throw new NotImplementedException();
+            return 0;
         }
 
         /// <summary>
@@ -1166,7 +1166,7 @@ namespace CS6502
         /// <returns></returns>
         private byte XXX()
         {
-            throw new NotImplementedException();
+            return 0;
         }
         #endregion // OpCodes
 

@@ -13,7 +13,7 @@ namespace CS6502
         {
             // this.cpu = cpu;
             this.ramSize = ramAmount;
-            this.ram = new byte[this.ramSize];
+            this.ram = new byte[this.ramSize+1];
         }
 
         public byte Read(ushort addr, bool readOnly = false)
