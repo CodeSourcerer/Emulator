@@ -879,21 +879,71 @@ namespace CS6502
 
         private byte BIT()
         {
+            fetch();
+            temp = (ushort)(a & fetched);
+            setFlag(FLAGS6502.Z, (temp & 0x00FF) == 0x00);
+            setFlag(FLAGS6502.N, (fetched & (1 << 7)) != 0);
+            setFlag(FLAGS6502.V, (fetched & (1 << 6)) != 0);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Branch if Negative
+        /// Function:    if(N == 1) pc = address
+        /// </summary>
+        /// <returns></returns>
         private byte BMI()
         {
+            if (getFlag(FLAGS6502.N) == 1)
+            {
+                cycles++;
+                addr_abs = (ushort)(pc + addr_rel);
+
+                if ((addr_abs & 0xFF00) != (pc & 0xFF00))
+                    cycles++;
+
+                pc = addr_abs;
+            }
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Branch if Not Equal
+        /// Function:    if(Z == 0) pc = address
+        /// </summary>
+        /// <returns></returns>
         private byte BNE()
         {
+            if (getFlag(FLAGS6502.Z) == 0)
+            {
+                cycles++;
+                addr_abs = (ushort)(pc + addr_rel);
+
+                if ((addr_abs & 0xFF00) != (pc & 0xFF00))
+                    cycles++;
+
+                pc = addr_abs;
+            }
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Branch if Positive
+        /// Function:    if(N == 0) pc = address
+        /// </summary>
+        /// <returns></returns>
         private byte BPL()
         {
+            if (getFlag(FLAGS6502.N) == 0)
+            {
+                cycles++;
+                addr_abs = (ushort)(pc + addr_rel);
+
+                if ((addr_abs & 0xFF00) != (pc & 0xFF00))
+                    cycles++;
+
+                pc = addr_abs;
+            }
             return 0;
         }
 
