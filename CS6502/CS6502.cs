@@ -125,7 +125,7 @@ namespace CS6502
         /// Interrupt Request
         /// </summary>
         /// <remarks>
-        /// // Interrupt requests are a complex operation and only happen if the
+        /// Interrupt requests are a complex operation and only happen if the
         /// "disable interrupt" flag is 0. IRQs can happen at any time, but
         /// you dont want them to be destructive to the operation of the running 
         /// program. Therefore the current instruction is allowed to finish
@@ -850,6 +850,21 @@ namespace CS6502
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Bitwise Logic XOR
+        /// Function:    A = A xor M
+        /// Flags Out:   N, Z
+        /// </summary>
+        /// <returns></returns>
+        private byte EOR()
+        {
+            fetch();
+            a = (byte)(a ^ fetched);
+            testAndSet(FLAGS6502.Z, a);
+            testAndSet(FLAGS6502.N, a);
+            return 1;
+        }
+
         #region Branch instructions
 
         /// <summary>
@@ -1123,51 +1138,124 @@ namespace CS6502
         /// <returns></returns>
         private byte CPY()
         {
+            fetch();
+            temp = (ushort)(y - fetched);
+            setFlag(FLAGS6502.C, y >= fetched);
+            testAndSet(FLAGS6502.Z, temp);
+            testAndSet(FLAGS6502.N, temp);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Decrement Value at Memory Location
+        /// Function:    M = M - 1
+        /// Flags Out:   N, Z
+        /// </summary>
+        /// <returns></returns>
         private byte DEC()
         {
+            fetch();
+            temp = (ushort)(fetched - 1);
+            write(addr_abs, (byte)(temp & 0x00FF));
+            testAndSet(FLAGS6502.Z, temp);
+            testAndSet(FLAGS6502.N, temp);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Decrement X Register
+        /// Function:    X = X - 1
+        /// Flags Out:   N, Z
+        /// </summary>
+        /// <returns></returns>
         private byte DEX()
         {
+            x--;
+            testAndSet(FLAGS6502.Z, x);
+            testAndSet(FLAGS6502.N, x);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Decrement Y Register
+        /// Function:    Y = Y - 1
+        /// Flags Out:   N, Z
+        /// </summary>
+        /// <returns></returns>
         private byte DEY()
         {
+            y--;
+            testAndSet(FLAGS6502.Z, y);
+            testAndSet(FLAGS6502.N, y);
             return 0;
         }
 
-        private byte EOR()
-        {
-            return 0;
-        }
-
+        /// <summary>
+        /// Instruction: Increment Value at Memory Location
+        /// Function:    M = M + 1
+        /// Flags Out:   N, Z
+        /// </summary>
+        /// <returns></returns>
         private byte INC()
         {
+            fetch();
+            temp = (ushort)(fetched + 1);
+            write(addr_abs, (byte)(temp & 0x00FF));
+            testAndSet(FLAGS6502.Z, temp);
+            testAndSet(FLAGS6502.N, temp);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Increment X Register
+        /// Function:    X = X + 1
+        /// Flags Out:   N, Z
+        /// </summary>
+        /// <returns></returns>
         private byte INX()
         {
+            x++;
+            testAndSet(FLAGS6502.Z, x);
+            testAndSet(FLAGS6502.N, x);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Increment Y Register
+        /// Function:    Y = Y + 1
+        /// Flags Out:   N, Z
+        /// </summary>
+        /// <returns></returns>
         private byte INY()
         {
+            y++;
+            testAndSet(FLAGS6502.Z, y);
+            testAndSet(FLAGS6502.N, y);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Jump To Location
+        /// Function:    pc = address
+        /// </summary>
+        /// <returns></returns>
         private byte JMP()
         {
+            pc = addr_abs;
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Jump To Sub-Routine
+        /// Function:    PC -> stack, pc = address
+        /// </summary>
+        /// <returns></returns>
         private byte JSR()
         {
+            pc--;
+            push((byte)(pc >> 8));
+            push((byte)(pc & 0x00FF));
+            pc = addr_abs;
             return 0;
         }
 
@@ -1216,12 +1304,18 @@ namespace CS6502
             return 1;
         }
 
+        /// <summary>
+        /// No operation
+        /// </summary>
+        /// <returns></returns>
+        /// <remarks>
+        /// Sadly not all NOPs are equal, Ive added a few here
+        /// based on https://wiki.nesdev.com/w/index.php/CPU_unofficial_opcodes
+        /// and will add more based on game compatibility, and ultimately
+        /// I'd like to cover all illegal opcodes too
+        /// </remarks>
         private byte NOP()
         {
-            // Sadly not all NOPs are equal, Ive added a few here
-            // based on https://wiki.nesdev.com/w/index.php/CPU_unofficial_opcodes
-            // and will add more based on game compatibility, and ultimately
-            // I'd like to cover all illegal opcodes too
             switch (opcode)
             {
                 case 0x1C:
@@ -1252,54 +1346,138 @@ namespace CS6502
             return 1;
         }
 
+        /// <summary>
+        /// Instruction: Push Accumulator to Stack
+        /// Function:    A -> stack
+        /// </summary>
+        /// <returns></returns>
         private byte PHA()
         {
+            push(a);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Push Status Register to Stack
+        /// Function:    FLAGS -> stack
+        /// Flags Out:   B, U
+        /// </summary>
+        /// <returns></returns>
         private byte PHP()
         {
+            write((ushort)(ADDR_STACK + sp), (byte)(status | FLAGS6502.B | FLAGS6502.U));
+            setFlag(FLAGS6502.B, false);
+            setFlag(FLAGS6502.U, false);
+            sp--;
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Pop Accumulator off Stack
+        /// Function:    A <- stack
+        /// Flags Out:   N, Z
+        /// </summary>
+        /// <returns></returns>
         private byte PLA()
         {
+            a = pop();
+            testAndSet(FLAGS6502.Z, a);
+            testAndSet(FLAGS6502.N, a);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Pop Status Register off Stack
+        /// Function:    FLAGS <- stack
+        /// Flags Out:   U
+        /// </summary>
+        /// <returns>
+        /// </returns>
         private byte PLP()
         {
+            status = (FLAGS6502)pop();
+            setFlag(FLAGS6502.U, true);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Rotate One bit Left
+        /// Function:    A or M = C <- (M << 1) <- C
+        /// Flags Out:   C, Z, N
+        /// </summary>
+        /// <returns></returns>
         private byte ROL()
         {
+            fetch();
+            temp = (ushort)((fetched << 1) | getFlag(FLAGS6502.C));
+            setFlag(FLAGS6502.C, (temp & 0xFF00) > 0);
+            testAndSet(FLAGS6502.Z, temp);
+            testAndSet(FLAGS6502.N, temp);
+            if (opcode_lookup[opcode].addr_mode == IMP)
+                a = (byte)(temp & 0x00FF);
+            else
+                write(addr_abs, (byte)(temp & 0x00FF));
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Rotate One bit Right
+        /// Function:    A or M = C -> (M >> 1) -> C
+        /// Flags Out:   C, Z, N
+        /// </summary>
+        /// <returns></returns>
         private byte ROR()
         {
+            fetch();
+            temp = (ushort)((getFlag(FLAGS6502.C) << 7) | fetched >> 1);
+            setFlag(FLAGS6502.C, (fetched & 0x01) == 1);
+            testAndSet(FLAGS6502.Z, temp);
+            testAndSet(FLAGS6502.N, temp);
+            if (opcode_lookup[opcode].addr_mode == IMP)
+                a = (byte)(temp & 0x00FF);
+            else
+                write(addr_abs, (byte)(temp & 0x00FF));
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Return From Interrupt
+        /// Function:    FLAGS <- stack, PC <- stack
+        /// Flags Out:   B, U
+        /// </summary>
+        /// <returns></returns>
         private byte RTI()
         {
+            status = (FLAGS6502)pop();
+            status &= ~FLAGS6502.B;
+            status &= ~FLAGS6502.U;
+
+            pc = pop();
+            pc |= (ushort)(pop() << 8);
+
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Return From Subroutine
+        /// Function:    PC <- stack, PC = PC + 1
+        /// Flags Out:   
+        /// </summary>
+        /// <returns></returns>
         private byte RTS()
         {
+            pc = pop();
+            pc |= (ushort)(pop() << 8);
+            pc++;
             return 0;
         }
 
         /// <summary>
         /// Instruction: Subtraction with Borrow In
-        /// </summary>
-        /// <returns></returns>
-        /// <remarks>
         /// Function:    A = A - M - (1 - C)
         /// Flags Out:   C, V, N, Z
-        /// </remarks>
+        /// </summary>
+        /// <returns></returns>
         private byte SBC()
         {
             fetch();
@@ -1312,70 +1490,164 @@ namespace CS6502
             // Notice this is exactly the same as addition from here!
             temp = (ushort)(a + value + getFlag(FLAGS6502.C));
             setFlag(FLAGS6502.C, temp > 255);
-            setFlag(FLAGS6502.Z, ((temp & 0x00FF) == 0));
+            testAndSet(FLAGS6502.Z, temp);
             setFlag(FLAGS6502.V, ((temp ^ a) & (temp ^ value) & 0x0080) == 1); // not sure I translated this right
             testAndSet(FLAGS6502.N, temp);
             a = (byte)(temp & 0x00FF);
             return 1;
         }
 
+        /// <summary>
+        /// Instruction: Set Carry Flag
+        /// Function:    C = 1
+        /// Flags Out:   C
+        /// </summary>
+        /// <returns></returns>
         private byte SEC()
         {
+            setFlag(FLAGS6502.C, true);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Set Decimal Flag
+        /// Function:    D = 1
+        /// Flags Out:   D
+        /// </summary>
+        /// <returns></returns>
         private byte SED()
         {
+            setFlag(FLAGS6502.D, true);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Set Interrupt Flag / Enable Interrupts
+        /// Function:    I = 1
+        /// Flags Out:   I
+        /// </summary>
+        /// <returns></returns>
         private byte SEI()
         {
+            setFlag(FLAGS6502.I, true);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Store Accumulator at Address
+        /// Function:    M = A
+        /// Flags Out:
+        /// </summary>
+        /// <returns></returns>
         private byte STA()
         {
+            write(addr_abs, a);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Store X Register at Address
+        /// Function:    M = X
+        /// Flags Out:
+        /// </summary>
+        /// <returns></returns>
         private byte STX()
         {
+            write(addr_abs, x);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Store Y Register at Address
+        /// Function:    M = Y
+        /// Flags Out:
+        /// </summary>
+        /// <returns></returns>
         private byte STY()
         {
+            write(addr_abs, y);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Transfer Accumulator to X Register
+        /// Function:    X = A
+        /// Flags Out:   N, Z
+        /// </summary>
+        /// <returns></returns>
         private byte TAX()
         {
+            x = a;
+            testAndSet(FLAGS6502.Z, x);
+            testAndSet(FLAGS6502.N, x);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Transfer Accumulator to Y Register
+        /// Function:    Y = A
+        /// Flags Out:   N, Z
+        /// </summary>
+        /// <returns></returns>
         private byte TAY()
         {
+            y = a;
+            testAndSet(FLAGS6502.Z, y);
+            testAndSet(FLAGS6502.N, y);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Transfer Stack Pointer to X Register
+        /// Function:    X = sp
+        /// Flags Out:   N, Z
+        /// </summary>
+        /// <returns></returns>
         private byte TSX()
         {
+            x = sp;
+            testAndSet(FLAGS6502.Z, x);
+            testAndSet(FLAGS6502.N, x);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Transfer X Register to Accumulator
+        /// Function:    A = X
+        /// Flags Out:   N, Z
+        /// </summary>
+        /// <returns></returns>
         private byte TXA()
         {
+            a = x;
+            testAndSet(FLAGS6502.Z, a);
+            testAndSet(FLAGS6502.N, a);
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Transfer X Register to Stack Pointer
+        /// Function:    SP = X
+        /// Flags Out:
+        /// </summary>
+        /// <returns></returns>
         private byte TXS()
         {
+            sp = x;
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Transfer Y Register to Accumulator
+        /// Function:    A = Y
+        /// Flags Out:   N, Z
+        /// </summary>
+        /// <returns></returns>
         private byte TYA()
         {
+            a = y;
+            testAndSet(FLAGS6502.Z, a);
+            testAndSet(FLAGS6502.N, a);
             return 0;
         }
 
@@ -1657,6 +1929,13 @@ namespace CS6502
             sp--;
         }
 
+        private byte pop()
+        {
+            sp++;
+            byte data = read((ushort)(ADDR_STACK + sp));
+            return data;
+        }
+
         private void testAndSet(FLAGS6502 flag, ushort data)
         {
             switch (flag)
@@ -1666,8 +1945,6 @@ namespace CS6502
                 case FLAGS6502.C:
                     break;
                 case FLAGS6502.D:
-                    break;
-                case FLAGS6502.I:
                     break;
                 case FLAGS6502.N:
                     setFlag(flag, (data & 0x0080) != 0);
