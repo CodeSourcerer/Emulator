@@ -32,6 +32,12 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Bus.cs" />
     <Compile Include="IBus.cs" />
+    <Compile Include="Cartridge.cs" />
+    <Compile Include="Mapper.cs" />
+    <Compile Include="CartridgeHeader.cs" />
+    <Compile Include="BusDeviceType.cs" />
+    <Compile Include="BusDevice.cs" />
+    <Compile Include="Ram.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\Portable\$(TargetFrameworkVersion)\Microsoft.Portable.CSharp.targets" />
 </Project>

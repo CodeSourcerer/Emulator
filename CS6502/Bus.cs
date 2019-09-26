@@ -4,46 +4,34 @@ namespace CS6502
 {
     public class Bus : IBus
     {
-        // private CS6502 cpu;
-        private byte[] ram;
+        private BusDevice[] _busDevices;
+        private long _systemClockCounter;
 
-        private readonly ushort ramSize;
-
-        public Bus(ushort ramAmount)
+        public Bus(BusDevice[] busDevices)
         {
-            // this.cpu = cpu;
-            this.ramSize = ramAmount;
-            this.ram = new byte[this.ramSize+1];
+            this._busDevices = busDevices;
         }
 
         public byte Read(ushort addr, bool readOnly = false)
         {
-            if (isAddressable(addr))
+            byte data = 0;
+
+            foreach(BusDevice device in _busDevices)
             {
-                return ram[addr];
+                if (device.Read(addr, out data))
+                    break;
             }
 
-            return 0x00;
+            return data;
         }
 
         public void Write(ushort addr, byte data)
         {
-            if (isAddressable(addr))
+            foreach(BusDevice device in _busDevices)
             {
-                ram[addr] = data;
+                if (device.Write(addr, data))
+                    break;
             }
-        }
-
-        public void LoadROM(byte[] ROM, ushort offset = 0)
-        {
-            Array.Copy(ROM, 0, ram, 0, ROM.Length);
-            ram[0xFFFC] = (byte)(offset & 0x00FF);
-            ram[0xFFFD] = (byte)(offset >> 8);
-        }
-
-        private bool isAddressable(ushort addr)
-        {
-            return addr >= 0x0000 && addr <= ramSize;
         }
     }
 }
