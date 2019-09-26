@@ -6,6 +6,7 @@ namespace CS6502
         RAM,
         CPU,
         PPU,
-        APU
+        APU,
+        CART
     }
 }

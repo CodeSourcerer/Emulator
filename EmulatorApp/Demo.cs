@@ -20,6 +20,7 @@ namespace EmulatorApp
         private PixelGameEngine pge;
         private GLWindow window;
         private Bus nesBus;
+        private BusDevice ram;
         private BusDevice[] busDevices;
         private CS6502.CS6502 cpu;
         private Dictionary<ushort, string> mapAsm;
@@ -32,18 +33,34 @@ namespace EmulatorApp
             pge.Construct(SCREEN_WIDTH, SCREEN_HEIGHT, window);
             pge.OnCreate += pge_OnCreate;
             pge.OnFrameUpdate += pge_OnUpdate;
+        }
 
-            BusDevice ram = new Ram(0x07FF, 0x1FFF);
-            BusDevice cart = new Cartridge("nothing");
-            busDevices = new BusDevice[] { cart, ram };
+        public void Start(Cartridge cartridge)
+        {
+            ram = new Ram(0x07FF, 0x1FFF);
+            busDevices = new BusDevice[] { ram };
             nesBus = new Bus(busDevices);
             cpu = new CS6502.CS6502();
             cpu.ConnectBus(nesBus);
+
+            nesBus.InsertCartridge(cartridge);
+
+            pge.Start();
         }
 
-        public void Start()
+        public Cartridge LoadCartridge(string fileName)
         {
-            pge.Start();
+            Cartridge cartridge = new Cartridge();
+
+            using (FileStream fs = new FileStream(fileName, FileMode.Open, FileAccess.Read))
+            {
+                using (BinaryReader br = new BinaryReader(fs))
+                {
+                    cartridge.ReadCartridge(br);
+                }
+            }
+
+            return cartridge;
         }
 
         private void Window_KeyDown(object sender, KeyboardKeyEventArgs e)
@@ -116,7 +133,8 @@ namespace EmulatorApp
         static void Main(string[] args)
         {
             Demo demo = new Demo("NES Emulator");
-            demo.Start();
+            Cartridge cartridge = demo.LoadCartridge("demo.nes");
+            demo.Start(cartridge);
         }
 
         void DrawRam(int x, int y, ushort nAddr, int nRows, int nColumns)

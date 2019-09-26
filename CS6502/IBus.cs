@@ -5,5 +5,6 @@ namespace CS6502
     {
         byte Read(ushort addr, bool readOnly = false);
         void Write(ushort addr, byte data);
+        void Reset();
     }
 }

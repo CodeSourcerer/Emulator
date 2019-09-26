@@ -6,6 +6,8 @@ namespace CS6502
     /// </summary>
     public class Ram : BusDevice
     {
+        public BusDeviceType DeviceType { get { return BusDeviceType.RAM; } }
+
         private byte[] _ram;
         private readonly ushort _ramAmount;
         private readonly ushort _maxAddressable;
@@ -39,5 +41,8 @@ namespace CS6502
 
             return true;
         }
+
+        public void Reset()
+        { }
     }
 }
