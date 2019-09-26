@@ -968,18 +968,54 @@ namespace CS6502
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Branch if Overflow Clear
+        /// Function:    if(V == 0) pc = address
+        /// </summary>
+        /// <returns></returns>
         private byte BVC()
         {
+            if (getFlag(FLAGS6502.V) == 0)
+            {
+                cycles++;
+                addr_abs = (ushort)(pc + addr_rel);
+
+                if ((addr_abs & 0xFF00) != (pc & 0xFF00))
+                    cycles++;
+
+                pc = addr_abs;
+            }
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Branch if Overflow Set
+        /// Function:    if(V == 1) pc = address
+        /// </summary>
+        /// <returns></returns>
         private byte BVS()
         {
+            if (getFlag(FLAGS6502.V) == 1)
+            {
+                cycles++;
+                addr_abs = (ushort)(pc + addr_rel);
+
+                if ((addr_abs & 0xFF00) != (pc & 0xFF00))
+                    cycles++;
+
+                pc = addr_abs;
+            }
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Clear Carry Flag
+        /// Function:    C = 0
+        /// </summary>
+        /// <returns></returns>
         private byte CLC()
         {
+            setFlag(FLAGS6502.C, false);
             return 0;
         }
 
@@ -1058,19 +1094,49 @@ namespace CS6502
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Load The Accumulator
+        /// Function:    A = M
+        /// Flags Out:   N, Z
+        /// </summary>
+        /// <returns></returns>
         private byte LDA()
         {
-            return 0;
+            fetch();
+            a = fetched;
+            setFlag(FLAGS6502.Z, a == 0x00);
+            setFlag(FLAGS6502.N, (a & 0x80) != 0);
+            return 1;
         }
 
+        /// <summary>
+        /// Instruction: Load The X Register
+        /// Function:    X = M
+        /// Flags Out:   N, Z
+        /// </summary>
+        /// <returns></returns>
         private byte LDX()
         {
-            return 0;
+            fetch();
+            x = fetched;
+            setFlag(FLAGS6502.Z, x == 0x00);
+            setFlag(FLAGS6502.N, (x & 0x80) != 0);
+            return 1;
         }
 
+        /// <summary>
+        /// Instruction: Load The Y Register
+        /// Function:    Y = M
+        /// Flags Out:   N, Z
+        /// </summary>
+        /// <returns></returns>
         private byte LDY()
         {
-            return 0;
+            fetch();
+            y = fetched;
+            setFlag(FLAGS6502.Z, y == 0x00);
+            setFlag(FLAGS6502.N, (y & 0x80) != 0);
+            return 1;
         }
 
         private byte LSR()
