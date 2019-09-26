@@ -1019,8 +1019,14 @@ namespace CS6502
             return 0;
         }
 
+        /// <summary>
+        /// Instruction: Clear Decimal Flag
+        /// Function:    D = 0
+        /// </summary>
+        /// <returns></returns>
         private byte CLD()
         {
+            setFlag(FLAGS6502.D, false);
             return 0;
         }
 
