@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace CS6502
+namespace NESEmulator
 {
     public delegate byte OpCode();
     public delegate byte AddressingMode();

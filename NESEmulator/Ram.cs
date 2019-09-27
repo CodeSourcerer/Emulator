@@ -1,5 +1,5 @@
 ﻿using System;
-namespace CS6502
+namespace NESEmulator
 {
     /// <summary>
     /// Represents the RAM connected to the NES bus

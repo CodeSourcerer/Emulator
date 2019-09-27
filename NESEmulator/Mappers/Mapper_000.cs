@@ -1,7 +1,7 @@
 ﻿using System;
-using CS6502;
+using NESEmulator;
 
-namespace CS6502.Mappers
+namespace NESEmulator.Mappers
 {
     public class Mapper_000 : Mapper
     {

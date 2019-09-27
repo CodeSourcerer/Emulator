@@ -1,9 +1,9 @@
 ﻿using System;
 using System.IO;
 
-using CS6502.Mappers;
+using NESEmulator.Mappers;
 
-namespace CS6502
+namespace NESEmulator
 {
     public class Cartridge : BusDevice
     {

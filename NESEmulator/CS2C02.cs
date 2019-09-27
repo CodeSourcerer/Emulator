@@ -1,7 +1,7 @@
 ﻿using System;
 using csPixelGameEngine;
 
-namespace CS6502
+namespace NESEmulator
 {
     /// <summary>
     /// This represents the NES' Picture Processing Unit (PPU) 2C02

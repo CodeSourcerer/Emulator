@@ -1,5 +1,5 @@
 ﻿using System;
-namespace CS6502
+namespace NESEmulator
 {
     public abstract class Mapper
     {

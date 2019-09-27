@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using csPixelGameEngine;
-using CS6502;
-using System.IO;
 using csPixelGameEngine.enums;
+using NESEmulator;
 using OpenTK;
 using OpenTK.Input;
 
@@ -22,7 +22,7 @@ namespace EmulatorApp
         private Bus nesBus;
         private BusDevice ram;
         private BusDevice[] busDevices;
-        private CS6502.CS6502 cpu;
+        private CS6502 cpu;
         private Dictionary<ushort, string> mapAsm;
 
         public Demo(string appName)
@@ -41,7 +41,7 @@ namespace EmulatorApp
             ram = new Ram(0x07FF, 0x1FFF);
             busDevices = new BusDevice[] { ram };
             nesBus = new Bus(busDevices);
-            cpu = new CS6502.CS6502();
+            cpu = new CS6502();
             cpu.ConnectBus(nesBus);
 
             nesBus.InsertCartridge(cartridge);
@@ -120,8 +120,8 @@ namespace EmulatorApp
             }
 
             // Set reset vector
-            nesBus.Write(CS6502.CS6502.ADDR_PC, 0x00);
-            nesBus.Write(CS6502.CS6502.ADDR_PC + 1, 0x01);
+            nesBus.Write(CS6502.ADDR_PC, 0x00);
+            nesBus.Write(CS6502.ADDR_PC + 1, 0x01);
 
             // Extract disassembly
             mapAsm = cpu.Disassemble(0x0000, 0x1FFF);

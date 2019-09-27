@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace CS6502
+namespace NESEmulator
 {
     /// <summary>
     /// Represents the main bus on the NES

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Timers;
 
-namespace CS6502
+namespace NESEmulator
 {
     public delegate void ClockTickHandler(object sender, EventArgs e);
 

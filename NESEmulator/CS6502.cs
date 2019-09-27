@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace CS6502
+namespace NESEmulator
 {
     [Flags]
     public enum FLAGS6502
