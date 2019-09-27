@@ -35,6 +35,13 @@ namespace CS6502
             this.PRGMemory = new byte[32 * 1024];
         }
 
+        /// <summary>
+        /// Attempt to read byte of data from cartridge. Will only read if address
+        /// is readable from loaded cartridge
+        /// </summary>
+        /// <param name="addr"></param>
+        /// <param name="data"></param>
+        /// <returns>true if byte read, false if address outside of range</returns>
         public bool Read(ushort addr, out byte data)
         {
             data = 0;
@@ -49,6 +56,13 @@ namespace CS6502
             return false;
         }
 
+        /// <summary>
+        /// Attempt to write byte of data to cartridge. Will only write if address
+        /// is writable to loaded cartridge
+        /// </summary>
+        /// <param name="addr"></param>
+        /// <param name="data"></param>
+        /// <returns>true if byte written, false of address outside of range</returns>
         public bool Write(ushort addr, byte data)
         {
             uint mapped_addr;
@@ -61,9 +75,18 @@ namespace CS6502
             return false;
         }
 
+        /// <summary>
+        /// Perform cartridge reset.
+        /// </summary>
         public void Reset()
         { }
 
+        /// <summary>
+        /// Attempt to read data from cartridge from PPU bus.
+        /// </summary>
+        /// <param name="addr"></param>
+        /// <param name="data"></param>
+        /// <returns>true if byte read, false if address outside of range</returns>
         public bool ppuRead(ushort addr, out byte data)
         {
             data = 0;
@@ -78,6 +101,12 @@ namespace CS6502
             return false;
         }
 
+        /// <summary>
+        /// Attempt to write data to cartridge from PPU bus.
+        /// </summary>
+        /// <param name="addr"></param>
+        /// <param name="data"></param>
+        /// <returns>true if byte written, false of address outside of range</returns>
         public bool ppuWrite(ushort addr, byte data)
         {
             uint mapped_addr;
@@ -90,19 +119,27 @@ namespace CS6502
             return false;
         }
 
+        /// <summary>
+        /// Read ROM/cartridge data
+        /// </summary>
+        /// <param name="cartStream">BinaryReader stream with ROM data</param>
+        /// <remarks>
+        /// Portable library does not support File operations, so that must be
+        /// done outside of this lib.
+        /// </remarks>
         public void ReadCartridge(BinaryReader cartStream)
         {
             CartridgeHeader cartridgeHeader = new CartridgeHeader();
 
-            cartridgeHeader.name = cartStream.ReadChars(4);
-            cartridgeHeader.prg_rom_chunks = cartStream.ReadByte();
-            cartridgeHeader.chr_rom_chunks = cartStream.ReadByte();
-            cartridgeHeader.mapper1 = cartStream.ReadByte();
-            cartridgeHeader.mapper2 = cartStream.ReadByte();
-            cartridgeHeader.prg_ram_size = cartStream.ReadByte();
-            cartridgeHeader.tv_system1 = cartStream.ReadByte();
-            cartridgeHeader.tv_system2 = cartStream.ReadByte();
-            cartridgeHeader.unused = cartStream.ReadChars(5);
+            cartridgeHeader.name            = cartStream.ReadChars(4);
+            cartridgeHeader.prg_rom_chunks  = cartStream.ReadByte();
+            cartridgeHeader.chr_rom_chunks  = cartStream.ReadByte();
+            cartridgeHeader.mapper1         = cartStream.ReadByte();
+            cartridgeHeader.mapper2         = cartStream.ReadByte();
+            cartridgeHeader.prg_ram_size    = cartStream.ReadByte();
+            cartridgeHeader.tv_system1      = cartStream.ReadByte();
+            cartridgeHeader.tv_system2      = cartStream.ReadByte();
+            cartridgeHeader.unused          = cartStream.ReadChars(5);
 
             // If a "trainer" exists we need to read past it
             // before we get to the good stuff
