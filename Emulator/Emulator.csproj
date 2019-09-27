@@ -11,8 +11,4 @@
     <None Remove="NewFolder\**" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\CS6502\CS6502.csproj" />
-  </ItemGroup>
-
 </Project>

@@ -40,15 +40,13 @@
     <Compile Include="Ram.cs" />
     <Compile Include="CS2C02.cs" />
     <Compile Include="Mappers\Mapper_000.cs" />
-    <Compile Include="Clock.cs" />
+    <Compile Include="NESClock.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="csPixelGameEngine">
       <HintPath>..\EmulatorApp\lib\csPixelGameEngine.dll</HintPath>
     </Reference>
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Mappers\" />
-  </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\Portable\$(TargetFrameworkVersion)\Microsoft.Portable.CSharp.targets" />
 </Project>

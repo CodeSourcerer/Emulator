@@ -3,14 +3,15 @@ namespace CS6502
 {
     public delegate void ClockTickHandler(object sender, EventArgs e);
 
-    public class Clock
+    public class NESClock
     {
-        long _systemClockCounter;
+        private long _systemClockCounter;
 
         public event ClockTickHandler OnClockTick;
 
-        public Clock()
+        public NESClock()
         {
+
         }
     }
 }
