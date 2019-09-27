@@ -44,5 +44,8 @@ namespace NESEmulator
 
         public void Reset()
         { }
+
+        public void Clock()
+        { }
     }
 }

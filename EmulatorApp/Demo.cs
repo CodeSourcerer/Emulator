@@ -14,16 +14,19 @@ namespace EmulatorApp
 {
     class Demo
     {
-        private const int SCREEN_WIDTH = 680;
+        private const int SCREEN_WIDTH = 780;
         private const int SCREEN_HEIGHT = 480;
 
         private PixelGameEngine pge;
         private GLWindow window;
+        private NESClock nesClock;
         private Bus nesBus;
         private BusDevice ram;
         private BusDevice[] busDevices;
         private CS6502 cpu;
+        private CS2C02 ppu;
         private Dictionary<ushort, string> mapAsm;
+        private bool runEmulation;
 
         public Demo(string appName)
         {
@@ -37,16 +40,33 @@ namespace EmulatorApp
 
         public void Start(Cartridge cartridge)
         {
-            // System.Timers.Timer t = new System.Timers.Timer();
+            ppu = new CS2C02();
             ram = new Ram(0x07FF, 0x1FFF);
-            busDevices = new BusDevice[] { ram };
+            busDevices = new BusDevice[] { ppu, ram };
             nesBus = new Bus(busDevices);
             cpu = new CS6502();
             cpu.ConnectBus(nesBus);
 
             nesBus.InsertCartridge(cartridge);
+            nesBus.Reset();
+
+            nesClock = new NESClock();
+            nesClock.OnClockTick += NesClock_OnClockTick;
 
             pge.Start();
+        }
+
+        private void NesClock_OnClockTick(object sender, EventArgs e)
+        {
+            if (runEmulation)
+            {
+                CS2C02 ppu = (CS2C02)nesBus.GetPPU();
+                do
+                {
+                    nesBus.clock();
+                } while (!ppu.FrameComplete);
+                ppu.FrameComplete = false;
+            }
         }
 
         public Cartridge LoadCartridge(string fileName)
@@ -72,14 +92,11 @@ namespace EmulatorApp
             switch(e.Key)
             {
                 case OpenTK.Input.Key.Space:
-                    do
-                    {
-                        cpu.Clock();
-                    } while (!cpu.isComplete());
+                    runEmulation = !runEmulation;
                     break;
 
                 case OpenTK.Input.Key.R:
-                    cpu.Reset();
+                    nesBus.Reset();
                     break;
 
                 case OpenTK.Input.Key.I:
@@ -89,6 +106,30 @@ namespace EmulatorApp
                 case OpenTK.Input.Key.N:
                     cpu.NMI();
                     break;
+
+                case OpenTK.Input.Key.F:
+                    CS2C02 ppu = (CS2C02)nesBus.GetPPU();
+                    do
+                    {
+                        nesBus.clock();
+                    } while (!ppu.FrameComplete);
+                    do
+                    {
+                        nesBus.clock();
+                    } while (!cpu.isComplete());
+                    ppu.FrameComplete = false;
+                    break;
+
+                case OpenTK.Input.Key.C:
+                    do
+                    {
+                        nesBus.clock();
+                    } while (!cpu.isComplete());
+                    do
+                    {
+                        nesBus.clock();
+                    } while (cpu.isComplete());
+                    break;
             }
         }
 
@@ -97,36 +138,37 @@ namespace EmulatorApp
             pge.Clear(Pixel.BLUE);
 
             // Draw Ram Page 0x00		
-            DrawRam(2, 2, 0x0000, 16, 16);
-            DrawRam(2, 182, 0x0100, 16, 16);
-            DrawCpu(448, 2);
-            DrawCode(448, 72, 26);
+            //DrawRam(2, 2, 0x0000, 16, 16);
+            //DrawRam(2, 182, 0x0100, 16, 16);
+            DrawCpu(516, 2);
+            DrawCode(516, 72, 26);
 
-
-            pge.DrawString(10, 370, "SPACE = Step Instruction    R = RESET    I = IRQ    N = NMI", Pixel.WHITE);
+            CS2C02 ppu = (CS2C02)nesBus.GetPPU();
+            pge.DrawSprite(0, 0, ppu.GetScreen(), 2);
+            pge.DrawString(10, 370, "SPACE = Toggle Run Mode    F = FRAME    C = STEP", Pixel.WHITE);
         }
 
         private void pge_OnCreate(object sender, EventArgs e)
         {
-            string programStr = "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA";
-            ushort offset = 0x0100;
+            //string programStr = "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA";
+            //ushort offset = 0x0100;
 
-            string[] prog = programStr.Split(" ".ToCharArray());
+            //string[] prog = programStr.Split(" ".ToCharArray());
 
-            foreach (string instByte in prog)
-            {
-                nesBus.Write(offset, Convert.ToByte(instByte, 16));
-                offset++;
-            }
+            //foreach (string instByte in prog)
+            //{
+            //    nesBus.Write(offset, Convert.ToByte(instByte, 16));
+            //    offset++;
+            //}
 
-            // Set reset vector
-            nesBus.Write(CS6502.ADDR_PC, 0x00);
-            nesBus.Write(CS6502.ADDR_PC + 1, 0x01);
+            //// Set reset vector
+            //nesBus.Write(CS6502.ADDR_PC, 0x00);
+            //nesBus.Write(CS6502.ADDR_PC + 1, 0x01);
 
-            // Extract disassembly
+             // Extract disassembly
             mapAsm = cpu.Disassemble(0x0000, 0x1FFF);
 
-            cpu.Reset();
+            //cpu.Reset();
 
             pge.Clear(Pixel.BLUE);
         }
@@ -134,7 +176,7 @@ namespace EmulatorApp
         static void Main(string[] args)
         {
             Demo demo = new Demo("NES Emulator");
-            Cartridge cartridge = demo.LoadCartridge("demo.nes");
+            Cartridge cartridge = demo.LoadCartridge("tests\\apu_test.nes");
             demo.Start(cartridge);
         }
 

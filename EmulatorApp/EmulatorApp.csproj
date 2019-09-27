@@ -61,6 +61,7 @@
     <None Include="tests\1.Branch_Basics.nes" />
     <None Include="tests\2.Backward_Branch.nes" />
     <None Include="tests\3.Forward_Branch.nes" />
+    <None Include="tests\apu_test.nes" />
     <None Include="tests\branch_timing_tests.zip" />
   </ItemGroup>
   <ItemGroup>
@@ -71,6 +72,9 @@
       <Project>{6804450b-2b66-4829-b80a-2fafcda5d931}</Project>
       <Name>NESEmulator</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="bin\Debug\tests\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

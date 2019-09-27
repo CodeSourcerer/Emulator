@@ -49,17 +49,30 @@ namespace NESEmulator
         public void InsertCartridge(Cartridge cartridge)
         {
             _busDeviceList.Insert(0, cartridge);
-            BusDevice ppu = _busDeviceList.Find((bd) => bd.DeviceType == BusDeviceType.PPU);
+            BusDevice ppu = GetPPU();
             if (ppu != null)
                 ((CS2C02)ppu).ConnectCartridge(cartridge);
         }
 
         public void clock()
         {
-            BusDevice ppu = _busDeviceList.Find((bd) => bd.DeviceType == BusDeviceType.PPU);
+            BusDevice ppu = GetPPU();
             if (ppu != null)
-                ((CS2C02)ppu).clock();
+                ppu.Clock();
 
+            // The CPU runs 3 times slower than the PPU so we only call its
+            // clock() function every 3 times this function is called. We
+            // have a global counter to keep track of this.
+            if (_systemClockCounter % 3 == 0)
+            {
+                var cpu = _busDeviceList.Find((bd) => bd.DeviceType == BusDeviceType.CPU);
+                cpu.Clock();
+            }
+        }
+
+        public BusDevice GetPPU()
+        {
+            return _busDeviceList.Find((bd) => bd.DeviceType == BusDeviceType.PPU);
         }
     }
 }

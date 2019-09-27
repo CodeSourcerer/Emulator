@@ -8,5 +8,6 @@ namespace NESEmulator
         bool Write(ushort addr, byte data);
         bool Read(ushort addr, out byte data);
         void Reset();
+        void Clock();
     }
 }

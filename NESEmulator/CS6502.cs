@@ -40,8 +40,10 @@ namespace NESEmulator
         N = (1 << 7)
     }
 
-    public class CS6502
+    public class CS6502 : BusDevice
     {
+        public BusDeviceType DeviceType { get { return BusDeviceType.CPU; } }
+
         private List<Instruction> opcode_lookup;
         private IBus bus;
 
@@ -436,6 +438,19 @@ namespace NESEmulator
         #endregion // Flag Methods
 
         #region Bus Methods
+
+        public bool Write(ushort addr, byte data)
+        {
+            // Ignore since we call BUS' Write(), which calls this.
+            return false;
+        }
+
+        public bool Read(ushort addr, out byte data)
+        {
+            // Ignore since we call BUS' Read(), which calls this.
+            data = 0;
+            return false;
+        }
 
         /// <summary>
         /// Reads an 8-bit byte from the bus, located at the specified 16-bit address

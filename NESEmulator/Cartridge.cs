@@ -186,5 +186,8 @@ namespace NESEmulator
             if (mapper != null)
                 ImageValid = true;
         }
+
+        public void Clock()
+        { }
     }
 }
