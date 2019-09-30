@@ -58,6 +58,7 @@
     <None Include="App.config" />
     <None Include="OpenTK.dll.config" />
     <None Include="packages.config" />
+    <None Include="tests\01-implied.nes" />
     <None Include="tests\1.Branch_Basics.nes" />
     <None Include="tests\2.Backward_Branch.nes" />
     <None Include="tests\3.Forward_Branch.nes" />

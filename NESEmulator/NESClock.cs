@@ -3,7 +3,7 @@ using System.Timers;
 
 namespace NESEmulator
 {
-    public delegate void ClockTickHandler(object sender, EventArgs e);
+    public delegate void ClockTickHandler(object sender, ElapsedEventArgs e);
 
     public class NESClock : IDisposable
     {
@@ -14,7 +14,7 @@ namespace NESEmulator
 
         public NESClock()
         {
-            timer = new Timer((1.0d / 60.0d) * 1000.0d);
+            timer = new Timer(5.0d);
             timer.AutoReset = true;
             timer.Elapsed += Timer_Elapsed;
             timer.Start();
@@ -28,7 +28,7 @@ namespace NESEmulator
         private void Timer_Elapsed(object sender, ElapsedEventArgs e)
         {
             _systemClockCounter++;
-            OnClockTick?.Invoke(this, new EventArgs());
+            OnClockTick?.Invoke(this, e);
         }
 
         #region IDisposable Support

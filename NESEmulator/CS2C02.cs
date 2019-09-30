@@ -154,7 +154,7 @@ namespace NESEmulator
         public void Clock()
         {
             // Temporary: fake noise
-            _screen.SetPixel((uint)(_cycle - 1), (uint)_scanline, _palScreen[(_random.Next(2) == 2) ? 0x3F : 0x30]);
+            _screen.SetPixel((uint)(_cycle - 1), (uint)(_scanline+1), _palScreen[(_random.Next(2) == 1) ? 0x3F : 0x30]);
 
             _cycle++;
 

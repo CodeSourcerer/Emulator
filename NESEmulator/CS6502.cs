@@ -119,8 +119,6 @@ namespace NESEmulator
             addr_rel = addr_abs = 0x0000;
             fetched = 0x00;
 
-            bus.Reset();
-
             // Reset takes time
             cycles = 8;
         }

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Timers;
 using csPixelGameEngine;
 using csPixelGameEngine.enums;
 using NESEmulator;
@@ -42,24 +43,33 @@ namespace EmulatorApp
         {
             ppu = new CS2C02();
             ram = new Ram(0x07FF, 0x1FFF);
-            busDevices = new BusDevice[] { ppu, ram };
-            nesBus = new Bus(busDevices);
             cpu = new CS6502();
+            busDevices = new BusDevice[] { ppu, ram, cpu };
+            nesBus = new Bus(busDevices);
             cpu.ConnectBus(nesBus);
 
+            if (!cartridge.ImageValid)
+                throw new ApplicationException("Invalid ROM image");
             nesBus.InsertCartridge(cartridge);
             nesBus.Reset();
 
-            nesClock = new NESClock();
-            nesClock.OnClockTick += NesClock_OnClockTick;
+            //nesClock = new NESClock();
+            //dtLastTick = DateTime.Now;
+            //nesClock.OnClockTick += NesClock_OnClockTick;
 
             pge.Start();
         }
 
-        private void NesClock_OnClockTick(object sender, EventArgs e)
+        DateTime dtLastTick;
+
+        private void NesClock_OnClockTick(object sender, ElapsedEventArgs e)
         {
             if (runEmulation)
             {
+                if ((DateTime.Now - dtLastTick) > TimeSpan.FromMilliseconds(18))
+                    Console.WriteLine("Taking too long! Frame took {0} ms", (DateTime.Now - dtLastTick).TotalMilliseconds);
+                dtLastTick = DateTime.Now;
+
                 CS2C02 ppu = (CS2C02)nesBus.GetPPU();
                 do
                 {
@@ -133,9 +143,30 @@ namespace EmulatorApp
             }
         }
 
+        private float residualTime = 0.0f;
         private void pge_OnUpdate(object sender, FrameUpdateEventArgs frameUpdateArgs)
         {
             pge.Clear(Pixel.BLUE);
+
+            CS2C02 ppu = (CS2C02)nesBus.GetPPU();
+            if (runEmulation)
+            {
+                //if ((DateTime.Now - dtLastTick) > TimeSpan.FromMilliseconds(18))
+                //    Console.WriteLine("Taking too long! Frame took {0} ms", (DateTime.Now - dtLastTick).TotalMilliseconds);
+                //dtLastTick = DateTime.Now;
+
+                if (residualTime > 0.0f)
+                    residualTime -= (float)frameUpdateArgs.ElapsedTime;
+                else
+                {
+                    residualTime += (1.0f / 60.0f) - (float)frameUpdateArgs.ElapsedTime;
+                    do
+                    {
+                        nesBus.clock();
+                    } while (!ppu.FrameComplete);
+                    ppu.FrameComplete = false;
+                }
+            }
 
             // Draw Ram Page 0x00		
             //DrawRam(2, 2, 0x0000, 16, 16);
@@ -143,7 +174,6 @@ namespace EmulatorApp
             DrawCpu(516, 2);
             DrawCode(516, 72, 26);
 
-            CS2C02 ppu = (CS2C02)nesBus.GetPPU();
             pge.DrawSprite(0, 0, ppu.GetScreen(), 2);
             pge.DrawString(10, 370, "SPACE = Toggle Run Mode    F = FRAME    C = STEP", Pixel.WHITE);
         }
@@ -166,7 +196,7 @@ namespace EmulatorApp
             //nesBus.Write(CS6502.ADDR_PC + 1, 0x01);
 
              // Extract disassembly
-            mapAsm = cpu.Disassemble(0x0000, 0x1FFF);
+            mapAsm = cpu.Disassemble(0x0000, 0xFFFF);
 
             //cpu.Reset();
 
@@ -176,7 +206,7 @@ namespace EmulatorApp
         static void Main(string[] args)
         {
             Demo demo = new Demo("NES Emulator");
-            Cartridge cartridge = demo.LoadCartridge("tests\\apu_test.nes");
+            Cartridge cartridge = demo.LoadCartridge("tests\\01-implied.nes");
             demo.Start(cartridge);
         }
 
