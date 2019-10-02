@@ -13,16 +13,22 @@ namespace NESEmulator
         // PPU has it's own bus
         private Bus _ppuBus;
 
-        private Pixel[] _palScreen = new Pixel[0x40];
+        private PPUStatus _status;
+
         private Sprite _screen = new Sprite(256, 240);
-        private Sprite[] _nameTable = { new Sprite(256, 240), new Sprite(256, 240) };
-        // private Sprite[] _patternTable = { new Sprite(128, 128), new Sprite(128, 128) };
 
         private short  _scanline;
         private ushort _cycle;
         private byte[][] _tblName = new byte[2][];
-        //private byte[][] _tblPattern = new byte[2][];
+        private Sprite[] _nameTable = { new Sprite(256, 240), new Sprite(256, 240) };
+
+        // TODO: This is connected to the PPU's bus, so I think it would be better
+        // to make this a BusDevice and attach to _ppuBus.
+        private byte[][] _tblPattern = new byte[2][];
+        private Sprite[] _patternTable = { new Sprite(128, 128), new Sprite(128, 128) };
+
         private byte[] _palette = new byte[32];
+        private Pixel[] _palScreen = new Pixel[0x40];
 
         private Cartridge _cartridge;
 
@@ -31,6 +37,9 @@ namespace NESEmulator
         public CS2C02()
         {
             _random = new Random();
+
+            _status = new PPUStatus();
+
             // Create PPU bus with its devices...
 
             _tblName[0] = new byte[1024];
