@@ -8,7 +8,6 @@
     <OutputType>Exe</OutputType>
     <RootNamespace>EmulatorApp</RootNamespace>
     <AssemblyName>EmulatorApp</AssemblyName>
-    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
@@ -67,12 +66,6 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="lib\csPixelGameEngine.dll" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\NESEmulator\NESEmulator.csproj">
-      <Project>{6804450b-2b66-4829-b80a-2fafcda5d931}</Project>
-      <Name>NESEmulator</Name>
-    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <Folder Include="bin\Debug\tests\" />

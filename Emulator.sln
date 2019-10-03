@@ -2,11 +2,13 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.29123.88
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Emulator", "Emulator\Emulator.csproj", "{DEECF887-3B10-45A5-BAFF-9B9C0BE19A38}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmulatorApp", "EmulatorApp\EmulatorApp.csproj", "{BE0CF804-1E66-4A23-A551-2B42204464CC}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NESEmulator", "NESEmulator\NESEmulator.csproj", "{6804450B-2B66-4829-B80A-2FAFCDA5D931}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmulatorTests", "EmulatorTests\EmulatorTests.csproj", "{0AF2965E-8708-471A-AA3F-09D7C9824811}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NESEmulatorApp", "NESEmulatorApp\NESEmulatorApp.csproj", "{BE2B9F85-0B5C-44B6-B84C-0CEE7BDE20EA}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -14,10 +16,6 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{DEECF887-3B10-45A5-BAFF-9B9C0BE19A38}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{DEECF887-3B10-45A5-BAFF-9B9C0BE19A38}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{DEECF887-3B10-45A5-BAFF-9B9C0BE19A38}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{DEECF887-3B10-45A5-BAFF-9B9C0BE19A38}.Release|Any CPU.Build.0 = Release|Any CPU
 		{BE0CF804-1E66-4A23-A551-2B42204464CC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{BE0CF804-1E66-4A23-A551-2B42204464CC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BE0CF804-1E66-4A23-A551-2B42204464CC}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -26,6 +24,14 @@ Global
 		{6804450B-2B66-4829-B80A-2FAFCDA5D931}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6804450B-2B66-4829-B80A-2FAFCDA5D931}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6804450B-2B66-4829-B80A-2FAFCDA5D931}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0AF2965E-8708-471A-AA3F-09D7C9824811}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0AF2965E-8708-471A-AA3F-09D7C9824811}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0AF2965E-8708-471A-AA3F-09D7C9824811}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0AF2965E-8708-471A-AA3F-09D7C9824811}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BE2B9F85-0B5C-44B6-B84C-0CEE7BDE20EA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BE2B9F85-0B5C-44B6-B84C-0CEE7BDE20EA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BE2B9F85-0B5C-44B6-B84C-0CEE7BDE20EA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BE2B9F85-0B5C-44B6-B84C-0CEE7BDE20EA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

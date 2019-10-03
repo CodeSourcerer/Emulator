@@ -14,6 +14,7 @@ namespace NESEmulator
         private Bus _ppuBus;
 
         private PPUStatus _status;
+        private PPUMask _mask;
 
         private Sprite _screen = new Sprite(256, 240);
 
@@ -39,6 +40,7 @@ namespace NESEmulator
             _random = new Random();
 
             _status = new PPUStatus();
+            _mask = new PPUMask();
 
             // Create PPU bus with its devices...
 
