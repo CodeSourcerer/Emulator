@@ -14,12 +14,15 @@ namespace EmulatorTests
         [DataRow((byte)0, 5, (byte)32)]
         [DataRow((byte)0, 6, (byte)64)]
         [DataRow((byte)0, 7, (byte)128)]
+        [DataRow((byte)85, 7, (byte)213)]
+        [DataRow((byte)85, 1, (byte)87)]
+        [DataRow((byte)85, 4, (byte)85)]
         [DataTestMethod]
         public void SetBit_SetsSingleBit(byte testByte, int testBit, byte expectedResult)
         {
             byte actualByte = testByte.SetBit(testBit, true);
 
-            Assert.AreEqual(expectedResult, actualByte);
+            Assert.AreEqual<byte>(expectedResult, actualByte, string.Format("Expected: {0}. Actual: {1}", expectedResult, actualByte));
         }
 
         [DataRow((byte)0,   0, false)]
@@ -33,7 +36,7 @@ namespace EmulatorTests
         {
             bool actualResult = testByte.TestBit(bitToTest);
 
-            Assert.AreEqual(expectedResult, actualResult);
+            Assert.AreEqual(expectedResult, actualResult, string.Format("Expected: {0}. Actual: {1}", expectedResult, actualResult));
         }
     }
 }

@@ -15,6 +15,7 @@ namespace NESEmulator
 
         private PPUStatus _status;
         private PPUMask _mask;
+        private PPUControl _control;
 
         private Sprite _screen = new Sprite(256, 240);
 

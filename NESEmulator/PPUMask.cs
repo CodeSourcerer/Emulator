@@ -1,4 +1,6 @@
 ﻿using System;
+using NESEmulator.Util;
+
 namespace NESEmulator
 {
     public struct PPUMask
@@ -9,11 +11,11 @@ namespace NESEmulator
         {
             get
             {
-                return (byte)(reg & 0x01) == 1;
+                return reg.TestBit(0);
             }
             set
             {
-                reg |= (byte)(value ? 1 : 0);
+                reg = reg.SetBit(0, value);
             }
         }
 
@@ -21,11 +23,11 @@ namespace NESEmulator
         {
             get
             {
-                return ((byte)(reg >> 1) & 0x01) == 1;
+                return reg.TestBit(1);
             }
             set
             {
-                reg |= (byte)((value ? 1 : 0) << 1);
+                reg = reg.SetBit(1, value);
             }
         }
 
@@ -33,11 +35,11 @@ namespace NESEmulator
         {
             get
             {
-                return ((byte)(reg >> 2) & 0x01) == 1;
+                return reg.TestBit(2);
             }
             set
             {
-                reg |= (byte)((value ? 1 : 0) << 2);
+                reg = reg.SetBit(2, value);
             }
         }
 
@@ -45,11 +47,11 @@ namespace NESEmulator
         {
             get
             {
-                return ((byte)(reg >> 3) & 0x01) == 1;
+                return reg.TestBit(3);
             }
             set
             {
-                reg |= (byte)((value ? 1 : 0) << 3);
+                reg = reg.SetBit(3, value);
             }
         }
 
@@ -57,11 +59,11 @@ namespace NESEmulator
         {
             get
             {
-                return ((byte)(reg >> 4) & 0x01) == 1;
+                return reg.TestBit(4);
             }
             set
             {
-                reg |= (byte)((value ? 1 : 0) << 4);
+                reg = reg.SetBit(4, value);
             }
         }
 
@@ -69,11 +71,11 @@ namespace NESEmulator
         {
             get
             {
-                return ((byte)(reg >> 5) & 0x01) == 1;
+                return reg.TestBit(5);
             }
             set
             {
-                reg |= (byte)((value ? 1 : 0) << 5);
+                reg = reg.SetBit(5, value);
             }
         }
 

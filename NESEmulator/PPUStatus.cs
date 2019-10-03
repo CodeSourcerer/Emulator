@@ -1,4 +1,6 @@
 ﻿using System;
+using NESEmulator.Util;
+
 namespace NESEmulator
 {
     public struct PPUStatus
@@ -23,11 +25,11 @@ namespace NESEmulator
         {
             get
             {
-                return ((byte)(reg >> 5) & 0x01) == 1;
+                return reg.TestBit(5);
             }
             set
             {
-                reg |= (byte)((value ? 1 : 0) << 5);
+                reg = reg.SetBit(5, value);
             }
         }
 
@@ -35,11 +37,11 @@ namespace NESEmulator
         {
             get
             {
-                return ((byte)(reg >> 6) & 0x01) == 1;
+                return reg.TestBit(6);
             }
             set
             {
-                reg |= (byte)((value ? 1 : 0) << 6);
+                reg = reg.SetBit(6, value);
             }
         }
 
@@ -50,11 +52,11 @@ namespace NESEmulator
         {
             get
             {
-                return ((byte)(reg >> 7) & 0x01) == 1;
+                return reg.TestBit(7);
             }
             set
             {
-                reg |= (byte)((value ? 1 : 0) << 7);
+                reg = reg.SetBit(7, value);
             }
         }
     }

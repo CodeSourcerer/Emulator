@@ -13,5 +13,10 @@ namespace NESEmulator.Util
             destByte |= (byte)((bitValue ? 1 : 0) << bitToSet);
             return destByte;
         }
+
+        public static byte SetBit(this byte destByte, int bitToSet, int bitValue)
+        {
+            return destByte.SetBit(bitToSet, bitValue != 0);
+        }
     }
 }
