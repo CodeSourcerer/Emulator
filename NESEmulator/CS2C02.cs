@@ -86,13 +86,78 @@ namespace NESEmulator
             return null;
         }
 
-        //public Sprite GetPatternTable(int i)
-        //{
-        //    if (i < 2)
-        //        return _patternTable[i];
+        /// <summary>
+        /// This function draw the CHR ROM for a given pattern table into
+        /// an olc::Sprite, using a specified palette. Pattern tables consist
+        /// of 16x16 "tiles or characters". It is independent of the running
+        /// emulation and using it does not change the systems state, though
+        /// it gets all the data it needs from the live system. Consequently,
+        /// if the game has not yet established palettes or mapped to relevant
+        /// CHR ROM banks, the sprite may look empty. This approach permits a 
+        /// "live" extraction of the pattern table exactly how the NES, and 
+        /// ultimately the player would see it.
+        /// 
+        /// A tile consists of 8x8 pixels. On the NES, pixels are 2 bits, which
+        /// gives an index into 4 different colours of a specific palette. There
+        /// are 8 palettes to choose from. Colour "0" in each palette is effectively
+        /// considered transparent, as those locations in memory "mirror" the global
+        /// background colour being used. This mechanics of this are shown in 
+        /// detail in ppuRead() & ppuWrite()
+        /// 
+        /// Characters on NES
+        /// ~~~~~~~~~~~~~~~~~
+        /// The NES stores characters using 2-bit pixels. These are not stored sequentially
+        /// but in singular bit planes. For example:
+        ///
+        /// 2-Bit Pixels       LSB Bit Plane     MSB Bit Plane
+        /// 0 0 0 0 0 0 0 0	  0 0 0 0 0 0 0 0   0 0 0 0 0 0 0 0
+        /// 0 1 1 0 0 1 1 0	  0 1 1 0 0 1 1 0   0 0 0 0 0 0 0 0
+        /// 0 1 2 0 0 2 1 0	  0 1 1 0 0 1 1 0   0 0 1 0 0 1 0 0
+        /// 0 0 0 0 0 0 0 0 =  0 0 0 0 0 0 0 0 + 0 0 0 0 0 0 0 0
+        /// 0 1 1 0 0 1 1 0	  0 1 1 0 0 1 1 0   0 0 0 0 0 0 0 0
+        /// 0 0 1 1 1 1 0 0	  0 0 1 1 1 1 0 0   0 0 0 0 0 0 0 0
+        /// 0 0 0 2 2 0 0 0	  0 0 0 1 1 0 0 0   0 0 0 1 1 0 0 0
+        /// 0 0 0 0 0 0 0 0	  0 0 0 0 0 0 0 0   0 0 0 0 0 0 0 0
+        ///
+        /// The planes are stored as 8 bytes of LSB, followed by 8 bytes of MSB
+        /// </summary>
+        /// <param name="i"></param>
+        /// <param name="palette"></param>
+        /// <returns></returns>
+        public Sprite GetPatternTable(int i, int palette)
+        {
+            // Loop through all the 16x16 tiles
+            for (int tileY = 0; tileY < 16; tileY++)
+            {
+                for (int tileX = 0; tileX < 16; tileX++)
+                {
+                    // Convert the 2D tile coordinate into an offset into the pattern
+                    // table memory.
+                    int offset = tileY * 256 + tileX * 16;
 
-        //    return null;
-        //}
+                    // Loop through 8x8 character/sprite at tile
+                    for (int row = 0; row < 8; row++)
+                    {
+                        // For each row, we need to read both bit planes of the character
+                        // in order to extract the least significant and most significant 
+                        // bits of the 2 bit pixel value. in the CHR ROM, each character
+                        // is stored as 64 bits of lsb, followed by 64 bits of msb. This
+                        // conveniently means that two corresponding rows are always 8
+                        // bytes apart in memory.
+                        byte tileLSB = ppuRead((ushort)(i * 0x1000 + offset + row + 0x0000));
+                        byte tileMSB = ppuRead((ushort)(i * 0x1000 + offset + row + 0x0008));
+
+                        // Now we have a single row of the two bit planes for the character
+                        // we need to iterate through the 8-bit words, combining them to give
+                        // us the final pixel index
+                    }
+                }
+            }
+            if (i < 2)
+                return _patternTable[i];
+
+            return null;
+        }
 
         public bool FrameComplete { get; set; }
 
@@ -173,6 +238,23 @@ namespace NESEmulator
 
         public void Reset()
         { }
+
+        // TODO: I think this should be a read from _ppuBus... will investigate later
+        private byte ppuRead(ushort addr, bool rdonly = false)
+        {
+            byte data = 0;
+            addr &= 0x3FFF;
+
+            // Do stuff...
+
+            return data;
+        }
+
+        // TODO: I think this should be a write to the _ppuBus... will investigate later
+        private void ppuWrite(ushort addr, byte data)
+        {
+
+        }
 
         #endregion // Bus Communications
 
