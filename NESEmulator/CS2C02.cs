@@ -16,11 +16,29 @@ namespace NESEmulator
         private PPUStatus _status;
         private PPUMask _mask;
         private PPUControl _control;
+        private PPULoopyRegister _vram_addr;
+        private PPULoopyRegister _tram_addr;
+
+        // Internal communications
+        private byte _addressLatch;
+        private byte _ppuDataBuffer;
 
         private Sprite _screen = new Sprite(256, 240);
 
+        // Pixel "dot" position information
         private short  _scanline;
         private ushort _cycle;
+
+        // Background rendering
+        private byte _bg_nextTileId;
+        private byte _bg_nextTileAttrib;
+        private byte _bg_nextTileLSB;
+        private byte _bg_nextTileMSB;
+        private ushort _bg_shifterPatternLo;
+        private ushort _bg_shifterPatternHi;
+        private ushort _bg_shifterAttribLo;
+        private ushort _bg_shifterAttribHi;
+
         private byte[][] _tblName = new byte[2][];
         private Sprite[] _nameTable = { new Sprite(256, 240), new Sprite(256, 240) };
 

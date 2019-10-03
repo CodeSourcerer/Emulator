@@ -18,5 +18,21 @@ namespace NESEmulator.Util
         {
             return destByte.SetBit(bitToSet, bitValue != 0);
         }
+
+        public static bool TestBit(this ushort input, int bitToTest)
+        {
+            return (ushort)((input >> bitToTest) & 0x0001) == 1;
+        }
+
+        public static ushort SetBit(this ushort input, int bitToSet, bool bitValue)
+        {
+            input |= (ushort)((bitValue ? 1 : 0) << bitToSet);
+            return input;
+        }
+
+        public static ushort SetBit(this ushort input, int bitToSet, int bitValue)
+        {
+            return input.SetBit(bitToSet, bitValue != 0);
+        }
     }
 }
