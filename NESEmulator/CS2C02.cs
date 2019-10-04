@@ -8,6 +8,8 @@ namespace NESEmulator
     /// </summary>
     public class CS2C02 : BusDevice
     {
+        private const ushort ADDR_PALETTE = 0x3F00;
+
         public BusDeviceType DeviceType { get { return BusDeviceType.PPU; } }
 
         // PPU has it's own bus
@@ -124,7 +126,7 @@ namespace NESEmulator
         /// <param name="i"></param>
         /// <param name="palette"></param>
         /// <returns></returns>
-        public Sprite GetPatternTable(int i, int palette)
+        public Sprite GetPatternTable(int i, byte palette)
         {
             // Loop through all the 16x16 tiles
             for (int tileY = 0; tileY < 16; tileY++)
@@ -150,6 +152,28 @@ namespace NESEmulator
                         // Now we have a single row of the two bit planes for the character
                         // we need to iterate through the 8-bit words, combining them to give
                         // us the final pixel index
+                        for (int col = 0; col < 8; col++)
+                        {
+                            // We can get the index value by simply adding the bits together
+                            // but we're only interested in the lsb of the row words because...
+                            byte pixel = (byte)((tileLSB & 0x01) + (tileMSB & 0x01));
+
+                            // ...we will shift the row words 1 bit right for each column of
+                            // the character.
+                            tileLSB >>= 1;
+                            tileMSB >>= 1;
+
+                            // Now we know the location and NES pixel value for a specific location
+                            // in the pattern table, we can translate that to a screen color, and an
+                            // (x,y) location in the sprite
+                            _patternTable[i].SetPixel(
+                                (uint)(tileX * 8 + (7 - col)),  // Because we are using the lsb of the row word first
+                                                                // we are effectively reading the row from right
+                                                                // to left, so we need to draw the row "backwards"
+                                (uint)(tileY * 8 + row),
+                                GetColorFromPaletteRam(palette, pixel)
+                            );
+                        }
                     }
                 }
             }
@@ -170,6 +194,10 @@ namespace NESEmulator
             bool dataRead = false;
             data = 0;
 
+            // These are the live PPU registers that repsond
+            // to being read from in various ways. Note that not
+            // all the registers are capable of being read from
+            // so they just return 0x00
             switch (addr)
             {
                 case 0x0000:    // Control
@@ -179,6 +207,18 @@ namespace NESEmulator
                     dataRead = true;
                     break;
                 case 0x0002:    // Status
+                    // Reading from the status register has the effect of resetting different parts of the circuit. 
+                    // Only the top three bits contain status information, however it is possible that some "noise"
+                    // gets picked up on the bottom 5 bits which represent the last PPU bus transaction. Some games
+                    // "may" use this noise as valid data (even though they probably shouldn't)
+                    data = (byte)((_status.reg & 0xE0) | (_ppuDataBuffer & 0x1F));
+
+                    // Clear the vertical blanking flag
+                    _status.VerticalBlank = false;
+
+                    // Reset Loopy's Address latch flag
+                    _addressLatch = 0;
+
                     dataRead = true;
                     break;
                 case 0x0003:    // OAM Address
@@ -280,6 +320,20 @@ namespace NESEmulator
                     FrameComplete = true;
                 }
             }
+        }
+
+        public Pixel GetColorFromPaletteRam(byte palette, byte pixel)
+        {
+            // This is a convenience function that takes a specified palette and pixel
+            // index and returns the appropriate screen colour.
+            // "0x3F00"       - Offset into PPU addressable range where palettes are stored
+            // "palette << 2" - Each palette is 4 bytes in size
+            // "pixel"        - Each pixel index is either 0, 1, 2 or 3
+            // "& 0x3F"       - Stops us reading beyond the bounds of the palScreen array
+            return _palScreen[ppuRead((ushort)(ADDR_PALETTE + (palette << 2) + pixel)) & 0x3F];
+
+            // Note: We dont access tblPalette directly here, instead we know that ppuRead()
+            // will map the address onto the seperate small RAM attached to the PPU bus.
         }
 
         private void buildPalette()
