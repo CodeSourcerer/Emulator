@@ -1,5 +1,6 @@
 ﻿using System;
 using csPixelGameEngine;
+using NESEmulator.Util;
 
 namespace NESEmulator
 {
@@ -8,7 +9,8 @@ namespace NESEmulator
     /// </summary>
     public class CS2C02 : BusDevice
     {
-        private const ushort ADDR_PALETTE = 0x3F00;
+        private const ushort ADDR_PALETTE   = 0x3F00;
+        private const ushort ADDR_NAMETABLE = 0x2000;
 
         public BusDeviceType DeviceType { get { return BusDeviceType.PPU; } }
 
@@ -157,9 +159,9 @@ namespace NESEmulator
                         // us the final pixel index
                         for (int col = 0; col < 8; col++)
                         {
-                            // We can get the index value by simply adding the bits together
+                            // We can get the index value by simply combining the bits together
                             // but we're only interested in the lsb of the row words because...
-                            byte pixel = (byte)((tileLSB & 0x01) + (tileMSB & 0x01));
+                            byte pixel = (byte)((tileLSB & 0x01) + ((tileMSB & 0x01) << 1));
 
                             // ...we will shift the row words 1 bit right for each column of
                             // the character.
@@ -483,6 +485,91 @@ namespace NESEmulator
             // information and sprite information, compositing them into a pixel
             // to be output.
 
+            // All but 1 of the scanlines is visible to the user. The pre-render scanline at -1, is used
+            // to configure the "shifters" for the first visible scanline, 0.
+            if (_scanline >= -1 && _scanline < 240)
+            {
+                if (_scanline == 0 && _cycle == 0)
+                {
+                    // "Odd Frame" cycle skip
+                    _cycle = 1;
+                }
+
+                if (_scanline == -1 && _cycle == 1)
+                {
+                    // Effectively start of new frame, so clear vertical blank flag
+                    _status.VerticalBlank = false;
+                }
+
+                if ((_cycle >= 2 && _cycle < 250) || (_cycle >= 321 && _cycle < 338))
+                {
+                    updateShifters();
+
+                    // In these cycles we are collecting and working with visible data. The "shifters" have
+                    // been preloaded by the end of the previous scanline with the data for the start of
+                    // this scanline. Once we leave the visible region, we go dormant until the shifters are
+                    // preloaded for the next scanline.
+
+                    // Fortunately, for background rendering, we go through a fairly repeatable sequence of
+                    // events, every 2 clock cycles.
+                    switch ((_cycle - 1) % 8)
+                    {
+                        case 0:
+                            // Load the current background tile pattern and attributes into the "shifter"
+                            loadBackgroundShifters();
+
+                            // Fetch the next background tile ID
+                            // "(vram_addr.reg & 0x0FFF)" : Mask to 12 bits that are relevant
+                            // "| 0x2000"                 : Offset into nametable space on PPU address bus
+                            _bg_nextTileId = ppuRead((ushort)(ADDR_NAMETABLE | (_vram_addr.reg & 0x0FFF)));
+
+                            break;
+
+                        case 2:
+                            // Fetch the next background tile attribute.
+
+                            // Recall that each nametable has two rows of cells that are not tile information, instead
+                            // they represent the attribute information that indicates which palettes are applied to
+                            // which area on the screen. Importantly (and frustratingly) there is not a 1 to 1
+                            // correspondance between background tile and palette. Two rows of tile data holds
+                            // 64 attributes. Therfore we can assume that the attributes affect 8x8 zones on the screen
+                            // for that nametable. Given a working resolution of 256x240, we can further assume that each
+                            // zone is 32x32 pixels in screen space, or 4x4 tiles. Four system palettes are allocated
+                            // to background rendering, so a palette can be specified using just 2 bits. The attribute
+                            // byte therefore can specify 4 distinct palettes. Therefore we can even further assume
+                            // that a single palette is applied to a 2x2 tile combination of the 4x4 tile zone. The
+                            // very fact that background tiles "share" a palette locally is the reason why in some
+                            // games you see distortion in the colours at screen edges.
+
+                            // As before when choosing the tile ID, we can use the bottom 12 bits of the loopy register,
+                            // but we need to make the implementation "coarser" because instead of a specific tile,
+                            // we want the attribute byte for a group of 4x4 tiles, or in other words, we divide our
+                            // 32x32 address by 4 to give us an equivalent 8x8 address, and we offset this address
+                            // into the attribute section of the target nametable.
+
+                            // Reconstruct the 12 bit loopy address into an offset into the
+                            // attribute memory
+
+                            // "(vram_addr.coarse_x >> 2)"        : integer divide coarse x by 4, 
+                            //                                      from 5 bits to 3 bits
+                            // "((vram_addr.coarse_y >> 2) << 3)" : integer divide coarse y by 4, 
+                            //                                      from 5 bits to 3 bits,
+                            //                                      shift to make room for coarse x
+
+                            // Result so far: YX00 00yy yxxx
+
+                            // All attribute memory begins at 0x03C0 within a nametable, so OR with
+                            // result to select target nametable, and attribute byte offset. Finally
+                            // OR with 0x2000 to offset into nametable address space on PPU bus.
+                            _bg_nextTileAttrib = ppuRead((ushort)(0x23C0 | ((_vram_addr.NameTableY ? 1 : 0) << 11)
+                                                                         | ((_vram_addr.NameTableX ? 1 : 0) << 10)
+                                                                         | ((_vram_addr.CoarseY >> 2) << 3)
+                                                                         | ( _vram_addr.CoarseX >> 2) ));
+
+                            break;
+                    }
+                }
+            }
             // Temporary: fake noise
             _screen.SetPixel((uint)(_cycle - 1), (uint)(_scanline+1), _palScreen[(_random.Next(2) == 1) ? 0x3F : 0x30]);
 
@@ -601,14 +688,74 @@ namespace NESEmulator
             }
         }
 
+        /// <summary>
+        /// Transfer the temporarily stored horizontal nametable access information into the "pointer". Note
+        /// that fine x scrolling is not part of the "pointer" addressing mechanism.
+        /// </summary>
         private void transferAddressX()
         {
-
+            // Only if rendering is enabled
+            if (_mask.RenderBackground || _mask.RenderSprites)
+            {
+                _vram_addr.NameTableX   = _tram_addr.NameTableX;
+                _vram_addr.CoarseX      = _tram_addr.CoarseX;
+            }
         }
 
+        /// <summary>
+        /// Transfer the temporarily stored vertical nametable access information into the "pointer". Note
+        /// that fine y scrolling is part of the "pointer" addressing mechanism.
+        /// </summary>
         private void transferAddressY()
         {
+            // Only if rendering is enabled
+            if (_mask.RenderBackground || _mask.RenderSprites)
+            {
+                _vram_addr.FineY        = _tram_addr.FineY;
+                _vram_addr.NameTableY   = _tram_addr.NameTableY;
+                _vram_addr.CoarseY      = _tram_addr.CoarseY;
+            }
+        }
 
+        /// <summary>
+        /// Prime the "in-effect" background tile shifters ready for outputting next 8 pixels in scanline.
+        /// </summary>
+        private void loadBackgroundShifters()
+        {
+            // Each PPU update we calculate one pixel. These shifters shift 1 bit along feeding the pixel
+            // compositor with the binary information it needs. Its 16 bits wide, because the top 8 bits
+            // are the current 8 pixels being drawn and the bottom 8 bits are the next 8 pixels to be drawn.
+            // Naturally this means the required bit is always the MSB of the shifter. However, "fine x"
+            // scrolling plays a part in this too, which is seen later, so in fact we can choose any one of
+            // the top 8 bits.
+            _bg_shifterPatternLo = (ushort)((_bg_shifterPatternLo & 0xFF00) | _bg_nextTileLSB);
+            _bg_shifterPatternHi = (ushort)((_bg_shifterPatternHi & 0xFF00) | _bg_nextTileMSB);
+
+            // Attribute bits do not change per pixel, rather they change every 8 pixels but are synchronised
+            // with the pattern shifters for convenience, so here we take the bottom 2 bits of the attribute
+            // word which represent which palette is being used for the current 8 pixels and the next 8 pixels,
+            // and "inflate" them to 8 bit words.
+            _bg_shifterAttribLo = (ushort)((_bg_shifterAttribLo & 0xFF00) | (_bg_nextTileAttrib.TestBit(0) ? 0xFF : 0x00));
+            _bg_shifterAttribHi = (ushort)((_bg_shifterAttribHi & 0xFF00) | (_bg_nextTileAttrib.TestBit(1) ? 0xFF : 0x00));
+        }
+
+        /// <summary>
+        /// Every cycle the shifters storing pattern and attribute information shift their contents by 1 bit.
+        /// This is because every cycle, the output progresses by 1 pixel. This means relatively, the state of
+        /// the shifter is in sync with the pixels being drawn for that 8 pixel section of the scanline.
+        /// </summary>
+        private void updateShifters()
+        {
+            if (_mask.RenderBackground)
+            {
+                // Shifting background tile pattern row
+                _bg_shifterPatternLo <<= 1;
+                _bg_shifterPatternHi <<= 1;
+
+                // Shift palette attributes by 1
+                _bg_shifterAttribLo <<= 1;
+                _bg_shifterAttribHi <<= 1;
+            }
         }
 
         #endregion // Scanline/Cycle operations
