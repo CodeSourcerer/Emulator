@@ -55,5 +55,28 @@ namespace NESEmulator
             }
         }
 
+        public byte FineY
+        {
+            get
+            {
+                return (byte)((reg >> 12) & 0x07);
+            }
+            set
+            {
+                reg |= (ushort)((value & 0x07) << 12);
+            }
+        }
+
+        public bool Unused
+        {
+            get
+            {
+                return reg.TestBit(15);
+            }
+            set
+            {
+                reg = reg.SetBit(15, value);
+            }
+        }
     }
 }

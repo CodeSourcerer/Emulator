@@ -21,6 +21,9 @@ namespace NESEmulator
         private PPULoopyRegister _vram_addr;
         private PPULoopyRegister _tram_addr;
 
+        // Pixel offset horizontally
+        private byte _fineX;
+
         // Internal communications
         private byte _addressLatch;
         private byte _ppuDataBuffer;
@@ -177,10 +180,9 @@ namespace NESEmulator
                     }
                 }
             }
-            if (i < 2)
-                return _patternTable[i];
 
-            return null;
+            // Return the sprite representing the pattern table
+            return _patternTable[i];
         }
 
         public bool FrameComplete { get; set; }
@@ -227,13 +229,26 @@ namespace NESEmulator
                 case 0x0004:    // OAM Data
                     dataRead = true;
                     break;
-                case 0x0005:    // Scroll
+                case 0x0005:    // Scroll - Not readable
                     dataRead = true;
                     break;
-                case 0x0006:    // PPU Address
+                case 0x0006:    // PPU Address - not readable
                     dataRead = true;
                     break;
                 case 0x0007:    // PPU Data
+                    // Reads from the NameTable ram get delayed one cycle, so output buffer which contains the data
+                    // from the previous read request
+                    data = _ppuDataBuffer;
+                    // Then update buffer for next time
+                    _ppuDataBuffer = ppuRead(_vram_addr.reg);
+                    // However, if the address was in the palette range, the data is not delayed, so it returns
+                    // immediately
+                    if (_vram_addr.reg >= ADDR_PALETTE)
+                        data = _ppuDataBuffer;
+                    // All reads from the PPU data automatically increment the nametable address depending upon the
+                    // mode set in the control register. If set to vertical mode, the increment is 32 so it skips
+                    // one whole nametable row; in horizontal mode it just increments by 1, moving to the next column
+                    _vram_addr.reg += (ushort)(_control.IncrementMode ? 32 : 1);
                     dataRead = true;
                     break;
             }
@@ -248,6 +263,9 @@ namespace NESEmulator
             switch (addr)
             {
                 case 0x0000:    // Control
+                    _control.reg = data;
+                    _tram_addr.NameTableX = _control.NameTableX;
+                    _tram_addr.NameTableY = _control.NameTableY;
                     dataWritten = true;
                     break;
                 case 0x0001:    // Mask
@@ -263,12 +281,50 @@ namespace NESEmulator
                     dataWritten = true;
                     break;
                 case 0x0005:    // Scroll
+                    if (_addressLatch == 0)
+                    {
+                        // First write to scroll register contains X offset in pixel space which we split into
+                        // coarse and fine x values
+                        _fineX = (byte)(data & 0x07);
+                        _tram_addr.CoarseX = (ushort)(data >> 3);
+                        _addressLatch = 1;
+                    }
+                    else
+                    {
+                        // First write to scroll register contains Y offset in pixel space which we split into
+                        // coarse and fine Y values
+                        _tram_addr.FineY = (byte)(data & 0x07);
+                        _tram_addr.CoarseY = (ushort)(data >> 3);
+                        _addressLatch = 0;
+                    }
                     dataWritten = true;
                     break;
                 case 0x0006:    // PPU Address
+                    if (_addressLatch == 0)
+                    {
+                        // PPU address bus can be accessed by CPU via the ADDR and DATA registers. The first
+                        // write to this register latches the high byte of the address, the second is the low
+                        // byte. Note the writes are stored in the tram register
+                        _tram_addr.reg = (ushort)(((data & 0x3F) << 8) | (_tram_addr.reg & 0x00FF));
+                        _addressLatch = 1;
+                    }
+                    else
+                    {
+                        // ...when a whole address has been written, the internal vram address buffer is updated.
+                        // Writing to the PPU is unwise during rendering as the PPU will maintain the vram address
+                        // automatically while rendering the scanline position.
+                        _tram_addr.reg = (ushort)((_tram_addr.reg & 0x00FF) | data);
+                        _vram_addr = _tram_addr;
+                        _addressLatch = 0;
+                    }
                     dataWritten = true;
                     break;
                 case 0x0007:    // PPU Data
+                    ppuWrite(_vram_addr.reg, data);
+                    // All writes from PPU data automatically increment the nametable address depending upon the
+                    // mode set in the control register. If set to vertical mode, the increment is 32, so it skips
+                    // one whole nametable row; in horizontal mode it just increments by 1, moving to the next column.
+                    _vram_addr.reg += (ushort)(_control.IncrementMode ? 32 : 1);
                     dataWritten = true;
                     break;
             }
@@ -277,7 +333,26 @@ namespace NESEmulator
         }
 
         public void Reset()
-        { }
+        {
+            _fineX                  = 0;
+            _addressLatch           = 0;
+            _ppuDataBuffer          = 0;
+            _scanline               = 0;
+            _cycle                  = 0;
+            _bg_nextTileId          = 0;
+            _bg_nextTileAttrib      = 0;
+            _bg_nextTileLSB         = 0;
+            _bg_nextTileMSB         = 0;
+            _bg_shifterPatternLo    = 0;
+            _bg_shifterPatternHi    = 0;
+            _bg_shifterAttribLo     = 0;
+            _bg_shifterAttribHi     = 0;
+            _status.reg             = 0;
+            _mask.reg               = 0;
+            _control.reg            = 0;
+            _vram_addr.reg          = 0;
+            _tram_addr.reg          = 0;
+        }
 
         // TODO: I think this should be a read from _ppuBus... will investigate later
         private byte ppuRead(ushort addr, bool rdonly = false)
@@ -285,7 +360,56 @@ namespace NESEmulator
             byte data = 0;
             addr &= 0x3FFF;
 
-            // Do stuff...
+            // TODO: Eventually loop through ppuBus like we do with the NES bus, attempting to do reads until
+            // one "hits"
+
+            if (_cartridge.ppuRead(addr, out data))
+            {
+
+            }
+            else if (addr >= 0x0000 && addr <= 0x1FFF)  // Pattern (sprite) memory range
+            {
+                // If the cartridge can't map the address, have a physical location ready here
+                data = _tblPattern[(addr & 0x1000) >> 12][addr & 0x0FFF];
+            }
+            else if (addr >= 0x2000 && addr <= 0x3EFF)  // Nametable memory (VRAM) range
+            {
+                addr &= 0x0FFF;
+
+                if (_cartridge.mirror == Cartridge.Mirror.VERTICAL)
+                {
+                    if (addr >= 0x0000 && addr <= 0x03FF)
+                        data = _tblName[0][addr & 0x03FF];
+                    else if (addr >= 0x0400 && addr <= 0x07FF)
+                        data = _tblName[1][addr & 0x03FF];
+                    else if (addr >= 0x0800 && addr <= 0x0BFF)
+                        data = _tblName[0][addr & 0x03FF];
+                    else if (addr >= 0x0C00 && addr <= 0x0FFF)
+                        data = _tblName[1][addr & 0x03FF];
+                }
+                else if (_cartridge.mirror == Cartridge.Mirror.HORIZONTAL)
+                {
+                    if (addr >= 0x0000 && addr <= 0x03FF)
+                        data = _tblName[0][addr & 0x03FF];
+                    else if (addr >= 0x0400 && addr <= 0x07FF)
+                        data = _tblName[0][addr & 0x03FF];
+                    else if (addr >= 0x0800 && addr <= 0x0BFF)
+                        data = _tblName[1][addr & 0x03FF];
+                    else if (addr >= 0x0C00 && addr <= 0x0FFF)
+                        data = _tblName[1][addr & 0x03FF];
+                }
+            }
+            else if (addr >= 0x3F00 && addr <= 0x3FFF)  // Palette memory range
+            {
+                // Mask bottom 5 bits
+                addr &= 0x001F;
+
+                // Hard-code the mirroring
+                if (addr >= 0x0010)
+                    addr -= 0x0010;
+
+                data = (byte)(_palette[addr] & (_mask.GrayScale ? 0x30 : 0x3F));
+            }
 
             return data;
         }
@@ -293,7 +417,56 @@ namespace NESEmulator
         // TODO: I think this should be a write to the _ppuBus... will investigate later
         private void ppuWrite(ushort addr, byte data)
         {
+            addr &= 0x3FFF;
 
+            // TODO: Eventually loop through ppuBus like we do with the NES bus, attempting to do writes until
+            // one "hits"
+
+            if (_cartridge.ppuWrite(addr, data))
+            {
+
+            }
+            else if (addr >= 0x0000 && addr <= 0x1FFF)  // Pattern (sprite) memory range
+            {
+                _tblPattern[(addr & 0x1000) >> 12][addr & 0x0FFF] = data;
+            }
+            else if (addr >= 0x2000 && addr <= 0x3EFF)  // Nametable memory (VRAM) range
+            {
+                addr &= 0x0FFF;
+                if (_cartridge.mirror == Cartridge.Mirror.VERTICAL)
+                {
+                    if (addr >= 0x0000 && addr <= 0x03FF)
+                        _tblName[0][addr & 0x03FF] = data;
+                    else if (addr >= 0x0400 && addr <= 0x07FF)
+                        _tblName[1][addr & 0x03FF] = data;
+                    else if (addr >= 0x0800 && addr <= 0x0BFF)
+                        _tblName[0][addr & 0x03FF] = data;
+                    else if (addr >= 0x0C00 && addr <= 0x0FFF)
+                        _tblName[1][addr & 0x03FF] = data;
+                }
+                else if (_cartridge.mirror == Cartridge.Mirror.HORIZONTAL)
+                {
+                    if (addr >= 0x0000 && addr <= 0x03FF)
+                        _tblName[0][addr & 0x03FF] = data;
+                    else if (addr >= 0x0400 && addr <= 0x07FF)
+                        _tblName[0][addr & 0x03FF] = data;
+                    else if (addr >= 0x0800 && addr <= 0x0BFF)
+                        _tblName[1][addr & 0x03FF] = data;
+                    else if (addr >= 0x0C00 && addr <= 0x0FFF)
+                        _tblName[1][addr & 0x03FF] = data;
+                }
+            }
+            else if (addr >= 0x3F00 && addr <= 0x3FFF)  // Palette memory range
+            {
+                // Mask lower 5 bits
+                addr &= 0x001F;
+
+                // Hard-code the mirroring
+                if (addr >= 0x0010)
+                    addr -= 0x0010;
+
+                _palette[addr] = data;
+            }
         }
 
         #endregion // Bus Communications
@@ -305,6 +478,11 @@ namespace NESEmulator
 
         public void Clock()
         {
+            // As we progress through scanlines and cycles, the PPU is effectively
+            // a state machine going through the motions of fetching background 
+            // information and sprite information, compositing them into a pixel
+            // to be output.
+
             // Temporary: fake noise
             _screen.SetPixel((uint)(_cycle - 1), (uint)(_scanline+1), _palScreen[(_random.Next(2) == 1) ? 0x3F : 0x30]);
 
@@ -335,6 +513,105 @@ namespace NESEmulator
             // Note: We dont access tblPalette directly here, instead we know that ppuRead()
             // will map the address onto the seperate small RAM attached to the PPU bus.
         }
+
+        #region Scanline/Cycle operations
+
+        /// <summary>
+        /// Increment the background tile "pointer" one tile/column horizontally
+        /// </summary>
+        private void incrementScrollX()
+        {
+            // Note: pixel perfect scrolling horizontally is handled by the 
+            // data shifters. Here we are operating in the spatial domain of 
+            // tiles, 8x8 pixel blocks.
+
+            // Only if rendering is enabled
+            if (_mask.RenderBackground || _mask.RenderSprites)
+            {
+                // A single name table is 32x30 tiles. As we increment horizontally we may cross
+                // into a neighboring nametable, or wrap around to a neighboring nametable
+                if (_vram_addr.CoarseX == 31)
+                {
+                    // Leaving nametable so wrap address around
+                    _vram_addr.CoarseX = 0;
+                    // Flip target nametable bit
+                    _vram_addr.NameTableX = !_vram_addr.NameTableX;
+                }
+                else
+                {
+                    // Staying in current nametable, so just increment
+                    _vram_addr.CoarseX++;
+                }
+            }
+        }
+
+        private void incrementScrollY()
+        {
+            // Incrementing vertically is more complicated. The visible nametable is 32x30 tiles, but in
+            // memory there is enough room for 32x32 tiles. The bottom two rows of tiles are in fact not
+            // tiles at all, they contain the "attribute" information for the entire table. This is
+            // information that describes which palettes are used for different regions of the nametable.
+
+            // In addition, the NES doesnt scroll vertically in chunks of 8 pixels i.e. the height of a
+            // tile, it can perform fine scrolling by using the fine_y component of the register. This
+            // means an increment in Y first adjusts the fine offset, but may need to adjust the whole
+            // row offset, since fine_y is a value 0 to 7, and a row is 8 pixels high
+
+            // Only if rendering is enabled
+            if (_mask.RenderBackground || _mask.RenderSprites)
+            {
+                // If possible, just increment the fine y offset
+                if (_vram_addr.FineY < 7)
+                {
+                    _vram_addr.FineY++;
+                    // Whew! That was easy...
+                }
+                else
+                {
+                    // If we have gone beyond the height of a row, we need to increment the row,
+                    // potentially wrapping into neighbouring vertical nametables. Dont forget however,
+                    // the bottom two rows do not contain tile information. The coarse y offset is used
+                    // to identify which row of the nametable we want, and the fine y offset is the
+                    // specific "scanline"
+
+                    // Reset fine y offset
+                    _vram_addr.FineY = 0;
+
+                    // Check if we need to swap vertical nametable targets
+                    if (_vram_addr.CoarseY == 29)
+                    {
+                        // We do, so reset coarse y offset
+                        _vram_addr.CoarseY = 0;
+                        // and flip the target nametable bit
+                        _vram_addr.NameTableY = !_vram_addr.NameTableY;
+                    }
+                    else if (_vram_addr.CoarseY == 31)
+                    {
+                        // In case the pointer is in the attribute memory, we just wrap around the current
+                        // nametable
+                        _vram_addr.CoarseY = 0;
+                    }
+                    else
+                    {
+                        // None of the above boundary/wrapping conditions apply so just increment the
+                        // coarse y offset
+                        _vram_addr.CoarseY++;
+                    }
+                }
+            }
+        }
+
+        private void transferAddressX()
+        {
+
+        }
+
+        private void transferAddressY()
+        {
+
+        }
+
+        #endregion // Scanline/Cycle operations
 
         private void buildPalette()
         {
