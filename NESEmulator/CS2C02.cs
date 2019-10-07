@@ -9,8 +9,13 @@ namespace NESEmulator
     /// </summary>
     public class CS2C02 : BusDevice
     {
+        private const ushort ADDR_PPU_MIN   = 0x2000;
+        private const ushort ADDR_PPU_MAX   = 0x3FFF;
         private const ushort ADDR_PALETTE   = 0x3F00;
         private const ushort ADDR_NAMETABLE = 0x2000;
+
+        private const ushort SCREEN_WIDTH  = 256;
+        private const ushort SCREEN_HEIGHT = 240;
 
         public BusDeviceType DeviceType { get { return BusDeviceType.PPU; } }
 
@@ -30,11 +35,13 @@ namespace NESEmulator
         private byte _addressLatch;
         private byte _ppuDataBuffer;
 
-        private Sprite _screen = new Sprite(256, 240);
+        private Sprite _screen = new Sprite(SCREEN_WIDTH, SCREEN_HEIGHT);
 
         // Pixel "dot" position information
         private short  _scanline;
         private ushort _cycle;
+
+        public bool NMI;
 
         // Background rendering
         private byte _bg_nextTileId;
@@ -47,7 +54,7 @@ namespace NESEmulator
         private ushort _bg_shifterAttribHi;
 
         private byte[][] _tblName = new byte[2][];
-        private Sprite[] _nameTable = { new Sprite(256, 240), new Sprite(256, 240) };
+        private Sprite[] _nameTable = { new Sprite(SCREEN_WIDTH, SCREEN_HEIGHT), new Sprite(SCREEN_WIDTH, SCREEN_HEIGHT) };
 
         // TODO: This is connected to the PPU's bus, so I think it would be better
         // to make this a BusDevice and attach to _ppuBus.
@@ -72,8 +79,8 @@ namespace NESEmulator
 
             _tblName[0] = new byte[1024];
             _tblName[1] = new byte[1024];
-            //_tblPattern[0] = new byte[4096];
-            //_tblPattern[1] = new byte[4096];
+            _tblPattern[0] = new byte[4096];
+            _tblPattern[1] = new byte[4096];
 
             buildPalette();
         }
@@ -138,8 +145,7 @@ namespace NESEmulator
             {
                 for (int tileX = 0; tileX < 16; tileX++)
                 {
-                    // Convert the 2D tile coordinate into an offset into the pattern
-                    // table memory.
+                    // Convert the 2D tile coordinate into an offset into the pattern table memory.
                     int offset = tileY * 256 + tileX * 16;
 
                     // Loop through 8x8 character/sprite at tile
@@ -198,61 +204,59 @@ namespace NESEmulator
             bool dataRead = false;
             data = 0;
 
-            // These are the live PPU registers that repsond
-            // to being read from in various ways. Note that not
-            // all the registers are capable of being read from
-            // so they just return 0x00
-            switch (addr)
+            if (addr >= ADDR_PPU_MIN && addr <= ADDR_PPU_MAX)
             {
-                case 0x0000:    // Control
-                    dataRead = true;
-                    break;
-                case 0x0001:    // Mask
-                    dataRead = true;
-                    break;
-                case 0x0002:    // Status
-                    // Reading from the status register has the effect of resetting different parts of the circuit. 
-                    // Only the top three bits contain status information, however it is possible that some "noise"
-                    // gets picked up on the bottom 5 bits which represent the last PPU bus transaction. Some games
-                    // "may" use this noise as valid data (even though they probably shouldn't)
-                    data = (byte)((_status.reg & 0xE0) | (_ppuDataBuffer & 0x1F));
+                addr &= 0x0007;
+                dataRead = true;
 
-                    // Clear the vertical blanking flag
-                    _status.VerticalBlank = false;
+                // These are the live PPU registers that repsond
+                // to being read from in various ways. Note that not
+                // all the registers are capable of being read from
+                // so they just return 0x00
+                switch (addr)
+                {
+                    case 0x0000:    // Control
+                        break;
+                    case 0x0001:    // Mask
+                        break;
+                    case 0x0002:    // Status
+                        _status.VerticalBlank = true;
+                        // Reading from the status register has the effect of resetting different parts of the circuit. 
+                        // Only the top three bits contain status information, however it is possible that some "noise"
+                        // gets picked up on the bottom 5 bits which represent the last PPU bus transaction. Some games
+                        // "may" use this noise as valid data (even though they probably shouldn't)
+                        data = (byte)((_status.reg & 0xE0) | (_ppuDataBuffer & 0x1F));
 
-                    // Reset Loopy's Address latch flag
-                    _addressLatch = 0;
+                        // Clear the vertical blanking flag
+                        _status.VerticalBlank = false;
 
-                    dataRead = true;
-                    break;
-                case 0x0003:    // OAM Address
-                    dataRead = true;
-                    break;
-                case 0x0004:    // OAM Data
-                    dataRead = true;
-                    break;
-                case 0x0005:    // Scroll - Not readable
-                    dataRead = true;
-                    break;
-                case 0x0006:    // PPU Address - not readable
-                    dataRead = true;
-                    break;
-                case 0x0007:    // PPU Data
-                    // Reads from the NameTable ram get delayed one cycle, so output buffer which contains the data
-                    // from the previous read request
-                    data = _ppuDataBuffer;
-                    // Then update buffer for next time
-                    _ppuDataBuffer = ppuRead(_vram_addr.reg);
-                    // However, if the address was in the palette range, the data is not delayed, so it returns
-                    // immediately
-                    if (_vram_addr.reg >= ADDR_PALETTE)
+                        // Reset Loopy's Address latch flag
+                        _addressLatch = 0;
+                        break;
+                    case 0x0003:    // OAM Address
+                        break;
+                    case 0x0004:    // OAM Data
+                        break;
+                    case 0x0005:    // Scroll - Not readable
+                        break;
+                    case 0x0006:    // PPU Address - not readable
+                        break;
+                    case 0x0007:    // PPU Data
+                                    // Reads from the NameTable ram get delayed one cycle, so output buffer which contains the data
+                                    // from the previous read request
                         data = _ppuDataBuffer;
-                    // All reads from the PPU data automatically increment the nametable address depending upon the
-                    // mode set in the control register. If set to vertical mode, the increment is 32 so it skips
-                    // one whole nametable row; in horizontal mode it just increments by 1, moving to the next column
-                    _vram_addr.reg += (ushort)(_control.IncrementMode ? 32 : 1);
-                    dataRead = true;
-                    break;
+                        // Then update buffer for next time
+                        _ppuDataBuffer = ppuRead(_vram_addr.reg);
+                        // However, if the address was in the palette range, the data is not delayed, so it returns
+                        // immediately
+                        if (_vram_addr.reg >= ADDR_PALETTE)
+                            data = _ppuDataBuffer;
+                        // All reads from the PPU data automatically increment the nametable address depending upon the
+                        // mode set in the control register. If set to vertical mode, the increment is 32 so it skips
+                        // one whole nametable row; in horizontal mode it just increments by 1, moving to the next column
+                        _vram_addr.reg += (ushort)(_control.IncrementMode ? 32 : 1);
+                        break;
+                }
             }
 
             return dataRead;
@@ -271,6 +275,7 @@ namespace NESEmulator
                     dataWritten = true;
                     break;
                 case 0x0001:    // Mask
+                    _mask.reg = data;
                     dataWritten = true;
                     break;
                 case 0x0002:    // Status
@@ -315,7 +320,7 @@ namespace NESEmulator
                         // ...when a whole address has been written, the internal vram address buffer is updated.
                         // Writing to the PPU is unwise during rendering as the PPU will maintain the vram address
                         // automatically while rendering the scanline position.
-                        _tram_addr.reg = (ushort)((_tram_addr.reg & 0x00FF) | data);
+                        _tram_addr.reg = (ushort)((_tram_addr.reg & 0xFF00) | data);
                         _vram_addr = _tram_addr;
                         _addressLatch = 0;
                     }
@@ -566,12 +571,149 @@ namespace NESEmulator
                                                                          | ((_vram_addr.CoarseY >> 2) << 3)
                                                                          | ( _vram_addr.CoarseX >> 2) ));
 
+                            // We've read the correct attribute byte for a specified address, but the byte itself is
+                            // broken down further into the 2x2 tile groups in the 4x4 attribute zone.
+
+                            // The attribute byte is assembled thus: BR(76) BL(54) TR(32) TL(10)
+                            //
+                            // +----+----+			    +----+----+
+                            // | TL | TR |			    | ID | ID |
+                            // +----+----+ where TL =   +----+----+
+                            // | BL | BR |			    | ID | ID |
+                            // +----+----+			    +----+----+
+                            //
+                            // Since we know we can access a tile directly from the 12 bit address, we can analyze
+                            // the bottom bits of the coarse coordinates to provide us with the correct offset into
+                            // the 8-bit word, to yield the 2 bits we are actually interested in which specifies the
+                            // palette for the 2x2 group of tiles. We know if "coarse y % 4" < 2 we are in the top
+                            // half else bottom half. Likewise if "coarse x % 4" < 2 we are in the left half else
+                            // right half. Ultimately we want the bottom two bits of our attribute word to be the
+                            // palette selected. So shift as required...
+                            if (_vram_addr.CoarseY.TestBit(1)) _bg_nextTileAttrib >>= 4;
+                            if (_vram_addr.CoarseX.TestBit(1)) _bg_nextTileAttrib >>= 2;
+                            _bg_nextTileAttrib &= 0x03;
+                            break;
+
+                        case 4:
+                            // Fetch the next background tile LSB bit plane from the pattern memory. The Tile ID has
+                            // been read from the nametable. We will use this id to index into the pattern memory to
+                            // find the correct sprite (assuming the sprites lie on 8x8 pixel boundaries in that memory,
+                            // which they do even though 8x16 sprites exist, as background tiles are always 8x8).
+                            //
+                            // Since the sprites are effectively 1 bit deep, but 8 pixels wide, we can represent a
+                            // whole sprite row as a single byte, so offsetting into the pattern memory is easy. In
+                            // total there is 8KB so we need a 13 bit address.
+
+                            // "(control.pattern_background << 12)"  : the pattern memory selector from control
+                            //                                         register, either 0K or 4K offset
+                            // "((uint16_t)bg_next_tile_id << 4)"    : the tile id multiplied by 16, as
+                            //                                         2 lots of 8 rows of 8 bit pixels
+                            // "(vram_addr.fine_y)"                  : Offset into which row based on
+                            //                                         vertical scroll offset
+                            // "+ 0"                                 : Mental clarity for plane offset
+                            // Note: No PPU address bus offset required as it starts at 0x0000
+                            _bg_nextTileLSB = ppuRead((ushort)(((_control.PatternBackground ? 1 : 0) << 12)
+                                                              + (_bg_nextTileId << 4)
+                                                              + (_vram_addr.FineY + 0)));
+                            break;
+
+                        case 6:
+                            // Fetch the next background tile MSB bit plane from the pattern memory. This is the same
+                            // as above, but has a +8 offset to select the next bit plane
+                            _bg_nextTileMSB = ppuRead((ushort)(((_control.PatternBackground ? 1 : 0) << 12)
+                                                              + (_bg_nextTileId << 4)
+                                                              + (_vram_addr.FineY + 8)));
+                            break;
+
+                        case 7:
+                            // Increment the background tile "pointer" to the next tile horizontally in the nametable
+                            // memory. Note this may cross nametable boundaries which is a little complex, but
+                            // essential to implement scrolling
+                            incrementScrollX();
                             break;
                     }
                 }
+
+                // End of a visible scanline, so increment downwards...
+                if (_cycle == 256)
+                {
+                    incrementScrollY();
+                }
+
+                // ...and reset the x position
+                if (_cycle == 257)
+                {
+                    loadBackgroundShifters();
+                    transferAddressX();
+                }
+
+                // Superfluous reads of a tile id at end of scanline
+                if (_cycle == 338 || _cycle == 340)
+                {
+                    _bg_nextTileId = ppuRead((ushort)(ADDR_NAMETABLE | (_vram_addr.reg & 0x0FFF)));
+                }
+
+                if (_scanline == -1 && _cycle >= 280 && _cycle < 305)
+                {
+                    // End of vertical blank period so reset the Y address ready for rendering
+                    transferAddressY();
+                }
             }
-            // Temporary: fake noise
-            _screen.SetPixel((uint)(_cycle - 1), (uint)(_scanline+1), _palScreen[(_random.Next(2) == 1) ? 0x3F : 0x30]);
+
+            if (_scanline == 240)
+            {
+                // Post render scanline - do nothing
+            }
+
+            if (_scanline >= 241 && _scanline < 261)
+            {
+                if (_scanline == 241 && _cycle == 1)
+                {
+                    // Effectively end of frame, so set vertical blank flag
+                    _status.VerticalBlank = true;
+
+                    // If the control register tells us to emit a NMI when entering vertical blanking period,
+                    // do it! The CPU will be informed that rendering is complete so it can perform operations
+                    // with the PPU knowing it won't produce visible artifacts.
+                    if (_control.EnableNMI)
+                        NMI = true;
+                }
+            }
+
+            // Composition - We now have background pixel information for this cycle. At this point we are only
+            // interested in background
+            byte bg_pixel   = 0x00;     // The 2-bit pixel to be rendered
+            byte bg_palette = 0x00;     // The 3-bit index of the palette the pixel indexes
+
+            // We only render backgrounds if the PPU is enabled to do so. Note if background rendering is
+            // disabled, the pixel and palette combine to form 0x00. This will fall through the color tables to
+            // yield the current background color in effect.
+            if (_mask.RenderBackground)
+            {
+                // Handle Pixel Selection by selecting the relevant bit depending upon fine x scrolling. This
+                // has the effect of offsetting ALL background rendering by a set number of pixels, permitting
+                // smooth scrolling.
+                ushort bit_mux = (ushort)(0x8000 >> _fineX);
+
+                // Select Plane pixels by extracting from the shifter
+                // at the required location.
+                byte p0_pixel = (byte)((_bg_shifterAttribLo & bit_mux) > 0 ? 1 : 0);
+                byte p1_pixel = (byte)((_bg_shifterAttribHi & bit_mux) > 0 ? 1 : 0);
+
+                // Combine to form pixel index
+                bg_pixel = (byte)((p1_pixel << 1) | p0_pixel);
+
+                byte bg_pal0 = (byte)((_bg_shifterAttribLo & bit_mux) > 0 ? 1 : 0);
+                byte bg_pal1 = (byte)((_bg_shifterAttribHi & bit_mux) > 0 ? 1 : 0);
+                bg_palette = (byte)((bg_pal1 << 1) | bg_pal0);
+            }
+
+            // Now we have a final pixel color, and a palette for this cycle of the current scanline. Let's at
+            // long last, draw it
+            if ((_cycle - 1) >= 0 && _scanline >= 0)
+            {
+                _screen.SetPixel((ushort)(_cycle - 1), (ushort)_scanline, GetColorFromPaletteRam(bg_palette, bg_pixel));
+            }
 
             _cycle++;
 

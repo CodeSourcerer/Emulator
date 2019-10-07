@@ -7,6 +7,7 @@ namespace NESEmulator
         CPU,
         PPU,
         APU,
-        CART
+        CART,
+        CONTROLLER
     }
 }
