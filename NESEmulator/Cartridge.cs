@@ -92,7 +92,7 @@ namespace NESEmulator
             data = 0;
 
             uint mapped_addr;
-            if (mapper.cpuMapRead(addr, out mapped_addr))
+            if (mapper.ppuMapRead(addr, out mapped_addr))
             {
                 data = CHRMemory[mapped_addr];
                 return true;
@@ -110,7 +110,7 @@ namespace NESEmulator
         public bool ppuWrite(ushort addr, byte data)
         {
             uint mapped_addr;
-            if (mapper.cpuMapWrite(addr, out mapped_addr))
+            if (mapper.ppuMapWrite(addr, out mapped_addr))
             {
                 CHRMemory[mapped_addr] = data;
                 return true;

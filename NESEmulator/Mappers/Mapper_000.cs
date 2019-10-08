@@ -53,6 +53,15 @@ namespace NESEmulator.Mappers
         {
             mapped_addr = 0;
 
+            if (addr <= 0x1FFF)
+            {
+                if (nCHRBanks == 0)
+                {
+                    mapped_addr = addr;
+                    return true;
+                }
+            }
+
             return false;
         }
     }

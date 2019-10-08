@@ -199,6 +199,28 @@ namespace NESEmulator
 
         #region Bus Communications
 
+        public void Reset()
+        {
+            _fineX = 0;
+            _addressLatch = 0;
+            _ppuDataBuffer = 0;
+            _scanline = 0;
+            _cycle = 0;
+            _bg_nextTileId = 0;
+            _bg_nextTileAttrib = 0;
+            _bg_nextTileLSB = 0;
+            _bg_nextTileMSB = 0;
+            _bg_shifterPatternLo = 0;
+            _bg_shifterPatternHi = 0;
+            _bg_shifterAttribLo = 0;
+            _bg_shifterAttribHi = 0;
+            _status.reg = 0;
+            _mask.reg = 0;
+            _control.reg = 0;
+            _vram_addr.reg = 0;
+            _tram_addr.reg = 0;
+        }
+
         public bool Read(ushort addr, out byte data)
         {
             bool dataRead = false;
@@ -220,7 +242,6 @@ namespace NESEmulator
                     case 0x0001:    // Mask
                         break;
                     case 0x0002:    // Status
-                        _status.VerticalBlank = true;
                         // Reading from the status register has the effect of resetting different parts of the circuit. 
                         // Only the top three bits contain status information, however it is possible that some "noise"
                         // gets picked up on the bottom 5 bits which represent the last PPU bus transaction. Some games
@@ -242,11 +263,12 @@ namespace NESEmulator
                     case 0x0006:    // PPU Address - not readable
                         break;
                     case 0x0007:    // PPU Data
-                                    // Reads from the NameTable ram get delayed one cycle, so output buffer which contains the data
-                                    // from the previous read request
+                        // Reads from the NameTable ram get delayed one cycle, so output buffer which contains the data
+                        // from the previous read request
                         data = _ppuDataBuffer;
                         // Then update buffer for next time
                         _ppuDataBuffer = ppuRead(_vram_addr.reg);
+
                         // However, if the address was in the palette range, the data is not delayed, so it returns
                         // immediately
                         if (_vram_addr.reg >= ADDR_PALETTE)
@@ -335,28 +357,6 @@ namespace NESEmulator
             }
 
             return dataWritten;
-        }
-
-        public void Reset()
-        {
-            _fineX                  = 0;
-            _addressLatch           = 0;
-            _ppuDataBuffer          = 0;
-            _scanline               = 0;
-            _cycle                  = 0;
-            _bg_nextTileId          = 0;
-            _bg_nextTileAttrib      = 0;
-            _bg_nextTileLSB         = 0;
-            _bg_nextTileMSB         = 0;
-            _bg_shifterPatternLo    = 0;
-            _bg_shifterPatternHi    = 0;
-            _bg_shifterAttribLo     = 0;
-            _bg_shifterAttribHi     = 0;
-            _status.reg             = 0;
-            _mask.reg               = 0;
-            _control.reg            = 0;
-            _vram_addr.reg          = 0;
-            _tram_addr.reg          = 0;
         }
 
         // TODO: I think this should be a read from _ppuBus... will investigate later

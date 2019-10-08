@@ -235,7 +235,7 @@ namespace NESEmulatorApp
         static void Main(string[] args)
         {
             Demo demo = new Demo("NES Emulator");
-            Cartridge cartridge = demo.LoadCartridge("tests/nestest.nes");
+            Cartridge cartridge = demo.LoadCartridge("tests/smb.nes");
             demo.Start(cartridge);
         }
 
