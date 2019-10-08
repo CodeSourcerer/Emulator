@@ -10,6 +10,7 @@ using csPixelGameEngine.enums;
 using NESEmulator;
 using OpenTK;
 using OpenTK.Input;
+using Key = OpenTK.Input.Key;
 
 namespace EmulatorApp
 {
@@ -26,8 +27,10 @@ namespace EmulatorApp
         private BusDevice[] busDevices;
         private CS6502 cpu;
         private CS2C02 ppu;
+        private NESController nesController;
         private Dictionary<ushort, string> mapAsm;
         private bool runEmulation;
+        private int selectedPalette;
 
         public Demo(string appName)
         {
@@ -44,7 +47,8 @@ namespace EmulatorApp
             ppu = new CS2C02();
             ram = new Ram(0x07FF, 0x1FFF);
             cpu = new CS6502();
-            busDevices = new BusDevice[] { ppu, ram, cpu };
+            nesController = new NESController();
+            busDevices = new BusDevice[] { ppu, ram, cpu, nesController };
             nesBus = new Bus(busDevices);
             cpu.ConnectBus(nesBus);
 
@@ -62,22 +66,22 @@ namespace EmulatorApp
 
         DateTime dtLastTick;
 
-        private void NesClock_OnClockTick(object sender, ElapsedEventArgs e)
-        {
-            if (runEmulation)
-            {
-                if ((DateTime.Now - dtLastTick) > TimeSpan.FromMilliseconds(18))
-                    Console.WriteLine("Taking too long! Frame took {0} ms", (DateTime.Now - dtLastTick).TotalMilliseconds);
-                dtLastTick = DateTime.Now;
+        //private void NesClock_OnClockTick(object sender, ElapsedEventArgs e)
+        //{
+        //    if (runEmulation)
+        //    {
+        //        if ((DateTime.Now - dtLastTick) > TimeSpan.FromMilliseconds(18))
+        //            Console.WriteLine("Taking too long! Frame took {0} ms", (DateTime.Now - dtLastTick).TotalMilliseconds);
+        //        dtLastTick = DateTime.Now;
 
-                CS2C02 ppu = (CS2C02)nesBus.GetPPU();
-                do
-                {
-                    nesBus.clock();
-                } while (!ppu.FrameComplete);
-                ppu.FrameComplete = false;
-            }
-        }
+        //        CS2C02 ppu = (CS2C02)nesBus.GetPPU();
+        //        do
+        //        {
+        //            nesBus.clock();
+        //        } while (!ppu.FrameComplete);
+        //        ppu.FrameComplete = false;
+        //    }
+        //}
 
         public Cartridge LoadCartridge(string fileName)
         {
@@ -96,6 +100,31 @@ namespace EmulatorApp
 
         private void Window_KeyDown(object sender, KeyboardKeyEventArgs e)
         {
+            // NES controller inputs
+            if (e.Key == Key.X)
+                nesController.Press(NESController.Controller.Controller1, NESController.NESButton.A);
+
+            if (e.Key == Key.Z)
+                nesController.Press(NESController.Controller.Controller1, NESController.NESButton.B);
+
+            if (e.Key == Key.A)
+                nesController.Press(NESController.Controller.Controller1, NESController.NESButton.START);
+
+            if (e.Key == Key.S)
+                nesController.Press(NESController.Controller.Controller1, NESController.NESButton.SELECT);
+
+            if (e.Key == Key.Up)
+                nesController.Press(NESController.Controller.Controller1, NESController.NESButton.UP);
+
+            if (e.Key == Key.Down)
+                nesController.Press(NESController.Controller.Controller1, NESController.NESButton.DOWN);
+
+            if (e.Key == Key.Left)
+                nesController.Press(NESController.Controller.Controller1, NESController.NESButton.LEFT);
+
+            if (e.Key == Key.Right)
+                nesController.Press(NESController.Controller.Controller1, NESController.NESButton.RIGHT);
+
             if (e.IsRepeat)
                 return;
 
@@ -113,12 +142,15 @@ namespace EmulatorApp
                     cpu.IRQ();
                     break;
 
+                case Key.P:
+                    selectedPalette = (selectedPalette + 1) & 0x07;
+                    break;
+
                 case OpenTK.Input.Key.N:
                     cpu.NMI();
                     break;
 
                 case OpenTK.Input.Key.F:
-                    CS2C02 ppu = (CS2C02)nesBus.GetPPU();
                     do
                     {
                         nesBus.clock();
@@ -148,7 +180,6 @@ namespace EmulatorApp
         {
             pge.Clear(Pixel.BLUE);
 
-            CS2C02 ppu = (CS2C02)nesBus.GetPPU();
             if (runEmulation)
             {
                 //if ((DateTime.Now - dtLastTick) > TimeSpan.FromMilliseconds(18))
@@ -174,28 +205,30 @@ namespace EmulatorApp
             DrawCpu(516, 2);
             DrawCode(516, 72, 26);
 
+            // Draw Palettes & Pattern Tables
+            const int swatchSize = 6;
+            for (int p = 0; p < 8; p++)
+            {
+                for (int s = 0; s < 4; s++)
+                {
+                    pge.FillRect(516 + p * (swatchSize * 5) + s * swatchSize, 340, swatchSize, swatchSize, ppu.GetColorFromPaletteRam((byte)p, (byte)s));
+                }
+            }
+
+            // Draw selection recticle around selected palette
+            pge.DrawRect(516 + selectedPalette * (swatchSize * 5) - 1, 339, (swatchSize * 4), swatchSize, Pixel.WHITE);
+
+            // Generate Pattern Tables
+            pge.DrawSprite(516, 348, ppu.GetPatternTable(0, (byte)selectedPalette));
+            pge.DrawSprite(648, 348, ppu.GetPatternTable(1, (byte)selectedPalette));
+
+            // Draw rendered output
             pge.DrawSprite(0, 0, ppu.GetScreen(), 2);
-            pge.DrawString(10, 370, "SPACE = Toggle Run Mode    F = FRAME    C = STEP", Pixel.WHITE);
         }
 
         private void pge_OnCreate(object sender, EventArgs e)
         {
-            //string programStr = "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA";
-            //ushort offset = 0x0100;
-
-            //string[] prog = programStr.Split(" ".ToCharArray());
-
-            //foreach (string instByte in prog)
-            //{
-            //    nesBus.Write(offset, Convert.ToByte(instByte, 16));
-            //    offset++;
-            //}
-
-            //// Set reset vector
-            //nesBus.Write(CS6502.ADDR_PC, 0x00);
-            //nesBus.Write(CS6502.ADDR_PC + 1, 0x01);
-
-             // Extract disassembly
+            // Extract disassembly
             mapAsm = cpu.Disassemble(0x0000, 0xFFFF);
 
             //cpu.Reset();
@@ -206,7 +239,7 @@ namespace EmulatorApp
         static void Main(string[] args)
         {
             Demo demo = new Demo("NES Emulator");
-            Cartridge cartridge = demo.LoadCartridge("tests\\01-implied.nes");
+            Cartridge cartridge = demo.LoadCartridge("tests\\nestest.nes");
             demo.Start(cartridge);
         }
 

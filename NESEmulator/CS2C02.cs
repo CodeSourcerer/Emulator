@@ -266,74 +266,72 @@ namespace NESEmulator
         {
             bool dataWritten = false;
 
-            switch (addr)
+            if (addr >= ADDR_PPU_MIN && addr <= ADDR_PPU_MAX)
             {
-                case 0x0000:    // Control
-                    _control.reg = data;
-                    _tram_addr.NameTableX = _control.NameTableX;
-                    _tram_addr.NameTableY = _control.NameTableY;
-                    dataWritten = true;
-                    break;
-                case 0x0001:    // Mask
-                    _mask.reg = data;
-                    dataWritten = true;
-                    break;
-                case 0x0002:    // Status
-                    dataWritten = true;
-                    break;
-                case 0x0003:    // OAM Address
-                    dataWritten = true;
-                    break;
-                case 0x0004:    // OAM Data
-                    dataWritten = true;
-                    break;
-                case 0x0005:    // Scroll
-                    if (_addressLatch == 0)
-                    {
-                        // First write to scroll register contains X offset in pixel space which we split into
-                        // coarse and fine x values
-                        _fineX = (byte)(data & 0x07);
-                        _tram_addr.CoarseX = (ushort)(data >> 3);
-                        _addressLatch = 1;
-                    }
-                    else
-                    {
-                        // First write to scroll register contains Y offset in pixel space which we split into
-                        // coarse and fine Y values
-                        _tram_addr.FineY = (byte)(data & 0x07);
-                        _tram_addr.CoarseY = (ushort)(data >> 3);
-                        _addressLatch = 0;
-                    }
-                    dataWritten = true;
-                    break;
-                case 0x0006:    // PPU Address
-                    if (_addressLatch == 0)
-                    {
-                        // PPU address bus can be accessed by CPU via the ADDR and DATA registers. The first
-                        // write to this register latches the high byte of the address, the second is the low
-                        // byte. Note the writes are stored in the tram register
-                        _tram_addr.reg = (ushort)(((data & 0x3F) << 8) | (_tram_addr.reg & 0x00FF));
-                        _addressLatch = 1;
-                    }
-                    else
-                    {
-                        // ...when a whole address has been written, the internal vram address buffer is updated.
-                        // Writing to the PPU is unwise during rendering as the PPU will maintain the vram address
-                        // automatically while rendering the scanline position.
-                        _tram_addr.reg = (ushort)((_tram_addr.reg & 0xFF00) | data);
-                        _vram_addr = _tram_addr;
-                        _addressLatch = 0;
-                    }
-                    dataWritten = true;
-                    break;
-                case 0x0007:    // PPU Data
-                    ppuWrite(_vram_addr.reg, data);
-                    // All writes from PPU data automatically increment the nametable address depending upon the
-                    // mode set in the control register. If set to vertical mode, the increment is 32, so it skips
-                    // one whole nametable row; in horizontal mode it just increments by 1, moving to the next column.
-                    _vram_addr.reg += (ushort)(_control.IncrementMode ? 32 : 1);
-                    dataWritten = true;
-                    break;
+                addr &= 0x0007;
+                dataWritten = true;
+
+                switch (addr)
+                {
+                    case 0x0000:    // Control
+                        _control.reg = data;
+                        _tram_addr.NameTableX = _control.NameTableX;
+                        _tram_addr.NameTableY = _control.NameTableY;
+                        break;
+                    case 0x0001:    // Mask
+                        _mask.reg = data;
+                        break;
+                    case 0x0002:    // Status
+                        break;
+                    case 0x0003:    // OAM Address
+                        break;
+                    case 0x0004:    // OAM Data
+                        break;
+                    case 0x0005:    // Scroll
+                        if (_addressLatch == 0)
+                        {
+                            // First write to scroll register contains X offset in pixel space which we split into
+                            // coarse and fine x values
+                            _fineX = (byte)(data & 0x07);
+                            _tram_addr.CoarseX = (ushort)(data >> 3);
+                            _addressLatch = 1;
+                        }
+                        else
+                        {
+                            // First write to scroll register contains Y offset in pixel space which we split into
+                            // coarse and fine Y values
+                            _tram_addr.FineY = (byte)(data & 0x07);
+                            _tram_addr.CoarseY = (ushort)(data >> 3);
+                            _addressLatch = 0;
+                        }
+                        break;
+                    case 0x0006:    // PPU Address
+                        if (_addressLatch == 0)
+                        {
+                            // PPU address bus can be accessed by CPU via the ADDR and DATA registers. The first
+                            // write to this register latches the high byte of the address, the second is the low
+                            // byte. Note the writes are stored in the tram register
+                            _tram_addr.reg = (ushort)(((data & 0x3F) << 8) | (_tram_addr.reg & 0x00FF));
+                            _addressLatch = 1;
+                        }
+                        else
+                        {
+                            // ...when a whole address has been written, the internal vram address buffer is updated.
+                            // Writing to the PPU is unwise during rendering as the PPU will maintain the vram address
+                            // automatically while rendering the scanline position.
+                            _tram_addr.reg = (ushort)((_tram_addr.reg & 0xFF00) | data);
+                            _vram_addr = _tram_addr;
+                            _addressLatch = 0;
+                        }
+                        break;
+                    case 0x0007:    // PPU Data
+                        ppuWrite(_vram_addr.reg, data);
+                        // All writes from PPU data automatically increment the nametable address depending upon the
+                        // mode set in the control register. If set to vertical mode, the increment is 32, so it skips
+                        // one whole nametable row; in horizontal mode it just increments by 1, moving to the next column.
+                        _vram_addr.reg += (ushort)(_control.IncrementMode ? 32 : 1);
+                        break;
+                }
             }
 
             return dataWritten;
