@@ -41,7 +41,7 @@ namespace NESEmulatorApp
         static void Main(string[] args)
         {
             Demo demo = new Demo("NES Emulator");
-            Cartridge cartridge = demo.LoadCartridge("tests/nestest.nes");
+            Cartridge cartridge = demo.LoadCartridge("tests/smb.nes");
             demo.Start(cartridge);
         }
 
@@ -142,10 +142,6 @@ namespace NESEmulatorApp
                     nesBus.Reset();
                     break;
 
-                case OpenTK.Input.Key.I:
-                    cpu.IRQ();
-                    break;
-
                 case Key.P:
                     selectedPalette = (selectedPalette + 1) & 0x07;
                     break;
@@ -212,9 +208,10 @@ namespace NESEmulatorApp
             const int swatchSize = 6;
             for (int p = 0; p < 8; p++)
             {
+                int ps5 = p * swatchSize * 5;
                 for (int s = 0; s < 4; s++)
                 {
-                    pge.FillRect(516 + p * (swatchSize * 5) + s * swatchSize, 340, swatchSize, swatchSize, ppu.GetColorFromPaletteRam((byte)p, (byte)s));
+                    pge.FillRect(516 + ps5 + s * swatchSize, 340, swatchSize, swatchSize, ppu.GetColorFromPaletteRam((byte)p, (byte)s));
                 }
             }
 
@@ -228,15 +225,17 @@ namespace NESEmulatorApp
             // Draw rendered output
             pge.DrawSprite(0, 0, ppu.GetScreen(), 2);
 
-            for (int y = 0; y < 30; y++)
-            {
-                for (int x = 0; x < 32; x++)
-                {
-                    //pge.DrawString(x * 16, y * 16, string.Format("{0:X2}", ppu.GetNameTableBytes(0)[y * 32 + x]), Pixel.WHITE, 1);
-                    byte id = ppu.GetNameTableBytes(0)[y * 32 + x];
-                    pge.DrawPartialSprite(x * 16, y * 16, ppu.GetPatternTable(0, (byte)selectedPalette), (id & 0x0F) << 3, ((id >> 4) & 0x0F) << 3, 8, 8, 2);
-                }
-            }
+            //for (int y = 0; y < 30; y++)
+            //{
+            //    int y16 = y << 4;
+            //    int y32 = y16 << 1;
+            //    for (int x = 0; x < 32; x++)
+            //    {
+            //        //pge.DrawString(x * 16, y * 16, string.Format("{0:X2}", ppu.GetNameTableBytes(0)[y * 32 + x]), Pixel.WHITE, 1);
+            //        byte id = ppu.GetNameTableBytes(0)[y32 + x];
+            //        pge.DrawPartialSprite(x << 4, y16, ppu.GetPatternTable(0, (byte)selectedPalette), (id & 0x0F) << 3, ((id >> 4) & 0x0F) << 3, 8, 8, 2);
+            //    }
+            //}
         }
 
         private void pge_OnCreate(object sender, EventArgs e)

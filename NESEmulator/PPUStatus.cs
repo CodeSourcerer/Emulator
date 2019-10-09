@@ -14,7 +14,15 @@ namespace NESEmulator
         {
             get
             {
-                return (byte)(reg >> 3);
+                return (byte)(reg & 0x1F);
+            }
+            set
+            {
+                reg = reg.SetBit(0, value.TestBit(0));
+                reg = reg.SetBit(1, value.TestBit(1));
+                reg = reg.SetBit(2, value.TestBit(2));
+                reg = reg.SetBit(3, value.TestBit(3));
+                reg = reg.SetBit(4, value.TestBit(4));
             }
         }
 

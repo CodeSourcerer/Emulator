@@ -7,27 +7,35 @@ namespace NESEmulator
     {
         public ushort reg;
 
-        public ushort CoarseX
+        public byte CoarseX
         {
             get
             {
-                return (ushort)(reg & 0x1F);
+                return (byte)(reg & 0x1F);
             }
             set
             {
-                reg |= (ushort)(value & 0x1F);
+                reg = reg.SetBit(0, value.TestBit(0));
+                reg = reg.SetBit(1, value.TestBit(1));
+                reg = reg.SetBit(2, value.TestBit(2));
+                reg = reg.SetBit(3, value.TestBit(3));
+                reg = reg.SetBit(4, value.TestBit(4));
             }
         }
 
-        public ushort CoarseY
+        public byte CoarseY
         {
             get
             {
-                return (ushort)((reg & 0x3E0) >> 5);
+                return (byte)((reg >> 5) & 0x1F);
             }
             set
             {
-                reg |= (ushort)((value & 0x1F) << 5);
+                reg = reg.SetBit(5, value.TestBit(0));
+                reg = reg.SetBit(6, value.TestBit(1));
+                reg = reg.SetBit(7, value.TestBit(2));
+                reg = reg.SetBit(8, value.TestBit(3));
+                reg = reg.SetBit(9, value.TestBit(4));
             }
         }
 
@@ -63,7 +71,9 @@ namespace NESEmulator
             }
             set
             {
-                reg |= (ushort)((value & 0x07) << 12);
+                reg = reg.SetBit(12, value.TestBit(0));
+                reg = reg.SetBit(13, value.TestBit(1));
+                reg = reg.SetBit(14, value.TestBit(2));
             }
         }
 

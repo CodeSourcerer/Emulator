@@ -320,7 +320,7 @@ namespace NESEmulator
                             // First write to scroll register contains X offset in pixel space which we split into
                             // coarse and fine x values
                             _fineX = (byte)(data & 0x07);
-                            _tram_addr.CoarseX = (ushort)(data >> 3);
+                            _tram_addr.CoarseX = (byte)(data >> 3);
                             _addressLatch = 1;
                         }
                         else
@@ -328,7 +328,7 @@ namespace NESEmulator
                             // First write to scroll register contains Y offset in pixel space which we split into
                             // coarse and fine Y values
                             _tram_addr.FineY = (byte)(data & 0x07);
-                            _tram_addr.CoarseY = (ushort)(data >> 3);
+                            _tram_addr.CoarseY = (byte)(data >> 3);
                             _addressLatch = 0;
                         }
                         break;
@@ -713,10 +713,8 @@ namespace NESEmulator
 
             // Now we have a final pixel color, and a palette for this cycle of the current scanline. Let's at
             // long last, draw it
-            if ((_cycle - 1) >= 0 && _scanline >= 0)
-            {
+            if (_cycle - 1 >= 0 && _scanline >= 0)
                 _screen.SetPixel((ushort)(_cycle - 1), (ushort)_scanline, GetColorFromPaletteRam(bg_palette, bg_pixel));
-            }
 
             _cycle++;
 

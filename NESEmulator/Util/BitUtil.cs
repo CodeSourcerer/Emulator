@@ -10,7 +10,11 @@ namespace NESEmulator.Util
 
         public static byte SetBit(this byte destByte, int bitToSet, bool bitValue)
         {
-            destByte |= (byte)((bitValue ? 1 : 0) << bitToSet);
+            if (bitValue)
+                destByte |= (byte)(1 << bitToSet);
+            else
+                destByte &= (byte)~(1 << bitToSet);
+
             return destByte;
         }
 
@@ -26,7 +30,11 @@ namespace NESEmulator.Util
 
         public static ushort SetBit(this ushort input, int bitToSet, bool bitValue)
         {
-            input |= (ushort)((bitValue ? 1 : 0) << bitToSet);
+            if (bitValue)
+                input |= (ushort)(1 << bitToSet);
+            else
+                input &= (ushort)~(1 << bitToSet);
+
             return input;
         }
 
