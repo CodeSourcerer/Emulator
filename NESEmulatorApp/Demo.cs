@@ -38,6 +38,13 @@ namespace NESEmulatorApp
             pge.OnFrameUpdate += pge_OnUpdate;
         }
 
+        static void Main(string[] args)
+        {
+            Demo demo = new Demo("NES Emulator");
+            Cartridge cartridge = demo.LoadCartridge("tests/nestest.nes");
+            demo.Start(cartridge);
+        }
+
         public void Start(Cartridge cartridge)
         {
             ppu = new CS2C02();
@@ -220,6 +227,16 @@ namespace NESEmulatorApp
 
             // Draw rendered output
             pge.DrawSprite(0, 0, ppu.GetScreen(), 2);
+
+            for (int y = 0; y < 30; y++)
+            {
+                for (int x = 0; x < 32; x++)
+                {
+                    //pge.DrawString(x * 16, y * 16, string.Format("{0:X2}", ppu.GetNameTableBytes(0)[y * 32 + x]), Pixel.WHITE, 1);
+                    byte id = ppu.GetNameTableBytes(0)[y * 32 + x];
+                    pge.DrawPartialSprite(x * 16, y * 16, ppu.GetPatternTable(0, (byte)selectedPalette), (id & 0x0F) << 3, ((id >> 4) & 0x0F) << 3, 8, 8, 2);
+                }
+            }
         }
 
         private void pge_OnCreate(object sender, EventArgs e)
@@ -230,13 +247,6 @@ namespace NESEmulatorApp
             //cpu.Reset();
 
             pge.Clear(Pixel.BLUE);
-        }
-
-        static void Main(string[] args)
-        {
-            Demo demo = new Demo("NES Emulator");
-            Cartridge cartridge = demo.LoadCartridge("tests/smb.nes");
-            demo.Start(cartridge);
         }
 
         void DrawRam(int x, int y, ushort nAddr, int nRows, int nColumns)

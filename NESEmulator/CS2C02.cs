@@ -92,6 +92,11 @@ namespace NESEmulator
             return _screen;
         }
 
+        public byte[] GetNameTableBytes(int tableNum)
+        {
+            return _tblName[tableNum];
+        }
+
         public Sprite GetNameTable(int i)
         {
             if (i < 2)
