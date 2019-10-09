@@ -19,5 +19,7 @@ namespace NESEmulator
         // Transform PPU bus address into CHR ROM offset
         public abstract bool ppuMapRead(ushort addr, out uint mapped_addr);
         public abstract bool ppuMapWrite(ushort addr, out uint mapped_addr);
+
+        public abstract void reset();
     }
 }

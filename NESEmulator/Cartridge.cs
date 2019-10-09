@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 
+using NESEmulator.Util;
 using NESEmulator.Mappers;
 
 namespace NESEmulator
@@ -79,7 +80,10 @@ namespace NESEmulator
         /// Perform cartridge reset.
         /// </summary>
         public void Reset()
-        { }
+        {
+            if (mapper != null)
+                mapper.reset();
+        }
 
         /// <summary>
         /// Attempt to read data from cartridge from PPU bus.
@@ -151,7 +155,7 @@ namespace NESEmulator
 
             // Determine mapper ID
             mapperId = (byte)(((cartridgeHeader.mapper2 >> 4) << 4) | (cartridgeHeader.mapper1 >> 4));
-            mirror = (cartridgeHeader.mapper1 & 01) != 0 ? Mirror.VERTICAL : Mirror.HORIZONTAL;
+            mirror = cartridgeHeader.mapper1.TestBit(0) ? Mirror.VERTICAL : Mirror.HORIZONTAL;
 
             // "Discover" file format
             byte fileType = 1;
@@ -167,7 +171,10 @@ namespace NESEmulator
                 cartStream.Read(PRGMemory, 0, PRGMemory.Length);
 
                 nCHRBanks = cartridgeHeader.chr_rom_chunks;
-                CHRMemory = new byte[nCHRBanks * 8192];
+                if (nCHRBanks == 0)
+                    CHRMemory = new byte[8192];
+                else
+                    CHRMemory = new byte[nCHRBanks * 8192];
                 cartStream.Read(CHRMemory, 0, CHRMemory.Length);
             }
             else if (fileType == 2)

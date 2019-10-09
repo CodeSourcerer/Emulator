@@ -64,5 +64,10 @@ namespace NESEmulator.Mappers
 
             return false;
         }
+
+        public override void reset()
+        {
+            
+        }
     }
 }

@@ -51,7 +51,7 @@ namespace NESEmulatorApp
             ram = new Ram(0x07FF, 0x1FFF);
             cpu = new CS6502();
             nesController = new NESController();
-            busDevices = new BusDevice[] { ppu, ram, cpu, nesController };
+            busDevices = new BusDevice[] { cpu, ram, ppu, nesController };
             nesBus = new Bus(busDevices);
             cpu.ConnectBus(nesBus);
 

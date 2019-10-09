@@ -12,7 +12,7 @@ namespace NESEmulator
         private readonly ushort _ramAmount;
         private readonly ushort _maxAddressable;
 
-        public Ram(ushort ramAmount, ushort maxAddressable)
+        public Ram(ushort ramAmount = 0x07FF, ushort maxAddressable = 0x1FFF)
         {
             _maxAddressable = maxAddressable;
             _ramAmount = ramAmount;
