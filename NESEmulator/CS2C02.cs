@@ -573,7 +573,6 @@ namespace NESEmulator
                                                                          | ((_vram_addr.NameTableX ? 1 : 0) << 10)
                                                                          | ((_vram_addr.CoarseY >> 2) << 3)
                                                                          | ( _vram_addr.CoarseX >> 2) ));
-
                             // We've read the correct attribute byte for a specified address, but the byte itself is
                             // broken down further into the 2x2 tile groups in the 4x4 attribute zone.
 
@@ -700,8 +699,8 @@ namespace NESEmulator
 
                 // Select Plane pixels by extracting from the shifter
                 // at the required location.
-                byte p0_pixel = (byte)((_bg_shifterAttribLo & bit_mux) > 0 ? 1 : 0);
-                byte p1_pixel = (byte)((_bg_shifterAttribHi & bit_mux) > 0 ? 1 : 0);
+                byte p0_pixel = (byte)((_bg_shifterPatternLo & bit_mux) > 0 ? 1 : 0);
+                byte p1_pixel = (byte)((_bg_shifterPatternHi & bit_mux) > 0 ? 1 : 0);
 
                 // Combine to form pixel index
                 bg_pixel = (byte)((p1_pixel << 1) | p0_pixel);
