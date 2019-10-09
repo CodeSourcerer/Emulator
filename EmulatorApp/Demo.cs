@@ -224,6 +224,14 @@ namespace EmulatorApp
 
             // Draw rendered output
             pge.DrawSprite(0, 0, ppu.GetScreen(), 2);
+
+            for (byte y = 0; y < 30; y++)
+            {
+                for (byte x = 0; x < 32; x++)
+                {
+                    //byte id = ppu.get
+                }
+            }
         }
 
         private void pge_OnCreate(object sender, EventArgs e)
