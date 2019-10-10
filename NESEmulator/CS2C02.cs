@@ -14,6 +14,8 @@ namespace NESEmulator
         private const ushort ADDR_PALETTE   = 0x3F00;
         private const ushort ADDR_NAMETABLE = 0x2000;
 
+        private const ushort MAX_PALETTE    = 0x3F;
+
         private const ushort SCREEN_WIDTH  = 256;
         private const ushort SCREEN_HEIGHT = 240;
 
@@ -73,14 +75,14 @@ namespace NESEmulator
             _random = new Random();
 
             _status = new PPUStatus();
-            _mask = new PPUMask();
+            _mask   = new PPUMask();
 
             // Create PPU bus with its devices...
 
-            _tblName[0] = new byte[1024];
-            _tblName[1] = new byte[1024];
-            _tblPattern[0] = new byte[4096];
-            _tblPattern[1] = new byte[4096];
+            _tblName[0]     = new byte[1024];
+            _tblName[1]     = new byte[1024];
+            _tblPattern[0]  = new byte[4096];
+            _tblPattern[1]  = new byte[4096];
 
             buildPalette();
         }
@@ -120,7 +122,7 @@ namespace NESEmulator
         /// gives an index into 4 different colours of a specific palette. There
         /// are 8 palettes to choose from. Colour "0" in each palette is effectively
         /// considered transparent, as those locations in memory "mirror" the global
-        /// background colour being used. This mechanics of this are shown in 
+        /// background color being used. This mechanics of this are shown in 
         /// detail in ppuRead() & ppuWrite()
         /// 
         /// Characters on NES
@@ -206,24 +208,24 @@ namespace NESEmulator
 
         public void Reset()
         {
-            _fineX = 0;
-            _addressLatch = 0;
-            _ppuDataBuffer = 0;
-            _scanline = 0;
-            _cycle = 0;
-            _bg_nextTileId = 0;
-            _bg_nextTileAttrib = 0;
-            _bg_nextTileLSB = 0;
-            _bg_nextTileMSB = 0;
-            _bg_shifterPatternLo = 0;
-            _bg_shifterPatternHi = 0;
-            _bg_shifterAttribLo = 0;
-            _bg_shifterAttribHi = 0;
-            _status.reg = 0;
-            _mask.reg = 0;
-            _control.reg = 0;
-            _vram_addr.reg = 0;
-            _tram_addr.reg = 0;
+            _fineX                  = 0;
+            _addressLatch           = 0;
+            _ppuDataBuffer          = 0;
+            _scanline               = 0;
+            _cycle                  = 0;
+            _bg_nextTileId          = 0;
+            _bg_nextTileAttrib      = 0;
+            _bg_nextTileLSB         = 0;
+            _bg_nextTileMSB         = 0;
+            _bg_shifterPatternLo    = 0;
+            _bg_shifterPatternHi    = 0;
+            _bg_shifterAttribLo     = 0;
+            _bg_shifterAttribHi     = 0;
+            _status.reg             = 0;
+            _mask.reg               = 0;
+            _control.reg            = 0;
+            _vram_addr.reg          = 0;
+            _tram_addr.reg          = 0;
         }
 
         public bool Read(ushort addr, out byte data)
@@ -368,7 +370,7 @@ namespace NESEmulator
         private byte ppuRead(ushort addr, bool rdonly = false)
         {
             byte data = 0;
-            addr &= 0x3FFF;
+            addr &= ADDR_PPU_MAX;
 
             // TODO: Eventually loop through ppuBus like we do with the NES bus, attempting to do reads until
             // one "hits"
@@ -428,7 +430,7 @@ namespace NESEmulator
         // TODO: I think this should be a write to the _ppuBus... will investigate later
         private void ppuWrite(ushort addr, byte data)
         {
-            addr &= 0x3FFF;
+            addr &= ADDR_PPU_MAX;
 
             // TODO: Eventually loop through ppuBus like we do with the NES bus, attempting to do writes until
             // one "hits"
@@ -437,7 +439,7 @@ namespace NESEmulator
             {
 
             }
-            else if (addr >= 0x0000 && addr <= 0x1FFF)  // Pattern (sprite) memory range
+            else if (addr <= 0x1FFF)  // Pattern (sprite) memory range
             {
                 _tblPattern[(addr & 0x1000) >> 12][addr & 0x0FFF] = data;
             }
@@ -446,7 +448,7 @@ namespace NESEmulator
                 addr &= 0x0FFF;
                 if (_cartridge.mirror == Cartridge.Mirror.VERTICAL)
                 {
-                    if (addr >= 0x0000 && addr <= 0x03FF)
+                    if (addr <= 0x03FF)
                         _tblName[0][addr & 0x03FF] = data;
                     else if (addr >= 0x0400 && addr <= 0x07FF)
                         _tblName[1][addr & 0x03FF] = data;
@@ -457,7 +459,7 @@ namespace NESEmulator
                 }
                 else if (_cartridge.mirror == Cartridge.Mirror.HORIZONTAL)
                 {
-                    if (addr >= 0x0000 && addr <= 0x03FF)
+                    if (addr <= 0x03FF)
                         _tblName[0][addr & 0x03FF] = data;
                     else if (addr >= 0x0400 && addr <= 0x07FF)
                         _tblName[0][addr & 0x03FF] = data;
@@ -488,7 +490,7 @@ namespace NESEmulator
             _cartridge = cartridge;
         }
 
-        public void Clock()
+        public void Clock(ulong clockCounter)
         {
             // As we progress through scanlines and cycles, the PPU is effectively
             // a state machine going through the motions of fetching background 
@@ -511,7 +513,7 @@ namespace NESEmulator
                     _status.VerticalBlank = false;
                 }
 
-                if ((_cycle >= 2 && _cycle < 250) || (_cycle >= 321 && _cycle < 338))
+                if ((_cycle >= 2 && _cycle < 258) || (_cycle >= 321 && _cycle < 338))
                 {
                     updateShifters();
 
@@ -574,7 +576,7 @@ namespace NESEmulator
                             _bg_nextTileAttrib = ppuRead((ushort)(0x23C0 | ((_vram_addr.NameTableY ? 1 : 0) << 11)
                                                                          | ((_vram_addr.NameTableX ? 1 : 0) << 10)
                                                                          | ((_vram_addr.CoarseY >> 2) << 3)
-                                                                         | ( _vram_addr.CoarseX >> 2) ));
+                                                                         |  (_vram_addr.CoarseX >> 2) ));
                             // We've read the correct attribute byte for a specified address, but the byte itself is
                             // broken down further into the 2x2 tile groups in the 4x4 attribute zone.
 
@@ -714,7 +716,7 @@ namespace NESEmulator
 
             // Now we have a final pixel color, and a palette for this cycle of the current scanline. Let's at
             // long last, draw it
-            if (_cycle - 1 >= 0 && _scanline >= 0)
+            if (_cycle - 1 >= 0 && (_scanline >= 0 && _scanline <= 240))
                 _screen.SetPixel((ushort)(_cycle - 1), (ushort)_scanline, GetColorFromPaletteRam(bg_palette, bg_pixel));
 
             _cycle++;
@@ -739,9 +741,9 @@ namespace NESEmulator
             // "palette << 2" - Each palette is 4 bytes in size
             // "pixel"        - Each pixel index is either 0, 1, 2 or 3
             // "& 0x3F"       - Stops us reading beyond the bounds of the palScreen array
-            return _palScreen[ppuRead((ushort)(ADDR_PALETTE + (palette << 2) + pixel)) & 0x3F];
+            return _palScreen[ppuRead((ushort)(ADDR_PALETTE + (palette << 2) + pixel)) & MAX_PALETTE];
 
-            // Note: We dont access tblPalette directly here, instead we know that ppuRead()
+            // Note: We dont access _palette directly here, instead we know that ppuRead()
             // will map the address onto the seperate small RAM attached to the PPU bus.
         }
 

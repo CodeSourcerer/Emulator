@@ -45,6 +45,7 @@ namespace EmulatorApp
         static void Main(string[] args)
         {
             Demo demo = new Demo("NES Emulator");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\5.nmi_suppression.nes");
             Cartridge cartridge = demo.LoadCartridge("tests\\smb.nes");
             demo.Start(cartridge);
         }
@@ -55,7 +56,7 @@ namespace EmulatorApp
             ram = new Ram(0x07FF, 0x1FFF);
             cpu = new CS6502();
             nesController = new NESController();
-            busDevices = new BusDevice[] { ppu, ram, cpu, nesController };
+            busDevices = new BusDevice[] { cpu, ram, ppu, nesController };
             nesBus = new Bus(busDevices);
             cpu.ConnectBus(nesBus);
 
@@ -135,7 +136,7 @@ namespace EmulatorApp
             if (e.IsRepeat)
                 return;
 
-            switch(e.Key)
+            switch (e.Key)
             {
                 case OpenTK.Input.Key.Space:
                     runEmulation = !runEmulation;
@@ -178,6 +179,9 @@ namespace EmulatorApp
             }
         }
 
+        private int _frameCount;
+        private int _fps;
+        private DateTime dtStart = DateTime.Now;
         private float residualTime = 0.0f;
         private void pge_OnUpdate(object sender, FrameUpdateEventArgs frameUpdateArgs)
         {
@@ -199,13 +203,21 @@ namespace EmulatorApp
                         nesBus.clock();
                     } while (!ppu.FrameComplete);
                     ppu.FrameComplete = false;
+                    _frameCount++;
+                    if (DateTime.Now - dtStart >= TimeSpan.FromSeconds(1))
+                    {
+                        dtStart = DateTime.Now;
+                        _fps = _frameCount;
+                        _frameCount = 0;
+                    }
                 }
             }
 
             // Draw Ram Page 0x00		
             //DrawRam(2, 2, 0x0000, 16, 16);
             //DrawRam(2, 182, 0x0100, 16, 16);
-            DrawCpu(516, 2);
+            // DrawCpu(516, 2);
+            pge.DrawString(516, 2, _fps.ToString(), Pixel.WHITE);
             DrawCode(516, 72, 26);
 
             // Draw Palettes & Pattern Tables

@@ -211,8 +211,11 @@ namespace NESEmulator
         /// the instruction. When it reaches 0, the instruction is complete, and
         /// the next one is ready to be executed.
         /// </remarks>
-        public void Clock()
+        public void Clock(ulong clockCounter)
         {
+            if (clockCounter % 3 != 0)
+                return;
+
             if (cycles == 0)
             {
                 // Read the next instruction byte. This 8-bit value is used to index the translation
@@ -781,7 +784,7 @@ namespace NESEmulator
             testAndSet(FLAGS6502.Z, temp);
 
             // The signed Overflow flag is set based on all that up there! :D
-            setFlag(FLAGS6502.V, ((~(a ^ fetched) & (a ^ temp)) & 0x0080) == 1);
+            setFlag(FLAGS6502.V, ((~(a ^ fetched) & (a ^ temp)) & 0x0080) != 0);
 
             // The negative flag is set to the most significant bit of the result
             testAndSet(FLAGS6502.N, temp);
@@ -1504,9 +1507,9 @@ namespace NESEmulator
 
             // Notice this is exactly the same as addition from here!
             temp = (ushort)(a + value + getFlag(FLAGS6502.C));
-            setFlag(FLAGS6502.C, temp > 255);
+            setFlag(FLAGS6502.C, (temp & 0xFF00) != 0);
             testAndSet(FLAGS6502.Z, temp);
-            setFlag(FLAGS6502.V, ((temp ^ a) & (temp ^ value) & 0x0080) == 1); // not sure I translated this right
+            setFlag(FLAGS6502.V, ((temp ^ a) & (temp ^ value) & 0x0080) != 0); // not sure I translated this right
             testAndSet(FLAGS6502.N, temp);
             a = (byte)(temp & 0x00FF);
             return 1;

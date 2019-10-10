@@ -12,9 +12,9 @@ namespace NESEmulator
         {
             A           = 0x80,
             B           = 0x40,
-            START       = 0x20,
+            UP          = 0x20,
             SELECT      = 0x10,
-            UP          = 0x08,
+            START       = 0x08,
             DOWN        = 0x04,
             LEFT        = 0x02,
             RIGHT       = 0x01,
@@ -36,9 +36,9 @@ namespace NESEmulator
             _controller_state = new NESButton[2];
         }
 
-        public void Clock()
+        public void Clock(ulong clockCounter)
         {
-            throw new NotImplementedException();
+            
         }
 
         public bool Read(ushort addr, out byte data)

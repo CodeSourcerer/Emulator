@@ -194,7 +194,7 @@ namespace NESEmulator
                 ImageValid = true;
         }
 
-        public void Clock()
+        public void Clock(ulong clockCounter)
         { }
     }
 }
