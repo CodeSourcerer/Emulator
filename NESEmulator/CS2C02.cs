@@ -414,9 +414,10 @@ namespace NESEmulator
                 // Mask bottom 5 bits
                 addr &= 0x001F;
 
-                // Hard-code the mirroring
-                if (addr >= 0x0010)
-                    addr -= 0x0010;
+                if (addr == 0x0010) addr = 0x0000;
+                if (addr == 0x0014) addr = 0x0004;
+                if (addr == 0x0018) addr = 0x0008;
+                if (addr == 0x001C) addr = 0x000C;
 
                 data = (byte)(_palette[addr] & (_mask.GrayScale ? 0x30 : 0x3F));
             }
@@ -440,7 +441,7 @@ namespace NESEmulator
             {
                 _tblPattern[(addr & 0x1000) >> 12][addr & 0x0FFF] = data;
             }
-            else if (addr >= 0x2000 && addr <= 0x3EFF)  // Nametable memory (VRAM) range
+            else if (addr >= ADDR_NAMETABLE && addr <= 0x3EFF)  // Nametable memory (VRAM) range
             {
                 addr &= 0x0FFF;
                 if (_cartridge.mirror == Cartridge.Mirror.VERTICAL)
@@ -471,9 +472,10 @@ namespace NESEmulator
                 // Mask lower 5 bits
                 addr &= 0x001F;
 
-                // Hard-code the mirroring
-                if (addr >= 0x0010)
-                    addr -= 0x0010;
+                if (addr == 0x0010) addr = 0x0000;
+                if (addr == 0x0014) addr = 0x0004;
+                if (addr == 0x0018) addr = 0x0008;
+                if (addr == 0x001C) addr = 0x000C;
 
                 _palette[addr] = data;
             }
