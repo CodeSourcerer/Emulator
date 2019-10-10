@@ -14,6 +14,17 @@ namespace NESEmulator
         public Bus(BusDevice[] busDevices)
         {
             _busDeviceList = new List<BusDevice>(busDevices);
+
+            List<InterruptingBusDevice> interruptingDevices = _busDeviceList.FindAll((bd) => bd is InterruptingBusDevice)
+                                                                            .ConvertAll((bd) => (InterruptingBusDevice)bd);
+            foreach (var device in _busDeviceList)
+            {
+                if (device is InterruptableBusDevice)
+                {
+                    foreach (var intDevice in interruptingDevices)
+                        intDevice.RaiseInterrupt += ((InterruptableBusDevice)device).HandleInterrupt;
+                }
+            }
         }
 
         public byte Read(ushort addr, bool readOnly = false)
@@ -70,14 +81,14 @@ namespace NESEmulator
 
             // The PPU is capable of emitting an interrupt to indicate the vertical blanking period has been
             // entered. If it has, we need to send that irq to the CPU.
-            if (ppu != null && cpu != null)
-            {
-                if (ppu.NMI)
-                {
-                    ppu.NMI = false;
-                    ((CS6502)cpu).NMI();
-                }
-            }
+            //if (ppu != null && cpu != null)
+            //{
+            //    if (ppu.NMI)
+            //    {
+            //        ppu.NMI = false;
+            //        ((CS6502)cpu).NMI();
+            //    }
+            //}
 
             _systemClockCounter++;
         }

@@ -7,7 +7,7 @@ namespace NESEmulator
     /// <summary>
     /// This represents the NES' Picture Processing Unit (PPU) 2C02
     /// </summary>
-    public class CS2C02 : BusDevice
+    public class CS2C02 : InterruptingBusDevice
     {
         private const ushort ADDR_PPU_MIN   = 0x2000;
         private const ushort ADDR_PPU_MAX   = 0x3FFF;
@@ -19,7 +19,9 @@ namespace NESEmulator
         private const ushort SCREEN_WIDTH  = 256;
         private const ushort SCREEN_HEIGHT = 240;
 
-        public BusDeviceType DeviceType { get { return BusDeviceType.PPU; } }
+        public override BusDeviceType DeviceType { get { return BusDeviceType.PPU; } }
+
+        public override event InterruptingDeviceHandler RaiseInterrupt;
 
         // PPU has it's own bus
         private Bus _ppuBus;
@@ -206,7 +208,7 @@ namespace NESEmulator
 
         #region Bus Communications
 
-        public void Reset()
+        public override void Reset()
         {
             _fineX                  = 0;
             _addressLatch           = 0;
@@ -228,7 +230,7 @@ namespace NESEmulator
             _tram_addr.reg          = 0;
         }
 
-        public bool Read(ushort addr, out byte data)
+        public override bool Read(ushort addr, out byte data)
         {
             bool dataRead = false;
             data = 0;
@@ -291,7 +293,7 @@ namespace NESEmulator
             return dataRead;
         }
 
-        public bool Write(ushort addr, byte data)
+        public override bool Write(ushort addr, byte data)
         {
             bool dataWritten = false;
 
@@ -490,7 +492,7 @@ namespace NESEmulator
             _cartridge = cartridge;
         }
 
-        public void Clock(ulong clockCounter)
+        public override void Clock(ulong clockCounter)
         {
             // As we progress through scanlines and cycles, the PPU is effectively
             // a state machine going through the motions of fetching background 
@@ -682,7 +684,8 @@ namespace NESEmulator
                     // do it! The CPU will be informed that rendering is complete so it can perform operations
                     // with the PPU knowing it won't produce visible artifacts.
                     if (_control.EnableNMI)
-                        NMI = true;
+                        this.RaiseInterrupt?.Invoke(this, EventArgs.Empty);
+                        //NMI = true;
                 }
             }
 

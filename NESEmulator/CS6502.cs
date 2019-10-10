@@ -40,9 +40,9 @@ namespace NESEmulator
         N = (1 << 7)
     }
 
-    public class CS6502 : BusDevice
+    public class CS6502 : InterruptableBusDevice
     {
-        public BusDeviceType DeviceType { get { return BusDeviceType.CPU; } }
+        public override BusDeviceType DeviceType { get { return BusDeviceType.CPU; } }
 
         private List<Instruction> opcode_lookup;
         private IBus bus;
@@ -76,6 +76,11 @@ namespace NESEmulator
             build_lookup();
         }
 
+        public override void HandleInterrupt(object sender, EventArgs e)
+        {
+            NMI();
+        }
+
         public void ConnectBus(IBus bus)
         {
             this.bus = bus;
@@ -102,7 +107,7 @@ namespace NESEmulator
         /// memory to start executing from. Typically the programmer would set the value
         /// at location 0xFFFC at compile time.
         /// </remarks>
-        public void Reset()
+        public override void Reset()
         {
             // Set PC
             addr_abs = ADDR_PC;
@@ -211,7 +216,7 @@ namespace NESEmulator
         /// the instruction. When it reaches 0, the instruction is complete, and
         /// the next one is ready to be executed.
         /// </remarks>
-        public void Clock(ulong clockCounter)
+        public override void Clock(ulong clockCounter)
         {
             if (clockCounter % 3 != 0)
                 return;
@@ -440,13 +445,13 @@ namespace NESEmulator
 
         #region Bus Methods
 
-        public bool Write(ushort addr, byte data)
+        public override bool Write(ushort addr, byte data)
         {
             // Ignore since we call BUS' Write(), which calls this.
             return false;
         }
 
-        public bool Read(ushort addr, out byte data)
+        public override bool Read(ushort addr, out byte data)
         {
             // Ignore since we call BUS' Read(), which calls this.
             data = 0;
