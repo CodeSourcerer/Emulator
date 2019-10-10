@@ -76,20 +76,6 @@ namespace NESEmulator
                 busDevice.Clock(_systemClockCounter);
             }
 
-            CS2C02 ppu = GetPPU();
-            var cpu = GetDevice(BusDeviceType.CPU);
-
-            // The PPU is capable of emitting an interrupt to indicate the vertical blanking period has been
-            // entered. If it has, we need to send that irq to the CPU.
-            //if (ppu != null && cpu != null)
-            //{
-            //    if (ppu.NMI)
-            //    {
-            //        ppu.NMI = false;
-            //        ((CS6502)cpu).NMI();
-            //    }
-            //}
-
             _systemClockCounter++;
         }
 
