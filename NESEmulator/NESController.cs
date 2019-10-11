@@ -12,9 +12,9 @@ namespace NESEmulator
         {
             A           = 0x80,
             B           = 0x40,
-            UP          = 0x20,
+            START       = 0x20,
             SELECT      = 0x10,
-            START       = 0x08,
+            UP          = 0x08,
             DOWN        = 0x04,
             LEFT        = 0x02,
             RIGHT       = 0x01,
@@ -27,13 +27,13 @@ namespace NESEmulator
             Controller2 = 1
         }
 
-        public NESButton[] ControllerState { get; private set; }
-        private NESButton[] _controller_state;
+        public byte[] ControllerState { get; private set; }
+        private byte[] _controller_state;
 
         public NESController()
         {
-            ControllerState = new NESButton[2];
-            _controller_state = new NESButton[2];
+            ControllerState = new byte[2];
+            _controller_state = new byte[2];
         }
 
         public void Clock(ulong clockCounter)
@@ -49,8 +49,8 @@ namespace NESEmulator
             if (addr >= 0x4016 && addr <= 0x4017)
             {
                 int controllerNum = addr & 0x0001;
-                data = (byte)(_controller_state[controllerNum].HasFlag(NESButton.A) ? 1 : 0);
-                _controller_state[controllerNum] = (NESButton)((int)_controller_state[controllerNum] << 1);
+                data = (byte)((_controller_state[controllerNum] & 0x80) > 0 ? 1 : 0);
+                _controller_state[controllerNum] <<= 1;
                 dataRead = true;
             }
 
@@ -63,7 +63,8 @@ namespace NESEmulator
 
             if (addr >= 0x4016 && addr <= 0x4017)
             {
-                _controller_state[addr & 0x0001] = ControllerState[addr & 0x0001];
+                int controllerNum = addr & 0x0001;
+                _controller_state[controllerNum] = ControllerState[controllerNum];
                 dataWritten = true;
             }
 
@@ -72,13 +73,18 @@ namespace NESEmulator
 
         public void Reset()
         {
-            ControllerState[0] = NESButton.NO_PRESS;
-            ControllerState[1] = NESButton.NO_PRESS;
+            ControllerState[0] = (byte)NESButton.NO_PRESS;
+            ControllerState[1] = (byte)NESButton.NO_PRESS;
         }
 
         public void Press(Controller controller, NESButton button)
         {
-            ControllerState[(int)controller] |= button;
+            ControllerState[(int)controller] |= (byte)button;
+        }
+
+        public void Release(Controller controller)
+        {
+            ControllerState[(int)controller] |= (byte)NESButton.NO_PRESS;
         }
     }
 }

@@ -45,8 +45,6 @@ namespace NESEmulator
         private short  _scanline;
         private ushort _cycle;
 
-        public bool NMI;
-
         // Background rendering
         private byte _bg_nextTileId;
         private byte _bg_nextTileAttrib;
@@ -685,7 +683,6 @@ namespace NESEmulator
                     // with the PPU knowing it won't produce visible artifacts.
                     if (_control.EnableNMI)
                         this.RaiseInterrupt?.Invoke(this, EventArgs.Empty);
-                        //NMI = true;
                 }
             }
 

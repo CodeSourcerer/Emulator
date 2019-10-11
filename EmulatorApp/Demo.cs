@@ -46,7 +46,7 @@ namespace EmulatorApp
         {
             Demo demo = new Demo("NES Emulator");
             //Cartridge cartridge = demo.LoadCartridge("tests\\5.nmi_suppression.nes");
-            Cartridge cartridge = demo.LoadCartridge("tests\\smb.nes");
+            Cartridge cartridge = demo.LoadCartridge("tests\\nestest.nes");
             demo.Start(cartridge);
         }
 
@@ -210,6 +210,7 @@ namespace EmulatorApp
                         _fps = _frameCount;
                         _frameCount = 0;
                     }
+                    nesController.ControllerState[(int)NESController.Controller.Controller1] = 0;
                 }
             }
 
