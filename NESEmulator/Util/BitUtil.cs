@@ -23,6 +23,14 @@ namespace NESEmulator.Util
             return destByte.SetBit(bitToSet, bitValue != 0);
         }
 
+        public static byte Flip(this byte byteToFlip)
+        {
+            byteToFlip = (byte)((byteToFlip & 0xF0) >> 4 | (byteToFlip & 0x0F) << 4);
+            byteToFlip = (byte)((byteToFlip & 0xCC) >> 2 | (byteToFlip & 0x33) << 2);
+            byteToFlip = (byte)((byteToFlip & 0xAA) >> 1 | (byteToFlip & 0x55) << 1);
+            return byteToFlip;
+        }
+
         public static bool TestBit(this ushort input, int bitToTest)
         {
             return (ushort)((input >> bitToTest) & 0x0001) == 1;
