@@ -16,7 +16,7 @@ namespace EmulatorApp
 {
     class Demo
     {
-        private const int SCREEN_WIDTH = 780;
+        private const int SCREEN_WIDTH = 960;
         private const int SCREEN_HEIGHT = 480;
 
         private PixelGameEngine pge;
@@ -46,7 +46,8 @@ namespace EmulatorApp
         {
             Demo demo = new Demo("NES Emulator");
             //Cartridge cartridge = demo.LoadCartridge("tests\\5.nmi_suppression.nes");
-            Cartridge cartridge = demo.LoadCartridge("tests\\nestest.nes");
+            // Oh, it's on! Like...
+            Cartridge cartridge = demo.LoadCartridge("tests\\donkey kong.nes"); 
             demo.Start(cartridge);
         }
 
@@ -215,11 +216,13 @@ namespace EmulatorApp
             }
 
             // Draw Ram Page 0x00		
-            //DrawRam(2, 2, 0x0000, 16, 16);
+            //DrawRam(516, 32, 0x0200, 16, 16);
             //DrawRam(2, 182, 0x0100, 16, 16);
             // DrawCpu(516, 2);
             pge.DrawString(516, 2, _fps.ToString(), Pixel.WHITE);
-            DrawCode(516, 72, 26);
+            // DrawCode(516, 72, 26);
+
+            DrawOam(516, 72);
 
             // Draw Palettes & Pattern Tables
             const int swatchSize = 6;
@@ -338,6 +341,15 @@ namespace EmulatorApp
                     else
                         break;
                 }
+            }
+        }
+
+        void DrawOam(int x, int y)
+        {
+            for (int i = 0; i < 26; i++)
+            {
+                string sOAM = string.Format("{0:X2}: ({1}, {2}) ID: {3:X2} AT: {4:X2}", i, ppu.OAM[i].x, ppu.OAM[i].y, ppu.OAM[i].id, ppu.OAM[i].attribute);
+                pge.DrawString(x, y + i * 10, sOAM, Pixel.WHITE);
             }
         }
     }

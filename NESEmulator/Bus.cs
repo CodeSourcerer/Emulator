@@ -42,7 +42,7 @@ namespace NESEmulator
 
         public void Write(ushort addr, byte data)
         {
-            foreach(BusDevice device in _busDeviceList)
+            foreach (BusDevice device in _busDeviceList)
             {
                 if (device.Write(addr, data))
                     break;

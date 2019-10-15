@@ -71,6 +71,16 @@ namespace NESEmulator
 
         #endregion // Well-Known Addresses
 
+        #region DMA Attributes
+        
+        private byte _dmaPage;
+        private byte _dmaAddr;
+        private byte _dmaData;
+        private bool _dmaTransfer;
+        private bool _dmaDummy = true;  // Why is this a "dummy"?
+        
+        #endregion // DMA Attributes
+
         public CS6502()
         {
             build_lookup();
@@ -109,6 +119,13 @@ namespace NESEmulator
         /// </remarks>
         public override void Reset()
         {
+            // Reset DMA
+            _dmaAddr = 0;
+            _dmaData = 0;
+            _dmaPage = 0;
+            _dmaDummy = true;
+            _dmaTransfer = false;
+
             // Set PC
             addr_abs = ADDR_PC;
             ushort lo = read(addr_abs);
@@ -221,37 +238,71 @@ namespace NESEmulator
             if (clockCounter % 3 != 0)
                 return;
 
-            if (cycles == 0)
+            if (_dmaTransfer)
             {
-                // Read the next instruction byte. This 8-bit value is used to index the translation
-                // table to get the relevat information about how to implement the instruction
-                opcode = read(pc);
+                if (_dmaDummy)
+                {
+                    if (clockCounter % 2 == 1)
+                    {
+                        _dmaDummy = false;
+                    }
+                }
+                else
+                {
+                    if (clockCounter % 2 == 0)
+                    {
+                        _dmaData = read((ushort)(_dmaPage << 8 | _dmaAddr));
+                    }
+                    else
+                    {
+                        // So yeah, let's just break all encapsulation and grab that PPU. Kinda what the HW is doing, I suppose...
+                        ((Bus)bus).GetPPU().OAM[_dmaAddr >> 2][_dmaAddr & 0x03] = _dmaData;
+                        _dmaAddr++;
 
-                // Make sure Unused status flag is 1
-                setFlag(FLAGS6502.U, true);
-
-                // After reading opcode, increment pc
-                pc++;
-
-                // Get starting number of cycles
-                cycles = opcode_lookup[opcode].cycles;
-
-                // Perform fetch of intermediate data using the required addressing mode
-                byte additional_cycle1 = opcode_lookup[opcode].addr_mode();
-
-                // Perform operation
-                byte additional_cycle2 = opcode_lookup[opcode].operation();
-
-                // Add additional cycles that may be required to complete operation
-                cycles += (byte)(additional_cycle1 & additional_cycle2);
-
-                // Make sure Unused status flag is 1
-                setFlag(FLAGS6502.U, true);
+                        // Apparently, technically _dmaAddr can start anywhere and it should wrap back to starting point
+                        // Implement that behavior later.
+                        if (_dmaAddr == 0x00)
+                        {
+                            _dmaTransfer = false;
+                            _dmaDummy = true;
+                        }
+                    }
+                }
             }
+            else
+            {
+                if (cycles == 0)
+                {
+                    // Read the next instruction byte. This 8-bit value is used to index the translation
+                    // table to get the relevat information about how to implement the instruction
+                    opcode = read(pc);
 
-            clock_count++;
+                    // Make sure Unused status flag is 1
+                    setFlag(FLAGS6502.U, true);
 
-            cycles--;
+                    // After reading opcode, increment pc
+                    pc++;
+
+                    // Get starting number of cycles
+                    cycles = opcode_lookup[opcode].cycles;
+
+                    // Perform fetch of intermediate data using the required addressing mode
+                    byte additional_cycle1 = opcode_lookup[opcode].addr_mode();
+
+                    // Perform operation
+                    byte additional_cycle2 = opcode_lookup[opcode].operation();
+
+                    // Add additional cycles that may be required to complete operation
+                    cycles += (byte)(additional_cycle1 & additional_cycle2);
+
+                    // Make sure Unused status flag is 1
+                    setFlag(FLAGS6502.U, true);
+                }
+
+                clock_count++;
+
+                cycles--;
+            }
         }
 
         /// <summary>
@@ -480,7 +531,14 @@ namespace NESEmulator
         /// <param name="data">The byte of data to write</param>
         private void write(ushort addr, byte data)
         {
-            bus.Write(addr, data);
+            if (addr == 0x4014)
+            {
+                _dmaPage = data;
+                _dmaAddr = 0x00;
+                _dmaTransfer = true;
+            }
+            else
+                bus.Write(addr, data);
         }
 
         #endregion // Bus Methods
@@ -1514,7 +1572,7 @@ namespace NESEmulator
             temp = (ushort)(a + value + getFlag(FLAGS6502.C));
             setFlag(FLAGS6502.C, (temp & 0xFF00) != 0);
             testAndSet(FLAGS6502.Z, temp);
-            setFlag(FLAGS6502.V, ((temp ^ a) & (temp ^ value) & 0x0080) != 0); // not sure I translated this right
+            setFlag(FLAGS6502.V, ((temp ^ a) & (temp ^ value) & 0x0080) != 0);
             testAndSet(FLAGS6502.N, temp);
             a = (byte)(temp & 0x00FF);
             return 1;

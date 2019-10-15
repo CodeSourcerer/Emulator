@@ -66,6 +66,9 @@ namespace NESEmulator
         private byte[] _palette = new byte[32];
         private Pixel[] _palScreen = new Pixel[0x40];
 
+        public ObjectAttributeEntry[] OAM = new ObjectAttributeEntry[64];
+        private byte _OAMaddr;
+
         private Cartridge _cartridge;
 
         private Random _random;
@@ -226,6 +229,8 @@ namespace NESEmulator
             _control.reg            = 0;
             _vram_addr.reg          = 0;
             _tram_addr.reg          = 0;
+            _OAMaddr                = 0;
+
         }
 
         public override bool Read(ushort addr, out byte data)
@@ -264,6 +269,7 @@ namespace NESEmulator
                     case 0x0003:    // OAM Address
                         break;
                     case 0x0004:    // OAM Data
+                        data = OAM[_OAMaddr >> 2][_OAMaddr & 0x03];    // maybe??
                         break;
                     case 0x0005:    // Scroll - Not readable
                         break;
@@ -313,8 +319,10 @@ namespace NESEmulator
                     case 0x0002:    // Status
                         break;
                     case 0x0003:    // OAM Address
+                        _OAMaddr = data;
                         break;
                     case 0x0004:    // OAM Data
+                        OAM[_OAMaddr >> 2][_OAMaddr & 0x03] = data;
                         break;
                     case 0x0005:    // Scroll
                         if (_addressLatch == 0)
