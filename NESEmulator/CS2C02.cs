@@ -69,6 +69,9 @@ namespace NESEmulator
         public ObjectAttributeEntry[] OAM = new ObjectAttributeEntry[64];
         private byte _OAMaddr;
 
+        private ObjectAttributeEntry[] _spriteScanline = new ObjectAttributeEntry[8];
+        private byte _spriteCount;
+
         private Cartridge _cartridge;
 
         private Random _random;
