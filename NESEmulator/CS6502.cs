@@ -77,7 +77,7 @@ namespace NESEmulator
         private byte _dmaAddr;
         private byte _dmaData;
         private bool _dmaTransfer;
-        private bool _dmaDummy = true;  // Why is this a "dummy"?
+        private bool _dmaSync = false;
         
         #endregion // DMA Attributes
 
@@ -123,7 +123,7 @@ namespace NESEmulator
             _dmaAddr = 0;
             _dmaData = 0;
             _dmaPage = 0;
-            _dmaDummy = true;
+            _dmaSync = false;
             _dmaTransfer = false;
 
             // Set PC
@@ -240,11 +240,11 @@ namespace NESEmulator
 
             if (_dmaTransfer)
             {
-                if (_dmaDummy)
+                if (!_dmaSync)
                 {
                     if (clockCounter % 2 == 1)
                     {
-                        _dmaDummy = false;
+                        _dmaSync = true;
                     }
                 }
                 else
@@ -264,7 +264,7 @@ namespace NESEmulator
                         if (_dmaAddr == 0x00)
                         {
                             _dmaTransfer = false;
-                            _dmaDummy = true;
+                            _dmaSync = false;
                         }
                     }
                 }
