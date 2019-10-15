@@ -240,34 +240,7 @@ namespace NESEmulator
 
             if (_dmaTransfer)
             {
-                if (!_dmaSync)
-                {
-                    if (clockCounter % 2 == 1)
-                    {
-                        _dmaSync = true;
-                    }
-                }
-                else
-                {
-                    if (clockCounter % 2 == 0)
-                    {
-                        _dmaData = read((ushort)(_dmaPage << 8 | _dmaAddr));
-                    }
-                    else
-                    {
-                        // So yeah, let's just break all encapsulation and grab that PPU. Kinda what the HW is doing, I suppose...
-                        ((Bus)bus).GetPPU().OAM[_dmaAddr >> 2][_dmaAddr & 0x03] = _dmaData;
-                        _dmaAddr++;
-
-                        // Apparently, technically _dmaAddr can start anywhere and it should wrap back to starting point
-                        // Implement that behavior later.
-                        if (_dmaAddr == 0x00)
-                        {
-                            _dmaTransfer = false;
-                            _dmaSync = false;
-                        }
-                    }
-                }
+                doDMATransfer(clockCounter);
             }
             else
             {
@@ -471,6 +444,38 @@ namespace NESEmulator
                 fetched = read(addr_abs);
 
             return fetched;
+        }
+
+        private void doDMATransfer(ulong clockCounter)
+        {
+            if (!_dmaSync)
+            {
+                if (clockCounter % 2 == 1)
+                {
+                    _dmaSync = true;
+                }
+            }
+            else
+            {
+                if (clockCounter % 2 == 0)
+                {
+                    _dmaData = read((ushort)(_dmaPage << 8 | _dmaAddr));
+                }
+                else
+                {
+                    // So yeah, let's just break all encapsulation and grab that PPU. Kinda what the HW is doing, I suppose...
+                    ((Bus)bus).GetPPU().OAM[_dmaAddr >> 2][_dmaAddr & 0x03] = _dmaData;
+                    _dmaAddr++;
+
+                    // Apparently, technically _dmaAddr can start anywhere and it should wrap back to starting point
+                    // Implement that behavior later.
+                    if (_dmaAddr == 0x00)
+                    {
+                        _dmaTransfer = false;
+                        _dmaSync = false;
+                    }
+                }
+            }
         }
 
         #region Flag Methods
