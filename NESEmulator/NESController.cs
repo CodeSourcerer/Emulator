@@ -12,8 +12,8 @@ namespace NESEmulator
         {
             A           = 0x80,
             B           = 0x40,
-            START       = 0x20,
-            SELECT      = 0x10,
+            SELECT      = 0x20,
+            START       = 0x10,
             UP          = 0x08,
             DOWN        = 0x04,
             LEFT        = 0x02,

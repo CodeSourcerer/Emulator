@@ -526,6 +526,19 @@ namespace NESEmulator
                 {
                     // Effectively start of new frame, so clear vertical blank flag
                     _status.VerticalBlank = false;
+
+                    // Clear sprite overflow flag
+                    _status.SpriteOverflow = false;
+
+                    // Clear sprite 0 hit flag
+                    _status.SpriteZeroHit = false;
+
+                    // Clear shifters
+                    for (int i = 0; i < 8; i++)
+                    {
+                        _spriteShifterPatternLo[i] = 0;
+                        _spriteShifterPatternHi[i] = 0;
+                    }
                 }
 
                 // Background Rendering ===================================================
@@ -687,12 +700,16 @@ namespace NESEmulator
                     // We've reached the end of a visible scanline. It is now time to determine which
                     // sprites are visible on the next scanline, and preload this info into buffers that
                     // we can work with while the scanline scans the row.
-                    _spriteScanline.Initialize();
+                    foreach (var sl in _spriteScanline)
+                        sl.Fill(0xFF);
 
                     _spriteCount = 0;
 
-                    _spriteShifterPatternLo.Initialize();
-                    _spriteShifterPatternHi.Initialize();
+                    for (byte i = 0; i < 8; i++)
+                    {
+                        _spriteShifterPatternLo[i] = 0;
+                        _spriteShifterPatternHi[i] = 0;
+                    }
 
                     // Evaluate which sprites are visible in the next scanline. We need to iterate through
                     // the OAM until we have found 8 sprites that have Y-positions and heights that are
@@ -726,6 +743,10 @@ namespace NESEmulator
                                 _spriteScanline[_spriteCount] = OAM[OAMEntry];
                                 _spriteCount++;
                             }
+                        }
+                        else if (diff < 0)
+                        {
+                            _spriteCount = _spriteCount;
                         }
 
                         OAMEntry++;
@@ -988,10 +1009,10 @@ namespace NESEmulator
                             {
                                 _status.SpriteZeroHit = true;
                             }
-                            else if (_cycle >= 1 && _cycle < 258)
-                            {
-                                _status.SpriteZeroHit = true;
-                            }
+                        }
+                        else if (_cycle >= 1 && _cycle < 258)
+                        {
+                            _status.SpriteZeroHit = true;
                         }
                     }
                 }

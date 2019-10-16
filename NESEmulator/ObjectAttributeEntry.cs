@@ -63,5 +63,10 @@ namespace NESEmulator
                 }
             }
         }
+
+        public void Fill(byte val)
+        {
+            y = id = attribute = x = val;
+        }
     }
 }
