@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using csPixelGameEngine;
 using NESEmulator.Util;
 
@@ -18,6 +19,9 @@ namespace NESEmulator
 
         private const ushort SCREEN_WIDTH  = 256;
         private const ushort SCREEN_HEIGHT = 240;
+
+        private const ushort CYCLES     = 341;
+        private const ushort SCANLINES  = 262;
 
         public override BusDeviceType DeviceType { get { return BusDeviceType.PPU; } }
 
@@ -77,6 +81,8 @@ namespace NESEmulator
         private bool _spriteZeroBeingRendered = false;
 
         private Cartridge _cartridge;
+
+        private List<PPUCycleNode>[] _cycleOperations;
 
         private Random _random;
 
@@ -1220,6 +1226,163 @@ namespace NESEmulator
             }
         }
 
+        private void skipCycle()
+        {
+            _cycle++;
+        }
+
+        private void noOp()
+        { }
+
+        private void fetchNextBGTileId()
+        {
+            // Fetch the next background tile ID
+            // "(vram_addr.reg & 0x0FFF)" : Mask to 12 bits that are relevant
+            // "| 0x2000"                 : Offset into nametable space on PPU address bus
+            _bg_nextTileId = ppuRead((ushort)(ADDR_NAMETABLE | (_vram_addr.reg & 0x0FFF)));
+        }
+
+        private void loadNextBGTileId()
+        {
+            updateShifters();
+
+            // Load the current background tile pattern and attributes into the "shifter"
+            loadBackgroundShifters();
+
+            fetchNextBGTileId();
+        }
+
+        private void loadNextBGTileAttrib()
+        {
+            updateShifters();
+
+            // Fetch the next background tile attribute.
+
+            // Recall that each nametable has two rows of cells that are not tile information, instead
+            // they represent the attribute information that indicates which palettes are applied to
+            // which area on the screen. Importantly (and frustratingly) there is not a 1 to 1
+            // correspondance between background tile and palette. Two rows of tile data holds
+            // 64 attributes. Therfore we can assume that the attributes affect 8x8 zones on the screen
+            // for that nametable. Given a working resolution of 256x240, we can further assume that each
+            // zone is 32x32 pixels in screen space, or 4x4 tiles. Four system palettes are allocated
+            // to background rendering, so a palette can be specified using just 2 bits. The attribute
+            // byte therefore can specify 4 distinct palettes. Therefore we can even further assume
+            // that a single palette is applied to a 2x2 tile combination of the 4x4 tile zone. The
+            // very fact that background tiles "share" a palette locally is the reason why in some
+            // games you see distortion in the colours at screen edges.
+
+            // As before when choosing the tile ID, we can use the bottom 12 bits of the loopy register,
+            // but we need to make the implementation "coarser" because instead of a specific tile,
+            // we want the attribute byte for a group of 4x4 tiles, or in other words, we divide our
+            // 32x32 address by 4 to give us an equivalent 8x8 address, and we offset this address
+            // into the attribute section of the target nametable.
+
+            // Reconstruct the 12 bit loopy address into an offset into the
+            // attribute memory
+
+            // "(vram_addr.coarse_x >> 2)"        : integer divide coarse x by 4, 
+            //                                      from 5 bits to 3 bits
+            // "((vram_addr.coarse_y >> 2) << 3)" : integer divide coarse y by 4, 
+            //                                      from 5 bits to 3 bits,
+            //                                      shift to make room for coarse x
+
+            // Result so far: YX00 00yy yxxx
+
+            // All attribute memory begins at 0x03C0 within a nametable, so OR with
+            // result to select target nametable, and attribute byte offset. Finally
+            // OR with 0x2000 to offset into nametable address space on PPU bus.
+            _bg_nextTileAttrib = ppuRead((ushort)(0x23C0 | ((_vram_addr.NameTableY ? 1 : 0) << 11)
+                                                         | ((_vram_addr.NameTableX ? 1 : 0) << 10)
+                                                         | ((_vram_addr.CoarseY >> 2) << 3)
+                                                         | (_vram_addr.CoarseX >> 2)));
+            // We've read the correct attribute byte for a specified address, but the byte itself is
+            // broken down further into the 2x2 tile groups in the 4x4 attribute zone.
+
+            // The attribute byte is assembled thus: BR(76) BL(54) TR(32) TL(10)
+            //
+            // +----+----+			    +----+----+
+            // | TL | TR |			    | ID | ID |
+            // +----+----+ where TL =   +----+----+
+            // | BL | BR |			    | ID | ID |
+            // +----+----+			    +----+----+
+            //
+            // Since we know we can access a tile directly from the 12 bit address, we can analyze
+            // the bottom bits of the coarse coordinates to provide us with the correct offset into
+            // the 8-bit word, to yield the 2 bits we are actually interested in which specifies the
+            // palette for the 2x2 group of tiles. We know if "coarse y % 4" < 2 we are in the top
+            // half else bottom half. Likewise if "coarse x % 4" < 2 we are in the left half else
+            // right half. Ultimately we want the bottom two bits of our attribute word to be the
+            // palette selected. So shift as required...
+            if (_vram_addr.CoarseY.TestBit(1)) _bg_nextTileAttrib >>= 4;
+            if (_vram_addr.CoarseX.TestBit(1)) _bg_nextTileAttrib >>= 2;
+            _bg_nextTileAttrib &= 0x03;
+        }
+
+        private void loadNextBGTileLSB()
+        {
+            updateShifters();
+
+            // Fetch the next background tile LSB bit plane from the pattern memory. The Tile ID has
+            // been read from the nametable. We will use this id to index into the pattern memory to
+            // find the correct sprite (assuming the sprites lie on 8x8 pixel boundaries in that memory,
+            // which they do even though 8x16 sprites exist, as background tiles are always 8x8).
+            //
+            // Since the sprites are effectively 1 bit deep, but 8 pixels wide, we can represent a
+            // whole sprite row as a single byte, so offsetting into the pattern memory is easy. In
+            // total there is 8KB so we need a 13 bit address.
+
+            // "(control.pattern_background << 12)"  : the pattern memory selector from control
+            //                                         register, either 0K or 4K offset
+            // "((uint16_t)bg_next_tile_id << 4)"    : the tile id multiplied by 16, as
+            //                                         2 lots of 8 rows of 8 bit pixels
+            // "(vram_addr.fine_y)"                  : Offset into which row based on
+            //                                         vertical scroll offset
+            // "+ 0"                                 : Mental clarity for plane offset
+            // Note: No PPU address bus offset required as it starts at 0x0000
+            _bg_nextTileLSB = ppuRead((ushort)(((_control.PatternBackground ? 1 : 0) << 12)
+                                              + (_bg_nextTileId << 4)
+                                              + (_vram_addr.FineY + 0)));
+        }
+
+        private void loadNextBGTileMSB()
+        {
+            updateShifters();
+
+            // Fetch the next background tile MSB bit plane from the pattern memory. This is the same
+            // as above, but has a +8 offset to select the next bit plane
+            _bg_nextTileMSB = ppuRead((ushort)(((_control.PatternBackground ? 1 : 0) << 12)
+                                              + (_bg_nextTileId << 4)
+                                              + (_vram_addr.FineY + 8)));
+        }
+
+        private void advanceBGTileX()
+        {
+            updateShifters();
+
+            // Increment the background tile "pointer" to the next tile horizontally in the nametable
+            // memory. Note this may cross nametable boundaries which is a little complex, but
+            // essential to implement scrolling
+            incrementScrollX();
+        }
+
+        private void advanceBGTileY()
+        {
+            updateShifters();
+
+            incrementScrollY();
+        }
+
+        private void resetBGForNextScanLine()
+        {
+            loadBackgroundShifters();
+            transferAddressX();
+        }
+
+        private void startVerticalBlank()
+        {
+
+        }
+
         #endregion // Scanline/Cycle operations
 
         private void buildPalette()
@@ -1291,6 +1454,87 @@ namespace NESEmulator
             _palScreen[0x3D] = new Pixel(160, 162, 160);
             _palScreen[0x3E] = new Pixel(0, 0, 0);
             _palScreen[0x3F] = new Pixel(0, 0, 0);
+        }
+
+        private void buildCycleOperations()
+        {
+            // Scanlines
+            _cycleOperations = new List<PPUCycleNode>[263];
+
+            int scanline = -1;
+            _cycleOperations[scanline + 1] = new List<PPUCycleNode>();
+
+            scanline++;
+            Func<short, bool, List<PPUCycleNode>> addBGTileToCycleOps = (tileNum, right) =>
+            {
+                Action advanceTile;
+
+                if (right)
+                    advanceTile = advanceBGTileX;
+                else
+                    advanceTile = advanceBGTileY;
+
+                short offset = (short)(tileNum * 8);
+                List<PPUCycleNode> fetchBGTileSeq = new List<PPUCycleNode>(new PPUCycleNode[]
+                {
+                    new PPUCycleNode((short)(offset + 1), 1, loadNextBGTileId),     new PPUCycleNode((short)(offset + 2), 1, updateShifters),
+                    new PPUCycleNode((short)(offset + 3), 2, loadNextBGTileAttrib), new PPUCycleNode((short)(offset + 4), 1, updateShifters),
+                    new PPUCycleNode((short)(offset + 5), 2, loadNextBGTileLSB),    new PPUCycleNode((short)(offset + 6), 1, updateShifters),
+                    new PPUCycleNode((short)(offset + 7), 1, loadNextBGTileMSB),    new PPUCycleNode((short)(offset + 8), 1, advanceTile)
+                });
+
+                return fetchBGTileSeq;
+            };
+
+            List<PPUCycleNode> visibleScanlineSequence = new List<PPUCycleNode>();
+
+            // Typical scanline does no-op for first cycle
+            visibleScanlineSequence.Add(new PPUCycleNode(0, 1, noOp));
+            for (short tile = 0; tile < 32; tile++)
+            {
+                visibleScanlineSequence.AddRange(addBGTileToCycleOps(tile, tile != 31));
+            }
+            visibleScanlineSequence.Add(new PPUCycleNode(257, 1, resetBGForNextScanLine));
+            visibleScanlineSequence.Add(new PPUCycleNode(258, 62, noOp));
+            // Pre-load first two tiles for next scanline
+            visibleScanlineSequence.AddRange(addBGTileToCycleOps(40, true));
+            visibleScanlineSequence.AddRange(addBGTileToCycleOps(41, true));
+            // Add superfluous reads of next BG tile id
+            visibleScanlineSequence.Add(new PPUCycleNode(337, 2, fetchNextBGTileId));
+            visibleScanlineSequence.Add(new PPUCycleNode(339, 2, fetchNextBGTileId));
+
+            // Add sequences to cycle ops for visible scanlines
+            _cycleOperations[scanline + 1] = new List<PPUCycleNode>(visibleScanlineSequence);
+            // Replace first cycle with skip function instead of no-op
+            _cycleOperations[scanline + 1][0] = new PPUCycleNode(0, 1, skipCycle);
+            _cycleOperations[scanline + 1].AddRange(visibleScanlineSequence);
+            scanline++;
+
+            for (; scanline < 240; scanline++)
+            {
+                _cycleOperations[scanline + 1] = new List<PPUCycleNode>(visibleScanlineSequence);
+            }
+
+            // Scanline 240 does nothing
+            _cycleOperations[scanline + 1] = new List<PPUCycleNode>();
+            _cycleOperations[scanline + 1].Add(new PPUCycleNode(0, CYCLES, noOp));
+            scanline++;
+
+            // Scanline 241, cycle 1 sets VBL flag
+            _cycleOperations[scanline + 1] = new List<PPUCycleNode>();
+            _cycleOperations[scanline + 1].Add(new PPUCycleNode(0, 1, noOp));
+            _cycleOperations[scanline + 1].Add(new PPUCycleNode(1, 1, startVerticalBlank));
+            _cycleOperations[scanline + 1].Add(new PPUCycleNode(2, (CYCLES - 2), noOp));
+            scanline++;
+
+            // Scanlines 242-260 do absolutely nothing. Boy are they lazy!
+            for (; scanline < 261; scanline++)
+            {
+                _cycleOperations[scanline + 1].Add(new PPUCycleNode(0, CYCLES, noOp));
+            }
+
+            // Scanline 261 clears VBL flag and pre-loads first scanline on next frame.
+            // Current implementation doesn't quite do this, so I'll leave it out for now.
         }
     }
 }
