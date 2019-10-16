@@ -744,10 +744,6 @@ namespace NESEmulator
                                 _spriteCount++;
                             }
                         }
-                        else if (diff < 0)
-                        {
-                            _spriteCount = _spriteCount;
-                        }
 
                         OAMEntry++;
                     }

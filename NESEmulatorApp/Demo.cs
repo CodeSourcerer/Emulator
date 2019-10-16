@@ -12,8 +12,8 @@ namespace NESEmulatorApp
 {
     class Demo
     {
-        private const int SCREEN_WIDTH = 780;
-        private const int SCREEN_HEIGHT = 480;
+        private const int SCREEN_WIDTH = 500;
+        private const int SCREEN_HEIGHT = 240;
 
         private PixelGameEngine pge;
         private GLWindow window;
@@ -30,7 +30,7 @@ namespace NESEmulatorApp
 
         public Demo(string appName)
         {
-            window = new GLWindow(SCREEN_WIDTH, SCREEN_HEIGHT, 2, 2, appName);
+            window = new GLWindow(SCREEN_WIDTH, SCREEN_HEIGHT, 4, 4, appName);
             window.KeyDown += Window_KeyDown;
             pge = new PixelGameEngine(appName);
             pge.Construct(SCREEN_WIDTH, SCREEN_HEIGHT, window);
@@ -69,23 +69,6 @@ namespace NESEmulatorApp
 
         DateTime dtLastTick;
 
-        //private void NesClock_OnClockTick(object sender, ElapsedEventArgs e)
-        //{
-        //    if (runEmulation)
-        //    {
-        //        if ((DateTime.Now - dtLastTick) > TimeSpan.FromMilliseconds(18))
-        //            Console.WriteLine("Taking too long! Frame took {0} ms", (DateTime.Now - dtLastTick).TotalMilliseconds);
-        //        dtLastTick = DateTime.Now;
-
-        //        //CS2C02 ppu = (CS2C02)nesBus.GetPPU();
-        //        do
-        //        {
-        //            nesBus.clock();
-        //        } while (!ppu.FrameComplete);
-        //        ppu.FrameComplete = false;
-        //    }
-        //}
-
         public Cartridge LoadCartridge(string fileName)
         {
             Cartridge cartridge = new Cartridge();
@@ -101,33 +84,37 @@ namespace NESEmulatorApp
             return cartridge;
         }
 
-        private void Window_KeyDown(object sender, KeyboardKeyEventArgs e)
+        private void handleControllerInputs(KeyboardState keyState)
         {
-            // NES controller inputs
-            if (e.Key == Key.X)
+            nesController.Reset();
+
+            if (keyState.IsKeyDown(Key.X))
                 nesController.Press(NESController.Controller.Controller1, NESController.NESButton.A);
 
-            if (e.Key == Key.Z)
+            if (keyState.IsKeyDown(Key.Z))
                 nesController.Press(NESController.Controller.Controller1, NESController.NESButton.B);
 
-            if (e.Key == Key.A)
+            if (keyState.IsKeyDown(Key.A))
                 nesController.Press(NESController.Controller.Controller1, NESController.NESButton.START);
 
-            if (e.Key == Key.S)
+            if (keyState.IsKeyDown(Key.S))
                 nesController.Press(NESController.Controller.Controller1, NESController.NESButton.SELECT);
 
-            if (e.Key == Key.Up)
+            if (keyState.IsKeyDown(Key.Up))
                 nesController.Press(NESController.Controller.Controller1, NESController.NESButton.UP);
 
-            if (e.Key == Key.Down)
+            if (keyState.IsKeyDown(Key.Down))
                 nesController.Press(NESController.Controller.Controller1, NESController.NESButton.DOWN);
 
-            if (e.Key == Key.Left)
+            if (keyState.IsKeyDown(Key.Left))
                 nesController.Press(NESController.Controller.Controller1, NESController.NESButton.LEFT);
 
-            if (e.Key == Key.Right)
+            if (keyState.IsKeyDown(Key.Right))
                 nesController.Press(NESController.Controller.Controller1, NESController.NESButton.RIGHT);
+        }
 
+        private void Window_KeyDown(object sender, KeyboardKeyEventArgs e)
+        {
             if (e.IsRepeat)
                 return;
 
@@ -171,71 +158,69 @@ namespace NESEmulatorApp
             }
         }
 
+        private int _frameCount;
+        private int _fps;
+        private DateTime dtStart = DateTime.Now;
         private float residualTime = 0.0f;
+        private DateTime _frameTime;
         private void pge_OnUpdate(object sender, FrameUpdateEventArgs frameUpdateArgs)
         {
             pge.Clear(Pixel.BLUE);
 
-            // Reset controller
-            nesController.Reset();
+            handleControllerInputs(Keyboard.GetState());
 
             if (runEmulation)
             {
-                //if ((DateTime.Now - dtLastTick) > TimeSpan.FromMilliseconds(18))
-                //    Console.WriteLine("Taking too long! Frame took {0} ms", (DateTime.Now - dtLastTick).TotalMilliseconds);
-                //dtLastTick = DateTime.Now;
-
                 if (residualTime > 0.0f)
                     residualTime -= (float)frameUpdateArgs.ElapsedTime;
                 else
                 {
                     residualTime += (1.0f / 60.0f) - (float)frameUpdateArgs.ElapsedTime;
+                    _frameTime = DateTime.Now;
                     do
                     {
                         nesBus.clock();
                     } while (!ppu.FrameComplete);
                     ppu.FrameComplete = false;
+                    _frameCount++;
+                    if (DateTime.Now - dtStart >= TimeSpan.FromSeconds(1))
+                    {
+                        dtStart = DateTime.Now;
+                        _fps = _frameCount;
+                        _frameCount = 0;
+                    }
+                    Console.WriteLine("PPU frame time: {0} ms", (DateTime.Now - _frameTime).TotalMilliseconds);
                 }
             }
 
             // Draw Ram Page 0x00
             //DrawRam(2, 2, 0x0000, 16, 16);
             //DrawRam(2, 182, 0x0100, 16, 16);
-            DrawCpu(516, 2);
-            DrawCode(516, 72, 26);
+            // DrawCpu(516, 2);
+            pge.DrawString(340, 2, string.Format("FPS: {0}", _fps), Pixel.WHITE);
+            //DrawCode(516, 72, 26);
+            //DrawOam(516, 72);
 
             // Draw Palettes & Pattern Tables
-            const int swatchSize = 6;
-            for (int p = 0; p < 8; p++)
-            {
-                int ps5 = p * swatchSize * 5;
-                for (int s = 0; s < 4; s++)
-                {
-                    pge.FillRect(516 + ps5 + s * swatchSize, 340, swatchSize, swatchSize, ppu.GetColorFromPaletteRam((byte)p, (byte)s));
-                }
-            }
-
-            // Draw selection recticle around selected palette
-            pge.DrawRect(516 + selectedPalette * (swatchSize * 5) - 1, 339, (swatchSize * 4), swatchSize, Pixel.WHITE);
-
-            // Generate Pattern Tables
-            pge.DrawSprite(516, 348, ppu.GetPatternTable(0, (byte)selectedPalette));
-            pge.DrawSprite(648, 348, ppu.GetPatternTable(1, (byte)selectedPalette));
-
-            // Draw rendered output
-            pge.DrawSprite(0, 0, ppu.GetScreen(), 2);
-
-            //for (int y = 0; y < 30; y++)
+            //const int swatchSize = 6;
+            //for (int p = 0; p < 8; p++)
             //{
-            //    int y16 = y << 4;
-            //    int y32 = y16 << 1;
-            //    for (int x = 0; x < 32; x++)
+            //    int ps5 = p * swatchSize * 5;
+            //    for (int s = 0; s < 4; s++)
             //    {
-            //        //pge.DrawString(x * 16, y * 16, string.Format("{0:X2}", ppu.GetNameTableBytes(0)[y * 32 + x]), Pixel.WHITE, 1);
-            //        byte id = ppu.GetNameTableBytes(0)[y32 + x];
-            //        pge.DrawPartialSprite(x << 4, y16, ppu.GetPatternTable(0, (byte)selectedPalette), (id & 0x0F) << 3, ((id >> 4) & 0x0F) << 3, 8, 8, 2);
+            //        pge.FillRect(516 + ps5 + s * swatchSize, 340, swatchSize, swatchSize, ppu.GetColorFromPaletteRam((byte)p, (byte)s));
             //    }
             //}
+
+            // Draw selection recticle around selected palette
+            //pge.DrawRect(516 + selectedPalette * (swatchSize * 5) - 1, 339, (swatchSize * 4), swatchSize, Pixel.WHITE);
+
+            // Generate Pattern Tables
+            //pge.DrawSprite(516, 348, ppu.GetPatternTable(0, (byte)selectedPalette));
+            //pge.DrawSprite(648, 348, ppu.GetPatternTable(1, (byte)selectedPalette));
+
+            // Draw rendered output
+            pge.DrawSprite(0, 0, ppu.GetScreen(), 1);
         }
 
         private void pge_OnCreate(object sender, EventArgs e)
@@ -324,6 +309,15 @@ namespace NESEmulatorApp
                     else
                         break;
                 }
+            }
+        }
+
+        void DrawOam(int x, int y)
+        {
+            for (int i = 0; i < 26; i++)
+            {
+                string sOAM = string.Format("{0:X2}: ({1}, {2}) ID: {3:X2} AT: {4:X2}", i, ppu.OAM[i].x, ppu.OAM[i].y, ppu.OAM[i].id, ppu.OAM[i].attribute);
+                pge.DrawString(x, y + i * 10, sOAM, Pixel.WHITE);
             }
         }
     }

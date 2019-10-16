@@ -46,11 +46,12 @@ namespace NESEmulator
             bool dataRead = false;
             data = 0;
 
-            if (addr >= 0x4016 && addr <= 0x4017)
+            if (addr == 0x4016 || addr == 0x4017)
             {
                 int controllerNum = addr & 0x0001;
                 data = (byte)((_controller_state[controllerNum] & 0x80) > 0 ? 1 : 0);
                 _controller_state[controllerNum] <<= 1;
+                // _controller_state[controllerNum] |= 0x01;
                 dataRead = true;
             }
 
@@ -61,7 +62,7 @@ namespace NESEmulator
         {
             bool dataWritten = false;
 
-            if (addr >= 0x4016 && addr <= 0x4017)
+            if (addr == 0x4016 || addr == 0x4017)
             {
                 int controllerNum = addr & 0x0001;
                 _controller_state[controllerNum] = ControllerState[controllerNum];
@@ -80,11 +81,6 @@ namespace NESEmulator
         public void Press(Controller controller, NESButton button)
         {
             ControllerState[(int)controller] |= (byte)button;
-        }
-
-        public void Release(Controller controller)
-        {
-            ControllerState[(int)controller] |= (byte)NESButton.NO_PRESS;
         }
     }
 }
