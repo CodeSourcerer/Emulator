@@ -893,12 +893,114 @@ namespace NESEmulator
             {
                 // Iterate through all sprites for this scanline. This is to maintain state priority.
                 // As soon as we find a non transparent pixel of a sprite, we can abort.
+                _spriteZeroBeingRendered = false;
+
+                for (byte i = 0; i < _spriteCount; i++)
+                {
+                    // Scanline cycle has "collided" with sprite, shifters taking over
+                    if (_spriteScanline[i].x == 0)
+                    {
+                        // Note: Fine X scrolling does not apply to sprites, the game should maintain their relationship
+                        // with the background. So, we'll just use the MSB of the shifter.
+
+                        // Determine the pixel value...
+                        byte fg_pixel_lo = (byte)((_spriteShifterPatternLo[i] & 0x80) > 0 ? 1 : 0);
+                        byte fg_pixel_hi = (byte)((_spriteShifterPatternHi[i] & 0x80) > 0 ? 1 : 0);
+                        fg_pixel = (byte)((fg_pixel_hi << 1) | fg_pixel_lo);
+
+                        // Extract the palette from the bottom 2 bits. Recall that foreground palettes are the latter 4
+                        // in the palette memory.
+                        fg_palette = (byte)((_spriteScanline[i].attribute & 0x03) + 0x04);
+                        fg_priority = (byte)((_spriteScanline[i].attribute & 0x20) == 0 ? 1 : 0);
+
+                        // If pixel is not transparent, we render it and don't bother checking the rest because the earlier
+                        // sprites in the list are higher priority
+                        if (fg_pixel != 0)
+                        {
+                            // is this sprite 0?
+                            if (i == 0)
+                            {
+                                _spriteZeroBeingRendered = true;
+                            }
+
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Now we have a background pixel and a foreground pixel. They need to be combined. It is possible for the sprites
+            // to go behind background tiles that are not "transparent", yet another neat trick of the PPU that adds complexity
+
+            byte pixel   = 0x00;    // The FINAL FINAL pixel
+            byte palette = 0x00;    // The FINAL FINAL palette
+
+            if (bg_pixel == 0 && fg_pixel == 0)
+            {
+                // The background AND foreground pixels are transparent, so draw "background" color
+                // (which is 0x00 for both, so do nothing)
+            }
+            else if (bg_pixel == 0 && fg_pixel > 0)
+            {
+                // The background pixel is transparent
+                // The foreground pixel is visible
+                // Foreground wins!
+                pixel = fg_pixel;
+                palette = fg_palette;
+            }
+            else if (bg_pixel > 0 && fg_pixel == 0)
+            {
+                // The background pixel is visible
+                // The foreground pixel is transparent
+                // Background wins!
+                pixel = bg_pixel;
+                palette = bg_palette;
+            }
+            else if (bg_pixel > 0 && fg_pixel > 0)
+            {
+                // The background pixel is visible
+                // The foreground pixel is visible
+                // Hmmm...
+                if (fg_priority != 0)
+                {
+                    // Foreground cheats and wins!
+                    pixel = fg_pixel;
+                    palette = fg_palette;
+                }
+                else
+                {
+                    // Background steals the pixel!
+                    pixel = bg_pixel;
+                    palette = bg_palette;
+                }
+
+                // Sprite 0 hit detection
+                if (_spriteZeroHitPossible && _spriteZeroBeingRendered)
+                {
+                    // Sprite 0 is a collision between foreground and background so they must both be enabled
+                    if (_mask.RenderBackground && _mask.RenderSprites)
+                    {
+                        // The left edge of the screen has specific switches to control its appearance. This is used to
+                        // smooth inconsistencies when scrolling (since sprite's x coord must be >= 0)
+                        if (!(_mask.RenderBackgroundLeft || _mask.RenderSpritesLeft))
+                        {
+                            if (_cycle >= 9 && _cycle < 258)
+                            {
+                                _status.SpriteZeroHit = true;
+                            }
+                            else if (_cycle >= 1 && _cycle < 258)
+                            {
+                                _status.SpriteZeroHit = true;
+                            }
+                        }
+                    }
+                }
             }
 
             // Now we have a final pixel color, and a palette for this cycle of the current scanline. Let's at
             // long last, draw it
             if (_cycle - 1 >= 0 && (_scanline >= 0 && _scanline <= 240))
-                _screen.SetPixel((ushort)(_cycle - 1), (ushort)_scanline, GetColorFromPaletteRam(bg_palette, bg_pixel));
+                _screen.SetPixel((ushort)(_cycle - 1), (ushort)_scanline, GetColorFromPaletteRam(palette, pixel));
 
             _cycle++;
 
@@ -1082,6 +1184,22 @@ namespace NESEmulator
                 // Shift palette attributes by 1
                 _bg_shifterAttribLo <<= 1;
                 _bg_shifterAttribHi <<= 1;
+            }
+
+            if (_mask.RenderSprites && _cycle >= 1 && _cycle < 258)
+            {
+                for (int i = 0; i < _spriteCount; i++)
+                {
+                    if (_spriteScanline[i].x > 0)
+                    {
+                        _spriteScanline[i].x--;
+                    }
+                    else
+                    {
+                        _spriteShifterPatternLo[i] <<= 1;
+                        _spriteShifterPatternHi[i] <<= 1;
+                    }
+                }
             }
         }
 

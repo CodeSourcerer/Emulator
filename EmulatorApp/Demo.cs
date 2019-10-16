@@ -47,7 +47,7 @@ namespace EmulatorApp
             Demo demo = new Demo("NES Emulator");
             //Cartridge cartridge = demo.LoadCartridge("tests\\5.nmi_suppression.nes");
             // Oh, it's on! Like...
-            Cartridge cartridge = demo.LoadCartridge("tests\\donkey kong.nes"); 
+            Cartridge cartridge = demo.LoadCartridge("tests\\smb.nes"); 
             demo.Start(cartridge);
         }
 
