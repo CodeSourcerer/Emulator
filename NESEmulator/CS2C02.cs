@@ -1380,7 +1380,14 @@ namespace NESEmulator
 
         private void startVerticalBlank()
         {
+            // Effectively end of frame, so set vertical blank flag
+            _status.VerticalBlank = true;
 
+            // If the control register tells us to emit a NMI when entering vertical blanking period,
+            // do it! The CPU will be informed that rendering is complete so it can perform operations
+            // with the PPU knowing it won't produce visible artifacts.
+            if (_control.EnableNMI)
+                this.RaiseInterrupt?.Invoke(this, EventArgs.Empty);
         }
 
         #endregion // Scanline/Cycle operations
@@ -1535,6 +1542,7 @@ namespace NESEmulator
 
             // Scanline 261 clears VBL flag and pre-loads first scanline on next frame.
             // Current implementation doesn't quite do this, so I'll leave it out for now.
+
         }
     }
 }
