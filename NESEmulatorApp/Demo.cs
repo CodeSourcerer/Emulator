@@ -196,21 +196,13 @@ namespace NESEmulatorApp
             // Draw Ram Page 0x00
             //DrawRam(2, 2, 0x0000, 16, 16);
             //DrawRam(2, 182, 0x0100, 16, 16);
-            // DrawCpu(516, 2);
+            //DrawCpu(516, 2);
             pge.DrawString(340, 2, string.Format("FPS: {0}", _fps), Pixel.WHITE);
             //DrawCode(516, 72, 26);
             //DrawOam(516, 72);
 
             // Draw Palettes & Pattern Tables
-            //const int swatchSize = 6;
-            //for (int p = 0; p < 8; p++)
-            //{
-            //    int ps5 = p * swatchSize * 5;
-            //    for (int s = 0; s < 4; s++)
-            //    {
-            //        pge.FillRect(516 + ps5 + s * swatchSize, 340, swatchSize, swatchSize, ppu.GetColorFromPaletteRam((byte)p, (byte)s));
-            //    }
-            //}
+            //DrawPalettes(516, 340);
 
             // Draw selection recticle around selected palette
             //pge.DrawRect(516 + selectedPalette * (swatchSize * 5) - 1, 339, (swatchSize * 4), swatchSize, Pixel.WHITE);
@@ -231,6 +223,19 @@ namespace NESEmulatorApp
             //cpu.Reset();
 
             pge.Clear(Pixel.BLUE);
+        }
+
+        void DrawPalettes(int x, int y)
+        {
+            const int swatchSize = 6;
+            for (int p = 0; p < 8; p++)
+            {
+                int ps5 = p * swatchSize * 5;
+                for (int s = 0; s < 4; s++)
+                {
+                    pge.FillRect(x + ps5 + s * swatchSize, y, swatchSize, swatchSize, ppu.GetColorFromPaletteRam((byte)p, (byte)s));
+                }
+            }
         }
 
         void DrawRam(int x, int y, ushort nAddr, int nRows, int nColumns)
