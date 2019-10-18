@@ -1360,7 +1360,7 @@ namespace NESEmulator
             visibleScanlineSequence.Add(new PPUCycleNode(0, noOp));
             for (short tile = 0; tile < 32; tile++)
             {
-                visibleScanlineSequence.AddRange(addBGTileToCycleOps(tile, tile != 30));
+                visibleScanlineSequence.AddRange(addBGTileToCycleOps(tile, tile != 31));
             }
             visibleScanlineSequence.Add(new PPUCycleNode(257, resetBGForNextScanLine));
             visibleScanlineSequence.Add(new PPUCycleNode(258, noOp));
