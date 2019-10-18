@@ -244,7 +244,8 @@ namespace NESEmulator
             _vram_addr.reg          = 0;
             _tram_addr.reg          = 0;
             _OAMaddr                = 0;
-
+            _cycleOpItr = _cycleOperations[_scanline+1].GetEnumerator();
+            _cycleOpItr.MoveNext();
         }
 
         public override bool Read(ushort addr, out byte data)
@@ -512,8 +513,8 @@ namespace NESEmulator
             _cartridge = cartridge;
         }
 
-        private ushort _nextCycleOperation = 0;
-        private ushort _cycleOperationIndex = 0;
+        private List<PPUCycleNode>.Enumerator _cycleOpItr;
+
         public override void Clock(ulong clockCounter)
         {
             // As we progress through scanlines and cycles, the PPU is effectively
@@ -882,17 +883,11 @@ namespace NESEmulator
             //    }
             //}
 
-            if (_cycle == _nextCycleOperation)
+            if (_cycleOpItr.Current != null && (_cycle == _cycleOpItr.Current.CycleStart))
             {
-                var cycleOperation = _cycleOperations[_scanline+1][_cycleOperationIndex];
+                var cycleOperation = _cycleOpItr.Current;
                 cycleOperation.CycleOperation();
-                _nextCycleOperation += cycleOperation.CycleCount;
-                _cycleOperationIndex++;
-                if (_nextCycleOperation >= CYCLES)
-                {
-                    _nextCycleOperation = 0;
-                    _cycleOperationIndex = 0;
-                }
+                _cycleOpItr.MoveNext();
             }
 
             // Composition - We now have background pixel information for this cycle. At this point we are only
@@ -1052,6 +1047,8 @@ namespace NESEmulator
                     _scanline = -1;
                     FrameComplete = true;
                 }
+                _cycleOpItr = _cycleOperations[_scanline + 1].GetEnumerator();
+                _cycleOpItr.MoveNext();
             }
         }
 
@@ -1245,7 +1242,6 @@ namespace NESEmulator
         private void skipCycle()
         {
             _cycle++;
-            _nextCycleOperation++;
         }
 
         private void noOp()
@@ -1506,9 +1502,12 @@ namespace NESEmulator
 
             int scanline = -1;
             _cycleOperations[scanline + 1] = new List<PPUCycleNode>();
-            _cycleOperations[scanline + 1].Add(new PPUCycleNode(0, 1, noOp));
-            _cycleOperations[scanline + 1].Add(new PPUCycleNode(1, 1, clearVerticalBlank));
-            _cycleOperations[scanline + 1].Add(new PPUCycleNode(2, (CYCLES - 2), noOp));
+            _cycleOperations[scanline + 1].Add(new PPUCycleNode(0, noOp));
+            _cycleOperations[scanline + 1].Add(new PPUCycleNode(1, clearVerticalBlank));
+            _cycleOperations[scanline + 1].Add(new PPUCycleNode(2, noOp));
+            for (short cycle = 280; cycle < 305; cycle++)
+                _cycleOperations[scanline + 1].Add(new PPUCycleNode(cycle, transferAddressY));
+            _cycleOperations[scanline + 1].Add(new PPUCycleNode(305, noOp));
             scanline++;
 
             Func<short, bool, List<PPUCycleNode>> addBGTileToCycleOps = (tileNum, right) =>
@@ -1523,10 +1522,10 @@ namespace NESEmulator
                 short offset = (short)(tileNum * 8);
                 List<PPUCycleNode> fetchBGTileSeq = new List<PPUCycleNode>(new PPUCycleNode[]
                 {
-                    new PPUCycleNode((short)(offset + 1), 1, loadNextBGTileId),     new PPUCycleNode((short)(offset + 2), 1, updateShifters),
-                    new PPUCycleNode((short)(offset + 3), 2, loadNextBGTileAttrib), new PPUCycleNode((short)(offset + 4), 1, updateShifters),
-                    new PPUCycleNode((short)(offset + 5), 2, loadNextBGTileLSB),    new PPUCycleNode((short)(offset + 6), 1, updateShifters),
-                    new PPUCycleNode((short)(offset + 7), 1, loadNextBGTileMSB),    new PPUCycleNode((short)(offset + 8), 1, advanceTile)
+                    new PPUCycleNode((short)(offset + 1), loadNextBGTileId),     new PPUCycleNode((short)(offset + 2), updateShifters),
+                    new PPUCycleNode((short)(offset + 3), loadNextBGTileAttrib), new PPUCycleNode((short)(offset + 4), updateShifters),
+                    new PPUCycleNode((short)(offset + 5), loadNextBGTileLSB),    new PPUCycleNode((short)(offset + 6), updateShifters),
+                    new PPUCycleNode((short)(offset + 7), loadNextBGTileMSB),    new PPUCycleNode((short)(offset + 8), advanceTile)
                 });
 
                 return fetchBGTileSeq;
@@ -1535,24 +1534,24 @@ namespace NESEmulator
             List<PPUCycleNode> visibleScanlineSequence = new List<PPUCycleNode>();
 
             // Typical scanline does no-op for first cycle
-            visibleScanlineSequence.Add(new PPUCycleNode(0, 1, noOp));
-            for (short tile = 0; tile < 32; tile++)
+            visibleScanlineSequence.Add(new PPUCycleNode(0, noOp));
+            for (short tile = 0; tile < 31; tile++)
             {
-                visibleScanlineSequence.AddRange(addBGTileToCycleOps(tile, tile != 31));
+                visibleScanlineSequence.AddRange(addBGTileToCycleOps(tile, tile != 30));
             }
-            visibleScanlineSequence.Add(new PPUCycleNode(257, 1, resetBGForNextScanLine));
-            visibleScanlineSequence.Add(new PPUCycleNode(258, 62, noOp));
+            visibleScanlineSequence.Add(new PPUCycleNode(257, resetBGForNextScanLine));
+            visibleScanlineSequence.Add(new PPUCycleNode(258, noOp));
             // Pre-load first two tiles for next scanline
             visibleScanlineSequence.AddRange(addBGTileToCycleOps(40, true));
             visibleScanlineSequence.AddRange(addBGTileToCycleOps(41, true));
             // Add superfluous reads of next BG tile id
-            visibleScanlineSequence.Add(new PPUCycleNode(337, 2, fetchNextBGTileId));
-            visibleScanlineSequence.Add(new PPUCycleNode(339, 2, fetchNextBGTileId));
+            visibleScanlineSequence.Add(new PPUCycleNode(337, fetchNextBGTileId));
+            visibleScanlineSequence.Add(new PPUCycleNode(339, fetchNextBGTileId));
 
             // Add sequences to cycle ops for visible scanlines
             _cycleOperations[scanline + 1] = new List<PPUCycleNode>(visibleScanlineSequence);
             // Replace first cycle with skip function instead of no-op
-            _cycleOperations[scanline + 1][0] = new PPUCycleNode(0, 1, skipCycle);
+            _cycleOperations[scanline + 1][0] = new PPUCycleNode(0, skipCycle);
             scanline++;
 
             for (; scanline < 240; scanline++)
@@ -1562,26 +1561,28 @@ namespace NESEmulator
 
             // Scanline 240 does nothing
             _cycleOperations[scanline + 1] = new List<PPUCycleNode>();
-            _cycleOperations[scanline + 1].Add(new PPUCycleNode(0, CYCLES, noOp));
+            _cycleOperations[scanline + 1].Add(new PPUCycleNode(0, noOp));
             scanline++;
 
             // Scanline 241, cycle 1 sets VBL flag
             _cycleOperations[scanline + 1] = new List<PPUCycleNode>();
-            _cycleOperations[scanline + 1].Add(new PPUCycleNode(0, 1, noOp));
-            _cycleOperations[scanline + 1].Add(new PPUCycleNode(1, 1, startVerticalBlank));
-            _cycleOperations[scanline + 1].Add(new PPUCycleNode(2, (CYCLES - 2), noOp));
+            _cycleOperations[scanline + 1].Add(new PPUCycleNode(0, noOp));
+            _cycleOperations[scanline + 1].Add(new PPUCycleNode(1, startVerticalBlank));
+            _cycleOperations[scanline + 1].Add(new PPUCycleNode(2, noOp));
             scanline++;
 
             // Scanlines 242-260 do absolutely nothing. Boy are they lazy!
             for (; scanline < 261; scanline++)
             {
                 _cycleOperations[scanline + 1] = new List<PPUCycleNode>();
-                _cycleOperations[scanline + 1].Add(new PPUCycleNode(0, CYCLES, noOp));
+                _cycleOperations[scanline + 1].Add(new PPUCycleNode(0, noOp));
             }
 
             // Scanline 261 clears VBL flag and pre-loads first scanline on next frame.
             // Current implementation doesn't quite do this, so I'll leave it out for now.
-
+            
+            // Useless statement to break on
+            scanline = scanline;
         }
     }
 }
