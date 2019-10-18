@@ -565,67 +565,11 @@ namespace NESEmulator
                         // lo address.
                         if (!_control.SpriteSize)
                         {
-                            // 8x8 sprite mode - the control register determines the pattern table
-                            if ((_spriteScanline[i].attribute & 0x80) == 0)
-                            {
-                                // Sprite is NOT flipped vertically, i.e. normal
-                                sprite_pattern_addr_lo = (ushort)(
-                                     ((_control.PatternSprite ? 1 : 0) << 12)   // Which pattern table? 0KB or 4KB offset
-                                    | (_spriteScanline[i].id           << 4 )   // Which cell? Tile ID * 16 (16B per tile)
-                                    | (_scanline - _spriteScanline[i].y));      // Which row in cell? 0 -> 7
-                            }
-                            else
-                            {
-                                // Sprite is flipped vertically, i.e. upside down
-                                sprite_pattern_addr_lo = (ushort)(
-                                     ((_control.PatternSprite ? 1 : 0) << 12)   // Which pattern table? 0KB or 4KB offset
-                                    | (_spriteScanline[i].id           << 4 )   // Which cell? Tile ID * 16 (16B per tile)
-                                    | (7 - (_scanline - _spriteScanline[i].y)));// Which row in cell? 7 -> 0
-                            }
+                            sprite_pattern_addr_lo = loadNextSpr8x8TileLSB(i);
                         }
                         else
                         {
-                            // 8x16 sprite mode - the sprite attribute determines the pattern table
-                            if ((_spriteScanline[i].attribute & 0x80) > 0)
-                            {
-                                // Sprite is NOT flipped vertically, i.e. normal
-                                if (_scanline - _spriteScanline[i].y < 8)
-                                {
-                                    // Top half of tile
-                                    sprite_pattern_addr_lo = (ushort)(
-                                            ((_spriteScanline[i].id & 0x01) << 12)      // Which pattern table? 0KB or 4KB offset
-                                        | ((_spriteScanline[i].id & 0xFE) << 4)         // Which cell? Tile ID * 16 (16B per tile)
-                                        | ((_scanline - _spriteScanline[i].y) & 0x07)); // Which row in cell? 0 -> 7)
-                                }
-                                else
-                                {
-                                    // Bottom half of tile
-                                    sprite_pattern_addr_lo = (ushort)(
-                                            ((_spriteScanline[i].id & 0x01) << 12)      // Which pattern table? 0KB or 4KB offset
-                                        | (((_spriteScanline[i].id & 0xFE) + 1) << 4)   // Which cell? Tile ID * 16 (16B per tile)
-                                        | ((_scanline - _spriteScanline[i].y) & 0x07)); // Which row in cell? 0 -> 7)
-                                }
-                            }
-                            else
-                            {
-                                // Sprite is flipped vertically, i.e. upside down
-                                if (_scanline - _spriteScanline[i].y < 8)
-                                {
-                                    // Top half of tile
-                                    sprite_pattern_addr_lo = (ushort)(
-                                            ((_spriteScanline[i].id & 0x01) << 12)            // Which pattern table? 0KB or 4KB offset
-                                        | ((_spriteScanline[i].id & 0xFE) << 4)             // Which cell? Tile ID * 16 (16B per tile)
-                                        | (7 - (_scanline - _spriteScanline[i].y) & 0x07)); // Which row in cell? 7 -> 0)
-                                }
-                                else
-                                {
-                                    // Bottom half of tile
-                                    sprite_pattern_addr_lo = (ushort)(
-                                            ((_spriteScanline[i].id & 0x01) << 12)      // Which pattern table? 0KB or 4KB offset
-                                        | (((_spriteScanline[i].id & 0xFE) + 1) << 4)       // Which cell? Tile ID * 16 (16B per tile)
-                                        | (7 - (_scanline - _spriteScanline[i].y) & 0x07)); // Which row in cell? 7 -> 0)
-                                }
-                            }
+                            sprite_pattern_addr_lo = loadNextSpr8x16TileLSB(i);
                         }
 
                         // Hi bit plane equivalent is always offset by 8 bytes from lo bit plane
@@ -1272,6 +1216,79 @@ namespace NESEmulator
 
             // Set sprite overflow flag
             _status.SpriteOverflow = (_spriteCount > 8);
+        }
+
+        private ushort loadNextSpr8x8TileLSB(byte i)
+        {
+            ushort sprite_pattern_addr_lo;
+
+            ushort cellRow = (ushort)(_scanline - _spriteScanline[i].y);
+            cellRow = (ushort)((_spriteScanline[i].attribute & 0x80) == 0 ? cellRow : (7 - cellRow));
+
+            sprite_pattern_addr_lo = (ushort)(
+                 ((_control.PatternSprite ? 1 : 0) << 12)         // Which pattern table? 0KB or 4KB offset
+                | (_spriteScanline[i].id << 4)          // Which cell? Tile ID * 16 (16B per tile)
+                | cellRow);                             // Which row in cell?
+
+            return sprite_pattern_addr_lo;
+        }
+
+        private ushort loadNextSpr8x16TileLSB(byte i)
+        {
+            ushort sprite_pattern_addr_lo;
+
+            //if ((_spriteScanline[i].attribute & 0x80) > 0)
+            //{
+            //    // Sprite is NOT flipped vertically, i.e. normal
+            //    if (_scanline - _spriteScanline[i].y < 8)
+            //    {
+            //        // Top half of tile
+            //        sprite_pattern_addr_lo = (ushort)(
+            //                ((_spriteScanline[i].id & 0x01) << 12)      // Which pattern table? 0KB or 4KB offset
+            //            | ((_spriteScanline[i].id & 0xFE) << 4)         // Which cell? Tile ID * 16 (16B per tile)
+            //            | ((_scanline - _spriteScanline[i].y) & 0x07)); // Which row in cell? 0 -> 7)
+            //    }
+            //    else
+            //    {
+            //        // Bottom half of tile
+            //        sprite_pattern_addr_lo = (ushort)(
+            //                ((_spriteScanline[i].id & 0x01) << 12)      // Which pattern table? 0KB or 4KB offset
+            //            | (((_spriteScanline[i].id & 0xFE) + 1) << 4)   // Which cell? Tile ID * 16 (16B per tile)
+            //            | ((_scanline - _spriteScanline[i].y) & 0x07)); // Which row in cell? 0 -> 7)
+            //    }
+            //}
+            //else
+            //{
+            //    // Sprite is flipped vertically, i.e. upside down
+            //    if (_scanline - _spriteScanline[i].y < 8)
+            //    {
+            //        // Top half of tile
+            //        sprite_pattern_addr_lo = (ushort)(
+            //                ((_spriteScanline[i].id & 0x01) << 12)            // Which pattern table? 0KB or 4KB offset
+            //            | ((_spriteScanline[i].id & 0xFE) << 4)             // Which cell? Tile ID * 16 (16B per tile)
+            //            | (7 - (_scanline - _spriteScanline[i].y) & 0x07)); // Which row in cell? 7 -> 0)
+            //    }
+            //    else
+            //    {
+            //        // Bottom half of tile
+            //        sprite_pattern_addr_lo = (ushort)(
+            //                ((_spriteScanline[i].id & 0x01) << 12)      // Which pattern table? 0KB or 4KB offset
+            //            | (((_spriteScanline[i].id & 0xFE) + 1) << 4)       // Which cell? Tile ID * 16 (16B per tile)
+            //            | (7 - (_scanline - _spriteScanline[i].y) & 0x07)); // Which row in cell? 7 -> 0)
+            //    }
+            //}
+
+            // 8x16 sprite mode - the sprite attribute determines the pattern table
+            ushort cellRow = (ushort)((_scanline - _spriteScanline[i].y) & 0x07);
+            cellRow    = (ushort)((_spriteScanline[i].attribute & 0x80) == 0 ? cellRow : 7 - cellRow);
+            int topHalf = (byte)((_scanline - _spriteScanline[i].y) < 8 ? 0 : 1);
+
+            sprite_pattern_addr_lo = (ushort)(
+                  ((_spriteScanline[i].id & 0x01) << 12)                // Which pattern table? 0KB or 4KB offset
+                | (((_spriteScanline[i].id & 0xFE) + topHalf) << 4)     // Which cell? Tile ID * 16 (16B per tile)
+                | cellRow);                                             // Which row in cell?
+
+            return sprite_pattern_addr_lo;
         }
 
         #endregion // Scanline/Cycle operations
