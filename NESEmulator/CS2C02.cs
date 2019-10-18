@@ -842,20 +842,7 @@ namespace NESEmulator
             if ((_cycle - 1) >= 0 && (_scanline >= 0 && _scanline <= 239))
                 _screen.SetPixel((uint)(_cycle - 1), (ushort)_scanline, GetColorFromPaletteRam(palette, pixel));
 
-            _cycle++;
-
-            if (_cycle >= 341)
-            {
-                _cycle = 0;
-                _scanline++;
-                if(_scanline >= 262)
-                {
-                    _scanline = 0;
-                    FrameComplete = true;
-                }
-                _cycleOpItr = _cycleOperations[_scanline].GetEnumerator();
-                _cycleOpItr.MoveNext();
-            }
+            advanceCycle();
         }
 
         public Pixel GetColorFromPaletteRam(byte palette, byte pixel)
@@ -873,6 +860,24 @@ namespace NESEmulator
         }
 
         #region Scanline/Cycle operations
+
+        private void advanceCycle()
+        {
+            _cycle++;
+
+            if (_cycle >= 341)
+            {
+                _cycle = 0;
+                _scanline++;
+                if (_scanline >= 262)
+                {
+                    _scanline = 0;
+                    FrameComplete = true;
+                }
+                _cycleOpItr = _cycleOperations[_scanline].GetEnumerator();
+                _cycleOpItr.MoveNext();
+            }
+        }
 
         /// <summary>
         /// Increment the background tile "pointer" one tile/column horizontally
@@ -1047,7 +1052,6 @@ namespace NESEmulator
 
         private void skipCycle()
         {
-            //_cycle++;
             _cycle = 0;
             _scanline = 0;
             FrameComplete = true;
@@ -1260,6 +1264,11 @@ namespace NESEmulator
             return fetchBGTileSeq;
         }
 
+        private void resetSpriteDataForScanline()
+        {
+
+        }
+
         #endregion // Scanline/Cycle operations
 
         private void buildPalette()
@@ -1369,8 +1378,6 @@ namespace NESEmulator
                 _cycleOperations[scanline] = new List<PPUCycleNode>(visibleScanlineSequence);
             }
 
-            // scanline = 240
-
             // Scanline 240 does nothing
             _cycleOperations[scanline] = new List<PPUCycleNode>();
             _cycleOperations[scanline].Add(new PPUCycleNode(0, noOp));
@@ -1390,8 +1397,6 @@ namespace NESEmulator
                 _cycleOperations[scanline].Add(new PPUCycleNode(0, noOp));
             }
 
-            // scanline = 261
-
             // Scanline 261 clears VBL flag and pre-loads first scanline on next frame.
             // Current implementation doesn't quite do this, so I'll leave it out for now.
             _cycleOperations[scanline] = new List<PPUCycleNode>(visibleScanlineSequence);
@@ -1401,8 +1406,8 @@ namespace NESEmulator
 
             // Replace last cycle with the skip
              _cycleOperations[scanline][_cycleOperations[scanline].Count - 1] = new PPUCycleNode(339, skipCycle);
-            // SPECIAL CASE: Do Y address xfer every cycle from 280-304
 
+            // SPECIAL CASE: Do Y address xfer every cycle from 280-304
             // Find the index of the "no-op" at cycle 258 and jamb these in right after
             int insertionPoint = visibleScanlineSequence.FindIndex((cycleNode) => cycleNode.CycleStart == 258) + 1;
             for (short cycle = 280; cycle < 305; cycle++)
