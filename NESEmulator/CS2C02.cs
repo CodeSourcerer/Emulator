@@ -543,56 +543,9 @@ namespace NESEmulator
                     // We've reached the end of a visible scanline. It is now time to determine which
                     // sprites are visible on the next scanline, and preload this info into buffers that
                     // we can work with while the scanline scans the row.
-                    foreach (var sl in _spriteScanline)
-                        sl.Fill(0xFF);
+                    resetSpriteDataForScanline();
 
-                    _spriteCount = 0;
-
-                    for (byte i = 0; i < 8; i++)
-                    {
-                        _spriteShifterPatternLo[i] = 0;
-                        _spriteShifterPatternHi[i] = 0;
-                    }
-
-                    // Evaluate which sprites are visible in the next scanline. We need to iterate through
-                    // the OAM until we have found 8 sprites that have Y-positions and heights that are
-                    // within vertical range of the next scanline. Once we have found 8 or exhausted the OAM
-                    // we stop.
-                    byte OAMEntry = 0;
-
-                    // New set of sprites. Sprite zero may not exist in the new set, so clear this flag.
-                    _spriteZeroHitPossible = false;
-
-                    while (OAMEntry < 64 && _spriteCount < 9)
-                    {
-                        short diff = (short)(_scanline - OAM[OAMEntry].y);
-
-                        // If the difference is positive then the scanline is at least at the same height
-                        // as the sprite, so check if it resides in the sprite vertically depending on the
-                        // current "sprite height mode"
-                        if (diff >= 0 && diff < (_control.SpriteSize ? 16 : 8))
-                        {
-                            // Sprite is visible, so copy the attribute entry over to our scanline sprite cache.
-                            // I've added < 8 here to guard the array being written to.
-                            if (_spriteCount < 8)
-                            {
-                                // Is this sprite zero?
-                                if (OAMEntry == 0)
-                                {
-                                    // Yup, so it may trigger a sprite zero hit when drawn
-                                    _spriteZeroHitPossible = true;
-                                }
-
-                                _spriteScanline[_spriteCount] = OAM[OAMEntry];
-                                _spriteCount++;
-                            }
-                        }
-
-                        OAMEntry++;
-                    }
-
-                    // Set sprite overflow flag
-                    _status.SpriteOverflow = (_spriteCount > 8);
+                    evaluateVisibleSpritesForScanline();
                 }
 
                 if (_cycle == 340)
@@ -613,21 +566,21 @@ namespace NESEmulator
                         if (!_control.SpriteSize)
                         {
                             // 8x8 sprite mode - the control register determines the pattern table
-                            if ((_spriteScanline[i].attribute & 0x80) > 0)
+                            if ((_spriteScanline[i].attribute & 0x80) == 0)
                             {
                                 // Sprite is NOT flipped vertically, i.e. normal
                                 sprite_pattern_addr_lo = (ushort)(
-                                        ((_control.PatternSprite ? 1 : 0) << 12)  // Which pattern table? 0KB or 4KB offset
-                                    | (_spriteScanline[i].id << 4)   // Which cell? Tile ID * 16 (16B per tile)
-                                    | (_scanline - _spriteScanline[i].y));     // Which row in cell? 0 -> 7
+                                     ((_control.PatternSprite ? 1 : 0) << 12)   // Which pattern table? 0KB or 4KB offset
+                                    | (_spriteScanline[i].id           << 4 )   // Which cell? Tile ID * 16 (16B per tile)
+                                    | (_scanline - _spriteScanline[i].y));      // Which row in cell? 0 -> 7
                             }
                             else
                             {
                                 // Sprite is flipped vertically, i.e. upside down
                                 sprite_pattern_addr_lo = (ushort)(
-                                        ((_control.PatternSprite ? 1 : 0) << 12)  // Which pattern table? 0KB or 4KB offset
-                                    | (_spriteScanline[i].id << 4)   // Which cell? Tile ID * 16 (16B per tile)
-                                    | (_scanline - _spriteScanline[i].y));     // Which row in cell? 7 -> 0
+                                     ((_control.PatternSprite ? 1 : 0) << 12)   // Which pattern table? 0KB or 4KB offset
+                                    | (_spriteScanline[i].id           << 4 )   // Which cell? Tile ID * 16 (16B per tile)
+                                    | (7 - (_scanline - _spriteScanline[i].y)));// Which row in cell? 7 -> 0
                             }
                         }
                         else
@@ -640,7 +593,7 @@ namespace NESEmulator
                                 {
                                     // Top half of tile
                                     sprite_pattern_addr_lo = (ushort)(
-                                            ((_spriteScanline[i].id & 0x01) << 12)        // Which pattern table? 0KB or 4KB offset
+                                            ((_spriteScanline[i].id & 0x01) << 12)      // Which pattern table? 0KB or 4KB offset
                                         | ((_spriteScanline[i].id & 0xFE) << 4)         // Which cell? Tile ID * 16 (16B per tile)
                                         | ((_scanline - _spriteScanline[i].y) & 0x07)); // Which row in cell? 0 -> 7)
                                 }
@@ -648,7 +601,7 @@ namespace NESEmulator
                                 {
                                     // Bottom half of tile
                                     sprite_pattern_addr_lo = (ushort)(
-                                            ((_spriteScanline[i].id & 0x01) << 12)  // Which pattern table? 0KB or 4KB offset
+                                            ((_spriteScanline[i].id & 0x01) << 12)      // Which pattern table? 0KB or 4KB offset
                                         | (((_spriteScanline[i].id & 0xFE) + 1) << 4)   // Which cell? Tile ID * 16 (16B per tile)
                                         | ((_scanline - _spriteScanline[i].y) & 0x07)); // Which row in cell? 0 -> 7)
                                 }
@@ -1266,7 +1219,59 @@ namespace NESEmulator
 
         private void resetSpriteDataForScanline()
         {
+            foreach (var sl in _spriteScanline)
+                sl.Fill(0xFF);
 
+            _spriteCount = 0;
+
+            for (byte i = 0; i < 8; i++)
+            {
+                _spriteShifterPatternLo[i] = 0;
+                _spriteShifterPatternHi[i] = 0;
+            }
+        }
+
+        private void evaluateVisibleSpritesForScanline()
+        {
+            // Evaluate which sprites are visible in the next scanline. We need to iterate through
+            // the OAM until we have found 8 sprites that have Y-positions and heights that are
+            // within vertical range of the next scanline. Once we have found 8 or exhausted the OAM
+            // we stop.
+            byte OAMEntry = 0;
+
+            // New set of sprites. Sprite zero may not exist in the new set, so clear this flag.
+            _spriteZeroHitPossible = false;
+
+            while (OAMEntry < 64 && _spriteCount < 9)
+            {
+                short diff = (short)(_scanline - OAM[OAMEntry].y);
+
+                // If the difference is positive then the scanline is at least at the same height
+                // as the sprite, so check if it resides in the sprite vertically depending on the
+                // current "sprite height mode"
+                if (diff >= 0 && diff < (_control.SpriteSize ? 16 : 8))
+                {
+                    // Sprite is visible, so copy the attribute entry over to our scanline sprite cache.
+                    // I've added < 8 here to guard the array being written to.
+                    if (_spriteCount < 8)
+                    {
+                        // Is this sprite zero?
+                        if (OAMEntry == 0)
+                        {
+                            // Yup, so it may trigger a sprite zero hit when drawn
+                            _spriteZeroHitPossible = true;
+                        }
+
+                        _spriteScanline[_spriteCount] = OAM[OAMEntry];
+                        _spriteCount++;
+                    }
+                }
+
+                OAMEntry++;
+            }
+
+            // Set sprite overflow flag
+            _status.SpriteOverflow = (_spriteCount > 8);
         }
 
         #endregion // Scanline/Cycle operations
