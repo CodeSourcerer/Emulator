@@ -1115,7 +1115,7 @@ namespace NESEmulator
             // do it! The CPU will be informed that rendering is complete so it can perform operations
             // with the PPU knowing it won't produce visible artifacts.
             if (_control.EnableNMI)
-                this.RaiseInterrupt?.Invoke(this, EventArgs.Empty);
+                this.RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.NMI));
         }
 
         private void clearVerticalBlank()

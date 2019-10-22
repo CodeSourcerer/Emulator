@@ -86,9 +86,18 @@ namespace NESEmulator
             build_lookup();
         }
 
-        public override void HandleInterrupt(object sender, EventArgs e)
+        public override void HandleInterrupt(object sender, InterruptEventArgs e)
         {
-            NMI();
+            switch (e.Interrupt)
+            {
+                case InterruptType.NMI:
+                    NMI();
+                    break;
+
+                case InterruptType.IRQ:
+                    IRQ();
+                    break;
+            }
         }
 
         public void ConnectBus(IBus bus)

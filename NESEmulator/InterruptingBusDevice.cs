@@ -4,7 +4,7 @@ using System.Text;
 
 namespace NESEmulator
 {
-    public delegate void InterruptingDeviceHandler(object sender, EventArgs e);
+    public delegate void InterruptingDeviceHandler(object sender, InterruptEventArgs e);
 
     public abstract class InterruptingBusDevice : BusDevice
     {
