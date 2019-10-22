@@ -24,30 +24,31 @@ namespace AudioTest
             Console.WriteLine("Vendor: {0}", AL.Get(ALGetString.Vendor));
             Console.WriteLine("Renderer: {0}", AL.Get(ALGetString.Renderer));
 
-            int sinbuffer, tribuffer, source;
+            int sinbuffer, tribuffer, sinsource, trisource;
             AL.GenBuffers(1, out sinbuffer);
             AL.GenBuffers(1, out tribuffer);
-            AL.GenSources(1, out source);
+            AL.GenSources(1, out sinsource);
+            AL.GenSources(1, out trisource);
 
             int sampleFreq = 44100;
-            var sinData = generateSinWave(440, sampleFreq);
+            var sinData = generateSinWave(240, sampleFreq);
             var triData = generateTriWave(440, sampleFreq);
 
             AL.BufferData(tribuffer, ALFormat.Mono16, triData, triData.Length, sampleFreq);
-            AL.Source(source, ALSourcei.Buffer, tribuffer);
-            AL.Source(source, ALSourceb.Looping, true);
+            AL.Source(trisource, ALSourcei.Buffer, tribuffer);
+            AL.Source(trisource, ALSourceb.Looping, true);
 
-            AL.SourcePlay(source);
+            AL.SourcePlay(trisource);
 
             Console.WriteLine("Triangle Wave - Press a key to stop");
             Console.ReadKey();
-            AL.SourceStop(source);
+            //AL.SourceStop(source);
 
             AL.BufferData(sinbuffer, ALFormat.Mono16, sinData, sinData.Length, sampleFreq);
-            AL.Source(source, ALSourcei.Buffer, sinbuffer);
-            AL.Source(source, ALSourceb.Looping, true);
+            AL.Source(sinsource, ALSourcei.Buffer, sinbuffer);
+            AL.Source(sinsource, ALSourceb.Looping, true);
 
-            AL.SourcePlay(source);
+            AL.SourcePlay(sinsource);
 
             Console.WriteLine("Sine Wave - Press a key to stop");
             Console.ReadKey();
