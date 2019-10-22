@@ -6,32 +6,29 @@ using NESEmulator.Util;
 
 namespace NESEmulator
 {
-    public struct APUFrameCounter
-    {
-        public byte reg { get; set; }
+    public enum SequenceMode { FourStep, FiveStep }
 
-        public bool InterruptInhibit
+    public class APUFrameCounter
+    {
+        public bool InterruptInhibit { get; set; }
+
+        public SequenceMode Mode { get; set; }
+
+        private IEnumerable<Channel> _audioChannels;
+
+        public APUFrameCounter(IEnumerable<Channel> audioChannels)
         {
-            get
-            {
-                return reg.TestBit(6);
-            }
-            set
-            {
-                reg.SetBit(6, value);
-            }
+            _audioChannels = audioChannels;
         }
 
-        public bool FiveStepSeqMode
+        /// <summary>
+        /// Called every CPU clock cycle, which is half of an APU cycle.
+        /// </summary>
+        /// <param name="apuCycle">APU cycle count</param>
+        /// <param name="isHalf">true if half APU cycle</param>
+        public void Clock(ulong apuCycle, bool isHalf)
         {
-            get
-            {
-                return reg.TestBit(7);
-            }
-            set
-            {
-                reg.SetBit(7, value);
-            }
+
         }
     }
 }
