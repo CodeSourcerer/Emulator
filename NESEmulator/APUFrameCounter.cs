@@ -14,21 +14,43 @@ namespace NESEmulator
 
         public SequenceMode Mode { get; set; }
 
-        private IEnumerable<Channel> _audioChannels;
+        private const ulong STEP1 = 7457;
+        private const ulong STEP2 = 14913;
+        private const ulong STEP3 = 22371;
+        private const ulong FOURSTEP_STEP4 = 29828;
+        private const ulong FIVESTEP_STEP4 = 29829;
 
-        public APUFrameCounter(IEnumerable<Channel> audioChannels)
+        private Dictionary<ulong, Action> _fourStepSequence;
+        private Dictionary<ulong, Action> _fiveStepSequence;
+        private IEnumerable<Channel> _audioChannels;
+        private ulong _clockCounter;
+        private CS2A03 _apu;
+
+        public APUFrameCounter(IEnumerable<Channel> audioChannels, CS2A03 connectedAPU)
         {
-            _audioChannels = audioChannels;
+            this._audioChannels = audioChannels;
+            this._apu = connectedAPU;
+            buildSequencers();
         }
 
         /// <summary>
         /// Called every CPU clock cycle, which is half of an APU cycle.
         /// </summary>
-        /// <param name="apuCycle">APU cycle count</param>
-        /// <param name="isHalf">true if half APU cycle</param>
-        public void Clock(ulong apuCycle, bool isHalf)
+        /// <param name="cpuCycle">CPU cycle count</param>
+        public void Clock(ulong cpuCycle)
         {
+            _clockCounter++;
 
+            foreach(var channel in _audioChannels)
+            {
+            }
+        }
+
+        private void buildSequencers()
+        {
+            this._fourStepSequence = new Dictionary<ulong, Action>(10);
+            this._fourStepSequence.Add()
+            this._fiveStepSequence = new Dictionary<ulong, Action>(10);
         }
     }
 }

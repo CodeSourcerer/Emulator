@@ -4,9 +4,10 @@ using System.Text;
 
 namespace NESEmulator
 {
-    public class CS2A03 : BusDevice
+    public class CS2A03 : InterruptingBusDevice
     {
-        public BusDeviceType DeviceType => BusDeviceType.APU;
+        public override BusDeviceType DeviceType => BusDeviceType.APU;
+        public override event InterruptingDeviceHandler RaiseInterrupt;
 
         private const float CLOCK_NTSC_MHZ = 1.789773f;
 
@@ -23,23 +24,30 @@ namespace NESEmulator
 
         private APUFrameCounter _frameCounter;
 
-        private bool _halfClock;
         private ushort _apuClockCounter;
+        private uint _cpuClockCounter;
         private byte _sequenceStep;
 
-        public void Clock(ulong clockCounter)
+        public CS2A03()
         {
-            if (clockCounter % 3 == 0)
-                _halfClock = true;
+            Channel[] audioChannels = { new TriangleChannel() };
+            _frameCounter = new APUFrameCounter(audioChannels, this);
+        }
 
+        public override void Clock(ulong clockCounter)
+        {
             if (clockCounter % 6 == 0)
             {
-                _halfClock = false;
                 ++_apuClockCounter;
+            }
+            if (clockCounter % 3 == 0)
+            {
+                ++_cpuClockCounter;
+                _frameCounter.Clock(_cpuClockCounter);
             }
         }
 
-        public bool Read(ushort addr, out byte data)
+        public override bool Read(ushort addr, out byte data)
         {
             bool dataRead = false;
             data = 0x00;
@@ -72,16 +80,20 @@ namespace NESEmulator
             return dataRead;
         }
 
-        public void Reset()
+        public override void Reset()
         {
             _apuClockCounter = 0;
-            _halfClock = false;
             _sequenceStep = 0;
         }
 
-        public bool Write(ushort addr, byte data)
+        public override bool Write(ushort addr, byte data)
         {
             throw new NotImplementedException();
+        }
+
+        public void IRQ()
+        {
+            this.RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.IRQ));
         }
     }
 }
