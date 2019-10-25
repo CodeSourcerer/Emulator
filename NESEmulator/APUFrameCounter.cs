@@ -7,6 +7,7 @@ using NESEmulator.Util;
 namespace NESEmulator
 {
     public enum SequenceMode { FourStep, FiveStep }
+    public enum SequenceAction { QuarterFrame, HalfFrame, Interrupt }
 
     public class APUFrameCounter
     {
@@ -20,7 +21,7 @@ namespace NESEmulator
         private const ulong FOURSTEP_STEP4 = 29828;
         private const ulong FIVESTEP_STEP4 = 29829;
 
-        private Dictionary<ulong, Action> _fourStepSequence;
+        private Dictionary<ulong, SequenceAction[]> _fourStepSequence;
         private Dictionary<ulong, Action> _fiveStepSequence;
         private IEnumerable<Channel> _audioChannels;
         private ulong _clockCounter;
@@ -48,8 +49,8 @@ namespace NESEmulator
 
         private void buildSequencers()
         {
-            this._fourStepSequence = new Dictionary<ulong, Action>(10);
-            this._fourStepSequence.Add()
+            this._fourStepSequence = new Dictionary<ulong, SequenceAction[]>(10);
+            this._fourStepSequence.Add(STEP1, new SequenceAction[] { SequenceAction.QuarterFrame });
             this._fiveStepSequence = new Dictionary<ulong, Action>(10);
         }
     }
