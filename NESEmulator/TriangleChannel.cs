@@ -7,14 +7,20 @@ namespace NESEmulator
         {
         }
 
+        /// <summary>
+        /// Called by frame sequencer every half frame
+        /// </summary>
         public void ClockHalfFrame()
         {
-            throw new NotImplementedException();
+            // Triangle channel ignores half frames
         }
 
+        /// <summary>
+        /// Called by frame sequencer every quarter frame
+        /// </summary>
         public void ClockQuarterFrame()
         {
-            throw new NotImplementedException();
+            //Console.WriteLine("Triangle channel quarter frame");
         }
     }
 }

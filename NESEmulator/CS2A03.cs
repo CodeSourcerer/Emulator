@@ -55,26 +55,32 @@ namespace NESEmulator
             if (addr >= ADDR_PULSE_LO && addr <= ADDR_PULSE_HI)
             {
                 dataRead = true;
+                Console.WriteLine("Pulse channel address read: {0:X2}", addr);
             }
             else if (addr >= ADDR_TRI_LO && addr <= ADDR_TRI_HI)
             {
                 dataRead = true;
+                Console.WriteLine("Triangle channel address read: {0:X2}", addr);
             }
             else if (addr >= ADDR_NOISE_LO && addr <= ADDR_NOISE_HI)
             {
                 dataRead = true;
+                Console.WriteLine("Noise channel address read: {0:X2}", addr);
             }
             else if (addr >= ADDR_DMC_LO && addr <= ADDR_DMC_HI)
             {
                 dataRead = true;
+                Console.WriteLine("DMC channel address read: {0:X2}", addr);
             }
             else if (addr == ADDR_STATUS)
             {
                 dataRead = true;
+                Console.WriteLine("Status register read");
             }
             else if (addr == ADDR_FRAME_COUNTER)
             {
                 dataRead = true;
+                Console.WriteLine("Frame counter read");
             }
 
             return dataRead;
@@ -88,7 +94,40 @@ namespace NESEmulator
 
         public override bool Write(ushort addr, byte data)
         {
-            throw new NotImplementedException();
+            bool dataWritten = false;
+
+            if (addr >= ADDR_PULSE_LO && addr <= ADDR_PULSE_HI)
+            {
+                dataWritten = true;
+                Console.WriteLine("Pulse channel address written: {0:X2}", addr);
+            }
+            else if (addr >= ADDR_TRI_LO && addr <= ADDR_TRI_HI)
+            {
+                dataWritten = true;
+                Console.WriteLine("Triangle channel address written: {0:X2}", addr);
+            }
+            else if (addr >= ADDR_NOISE_LO && addr <= ADDR_NOISE_HI)
+            {
+                dataWritten = true;
+                Console.WriteLine("Noise channel address written: {0:X2}", addr);
+            }
+            else if (addr >= ADDR_DMC_LO && addr <= ADDR_DMC_HI)
+            {
+                dataWritten = true;
+                Console.WriteLine("DMC channel address written: {0:X2}", addr);
+            }
+            else if (addr == ADDR_STATUS)
+            {
+                dataWritten = true;
+                Console.WriteLine("Status register written with data: {0:X2}", data);
+            }
+            else if (addr == ADDR_FRAME_COUNTER)
+            {
+                dataWritten = true;
+                Console.WriteLine("Frame counter written");
+            }
+
+            return dataWritten;
         }
 
         public void IRQ()

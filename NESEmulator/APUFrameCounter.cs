@@ -19,10 +19,13 @@ namespace NESEmulator
         private const ulong STEP2 = 14913;
         private const ulong STEP3 = 22371;
         private const ulong FOURSTEP_STEP4 = 29828;
+        private const ulong FOURSTEP_FINAL = 29830;
         private const ulong FIVESTEP_STEP4 = 29829;
+        private const ulong FIVESTEP_STEP5 = 37281;
+        private const ulong FIVESTEP_FINAL = 37282;
 
         private Dictionary<ulong, SequenceAction[]> _fourStepSequence;
-        private Dictionary<ulong, Action> _fiveStepSequence;
+        private Dictionary<ulong, SequenceAction[]> _fiveStepSequence;
         private IEnumerable<Channel> _audioChannels;
         private ulong _clockCounter;
         private CS2A03 _apu;
@@ -42,8 +45,49 @@ namespace NESEmulator
         {
             _clockCounter++;
 
-            foreach(var channel in _audioChannels)
+            SequenceAction[] sequenceActions = null;
+            if (this.Mode == SequenceMode.FourStep)
             {
+                if (this._fourStepSequence.ContainsKey(_clockCounter))
+                {
+                    sequenceActions = this._fourStepSequence[_clockCounter];
+                }
+
+                if (_clockCounter >= FOURSTEP_FINAL)
+                    _clockCounter = 0;
+            }
+            else
+            {
+                if (this._fiveStepSequence.ContainsKey(_clockCounter))
+                {
+                    sequenceActions = this._fiveStepSequence[_clockCounter];
+                }
+
+                if (_clockCounter >= FIVESTEP_FINAL)
+                    _clockCounter = 0;
+            }
+
+            if (sequenceActions != null)
+            {
+                //Console.WriteLine("FrameCounter perform sequences at clockCount: {0}", _clockCounter);
+                foreach (var channel in _audioChannels)
+                {
+                    foreach (var action in sequenceActions)
+                    {
+                        switch (action)
+                        {
+                            case SequenceAction.QuarterFrame:
+                                channel.ClockQuarterFrame();
+                                break;
+                            case SequenceAction.HalfFrame:
+                                channel.ClockHalfFrame();
+                                break;
+                            case SequenceAction.Interrupt:
+                                this._apu.IRQ();
+                                break;
+                        }
+                    }
+                }
             }
         }
 
@@ -51,7 +95,18 @@ namespace NESEmulator
         {
             this._fourStepSequence = new Dictionary<ulong, SequenceAction[]>(10);
             this._fourStepSequence.Add(STEP1, new SequenceAction[] { SequenceAction.QuarterFrame });
-            this._fiveStepSequence = new Dictionary<ulong, Action>(10);
+            this._fourStepSequence.Add(STEP2, new SequenceAction[] { SequenceAction.QuarterFrame, SequenceAction.HalfFrame });
+            this._fourStepSequence.Add(STEP3, new SequenceAction[] { SequenceAction.QuarterFrame });
+            this._fourStepSequence.Add(FOURSTEP_STEP4, new SequenceAction[] { SequenceAction.Interrupt });
+            this._fourStepSequence.Add(FOURSTEP_STEP4 + 1, new SequenceAction[] { SequenceAction.QuarterFrame, SequenceAction.HalfFrame, SequenceAction.Interrupt });
+            this._fourStepSequence.Add(FOURSTEP_FINAL, new SequenceAction[] { SequenceAction.Interrupt });
+            
+            this._fiveStepSequence = new Dictionary<ulong, SequenceAction[]>(10);
+            this._fiveStepSequence.Add(STEP1, new SequenceAction[] { SequenceAction.QuarterFrame });
+            this._fiveStepSequence.Add(STEP2, new SequenceAction[] { SequenceAction.QuarterFrame, SequenceAction.HalfFrame });
+            this._fiveStepSequence.Add(STEP3, new SequenceAction[] { SequenceAction.QuarterFrame });
+            // step 4, do nothing??
+            this._fiveStepSequence.Add(FIVESTEP_STEP5, new SequenceAction[] { SequenceAction.QuarterFrame, SequenceAction.HalfFrame });
         }
     }
 }
