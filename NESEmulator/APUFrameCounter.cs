@@ -45,6 +45,15 @@ namespace NESEmulator
         {
             _clockCounter++;
 
+            foreach (var audioChannel in _audioChannels)
+            {
+                // Triange channel clocked every CPU cycle
+                if (audioChannel is TriangleChannel)
+                    ((TriangleChannel)audioChannel).Clock(_clockCounter);
+                else if (_clockCounter % 2 == 0) // all other channels clocked every other CPU cycle
+                    audioChannel.Clock(_clockCounter);
+            }
+
             SequenceAction[] sequenceActions = null;
             if (this.Mode == SequenceMode.FourStep)
             {

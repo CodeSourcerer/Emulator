@@ -27,10 +27,15 @@ namespace NESEmulator
         private ushort _apuClockCounter;
         private uint _cpuClockCounter;
         private byte _sequenceStep;
+        private TriangleChannel _triangleChannel;
+        private DMCChannel _dmcChannel;
 
         public CS2A03()
         {
-            Channel[] audioChannels = { new TriangleChannel() };
+            _triangleChannel = new TriangleChannel();
+            _dmcChannel      = new DMCChannel();
+            Channel[] audioChannels = { _triangleChannel, _dmcChannel };
+
             _frameCounter = new APUFrameCounter(audioChannels, this);
         }
 
@@ -60,6 +65,7 @@ namespace NESEmulator
             else if (addr >= ADDR_TRI_LO && addr <= ADDR_TRI_HI)
             {
                 dataRead = true;
+                data = _triangleChannel.Read(addr);
                 Console.WriteLine("Triangle channel address read: {0:X2}", addr);
             }
             else if (addr >= ADDR_NOISE_LO && addr <= ADDR_NOISE_HI)
@@ -70,6 +76,7 @@ namespace NESEmulator
             else if (addr >= ADDR_DMC_LO && addr <= ADDR_DMC_HI)
             {
                 dataRead = true;
+                data = _dmcChannel.Read(addr);
                 Console.WriteLine("DMC channel address read: {0:X2}", addr);
             }
             else if (addr == ADDR_STATUS)
@@ -104,6 +111,7 @@ namespace NESEmulator
             else if (addr >= ADDR_TRI_LO && addr <= ADDR_TRI_HI)
             {
                 dataWritten = true;
+                _triangleChannel.Write(addr, data);
                 Console.WriteLine("Triangle channel address written: {0:X2}", addr);
             }
             else if (addr >= ADDR_NOISE_LO && addr <= ADDR_NOISE_HI)
@@ -114,6 +122,7 @@ namespace NESEmulator
             else if (addr >= ADDR_DMC_LO && addr <= ADDR_DMC_HI)
             {
                 dataWritten = true;
+                _dmcChannel.Write(addr, data);
                 Console.WriteLine("DMC channel address written: {0:X2}", addr);
             }
             else if (addr == ADDR_STATUS)

@@ -22,5 +22,20 @@ namespace NESEmulator
         {
             //Console.WriteLine("Triangle channel quarter frame");
         }
+
+        public void Clock(ulong clockCyles)
+        {
+
+        }
+
+        public byte Read(ushort addr)
+        {
+            return 0;
+        }
+
+        public void Write(ushort addr, byte data)
+        {
+
+        }
     }
 }
