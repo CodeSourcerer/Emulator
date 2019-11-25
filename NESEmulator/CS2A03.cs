@@ -13,14 +13,16 @@ namespace NESEmulator
 
         private const ushort ADDR_PULSE_LO = 0x4000;
         private const ushort ADDR_PULSE_HI = 0x4007;
-        private const ushort ADDR_TRI_LO = 0x4008;
-        private const ushort ADDR_TRI_HI = 0x400B;
+        private const ushort ADDR_TRI_LO   = 0x4008;
+        private const ushort ADDR_TRI_HI   = 0x400B;
         private const ushort ADDR_NOISE_LO = 0x400C;
         private const ushort ADDR_NOISE_HI = 0x400F;
-        private const ushort ADDR_DMC_LO = 0x4010;
-        private const ushort ADDR_DMC_HI = 0x4013;
-        private const ushort ADDR_STATUS = 0x4015;
+        private const ushort ADDR_DMC_LO   = 0x4010;
+        private const ushort ADDR_DMC_HI   = 0x4013;
+        private const ushort ADDR_STATUS   = 0x4015;
         private const ushort ADDR_FRAME_COUNTER = 0x4017;
+
+        private Bus _bus;
 
         private APUFrameCounter _frameCounter;
 
@@ -33,10 +35,15 @@ namespace NESEmulator
         public CS2A03()
         {
             _triangleChannel = new TriangleChannel();
-            _dmcChannel      = new DMCChannel();
+            _dmcChannel      = new DMCChannel(this);
             Channel[] audioChannels = { _triangleChannel, _dmcChannel };
 
             _frameCounter = new APUFrameCounter(audioChannels, this);
+        }
+
+        public void ConnectBus(Bus bus)
+        {
+            this._bus = bus;
         }
 
         public override void Clock(ulong clockCounter)
@@ -106,24 +113,24 @@ namespace NESEmulator
             if (addr >= ADDR_PULSE_LO && addr <= ADDR_PULSE_HI)
             {
                 dataWritten = true;
-                Console.WriteLine("Pulse channel address written: {0:X2}", addr);
+                Console.WriteLine("Pulse channel address written: {0:X2}; data: {1:X2}", addr, data);
             }
             else if (addr >= ADDR_TRI_LO && addr <= ADDR_TRI_HI)
             {
                 dataWritten = true;
                 _triangleChannel.Write(addr, data);
-                Console.WriteLine("Triangle channel address written: {0:X2}", addr);
+                Console.WriteLine("Triangle channel address written: {0:X2}; data: {1:X2}", addr, data);
             }
             else if (addr >= ADDR_NOISE_LO && addr <= ADDR_NOISE_HI)
             {
                 dataWritten = true;
-                Console.WriteLine("Noise channel address written: {0:X2}", addr);
+                Console.WriteLine("Noise channel address written: {0:X2}; data: {1:X2}", addr, data);
             }
             else if (addr >= ADDR_DMC_LO && addr <= ADDR_DMC_HI)
             {
                 dataWritten = true;
                 _dmcChannel.Write(addr, data);
-                Console.WriteLine("DMC channel address written: {0:X2}", addr);
+                Console.WriteLine("DMC channel address written: {0:X2}; data: {1:X2}", addr, data);
             }
             else if (addr == ADDR_STATUS)
             {
@@ -133,10 +140,30 @@ namespace NESEmulator
             else if (addr == ADDR_FRAME_COUNTER)
             {
                 dataWritten = true;
-                Console.WriteLine("Frame counter written");
+                Console.WriteLine("Frame counter written; data: {0:X2}", data);
             }
 
             return dataWritten;
+        }
+
+        public byte ReadBus(ushort addr)
+        {
+            byte dataRead = 0x00;
+
+            if (_bus != null)
+            {
+                dataRead = _bus.Read(addr);
+            }
+
+            return dataRead;
+        }
+
+        public void WriteBus(ushort addr, byte data)
+        {
+            if (_bus != null)
+            {
+                _bus.Write(addr, data);
+            }
         }
 
         public void IRQ()

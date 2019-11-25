@@ -50,6 +50,9 @@ namespace NESEmulator
             }
         }
 
+        /// <summary>
+        /// Output level
+        /// </summary>
         public byte DirectLoad { get; set; }
 
         private byte _sampleAddress;
@@ -78,24 +81,37 @@ namespace NESEmulator
             }
         }
 
-        public DMCChannel()
+        private CS2A03 _apu;
+        private byte _rightShiftReg;
+        private byte _bitsRemaining;
+        private bool _silence;  // I keel you!
+
+        public DMCChannel(CS2A03 apu)
         {
+            this._apu = apu;
             generateRateTableNTSC();
         }
 
         public void ClockHalfFrame()
         {
-            throw new NotImplementedException();
+            
         }
 
         public void ClockQuarterFrame()
         {
-            throw new NotImplementedException();
+            
         }
 
+        /// <summary>
+        /// Clock the channel (as if from timer)
+        /// </summary>
+        /// <param name="clockCycles"></param>
         public void Clock(ulong clockCycles)
         {
-
+            if (_bitsRemaining == 0)
+            {
+                _bitsRemaining = 8;
+            }
         }
 
         public byte Read(ushort addr)
@@ -110,18 +126,22 @@ namespace NESEmulator
             {
                 case ADDR_FLAGSANDRATE:
                     this.FlagsAndRate = data;
+                    Console.WriteLine("DMC Flags and Rate: {0:X2}", data);
                     break;
 
                 case ADDR_DIRECTLOAD:
                     this.DirectLoad = data;
+                     Console.WriteLine("DMC Direct Load: {0:X2}", data);
                     break;
 
                 case ADDR_SAMPLEADDR:
                     this.SampleAddress = data;
+                    Console.WriteLine("DMC Sample Address set: {0:X2}", data);
                     break;
 
                 case ADDR_SAMPLELENGTH:
                     this.SampleLength = data;
+                    Console.WriteLine("DMC Sample Length set: {0:X2}", data);
                     break;
             }
         }

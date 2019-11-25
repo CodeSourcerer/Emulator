@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Collections.Generic;
 
 namespace NESEmulator
@@ -17,13 +18,13 @@ namespace NESEmulator
 
             List<InterruptingBusDevice> interruptingDevices = _busDeviceList.FindAll((bd) => bd is InterruptingBusDevice)
                                                                             .ConvertAll((bd) => (InterruptingBusDevice)bd);
-            foreach (var device in _busDeviceList)
+            var interruptableBusDevices = from device in _busDeviceList
+                                          where device is InterruptableBusDevice
+                                          select device;
+            foreach (var device in interruptableBusDevices)
             {
-                if (device is InterruptableBusDevice)
-                {
-                    foreach (var intDevice in interruptingDevices)
-                        intDevice.RaiseInterrupt += ((InterruptableBusDevice)device).HandleInterrupt;
-                }
+                foreach (var intDevice in interruptingDevices)
+                    intDevice.RaiseInterrupt += ((InterruptableBusDevice)device).HandleInterrupt;
             }
         }
 
@@ -51,8 +52,7 @@ namespace NESEmulator
 
         public void Reset()
         {
-            foreach (var device in _busDeviceList)
-                device.Reset();
+            _busDeviceList.ForEach(device => device.Reset());
 
             _systemClockCounter = 0;
         }
@@ -61,8 +61,7 @@ namespace NESEmulator
         {
             _busDeviceList.Insert(0, cartridge);
             CS2C02 ppu = GetPPU();
-            if (ppu != null)
-                ppu.ConnectCartridge(cartridge);
+            ppu?.ConnectCartridge(cartridge);
         }
 
         public void clock()
@@ -71,10 +70,7 @@ namespace NESEmulator
             // this function. So here we "divide" the clock as necessary and call the peripheral devices Clock()
             // function at the correct times.
 
-            foreach (BusDevice busDevice in _busDeviceList)
-            {
-                busDevice.Clock(_systemClockCounter);
-            }
+            _busDeviceList.ForEach(device => device.Clock(_systemClockCounter));
 
             _systemClockCounter++;
         }

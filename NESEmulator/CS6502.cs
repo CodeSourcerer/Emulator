@@ -530,12 +530,24 @@ namespace NESEmulator
         /// <returns></returns>
         private byte read(ushort addr)
         {
+            byte dataRead = 0x00;
             // In normal operation "read only" is set to false. This may seem odd. Some
             // devices on the bus may change state when they are read from, and this 
             // is intentional under normal circumstances. However the disassembler will
             // want to read the data at an address without changing the state of the
             // devices on the bus
-            return bus.Read(addr, false);
+
+            if (addr >= 0xC000 && addr <= 0xFFFF)
+            {
+                dataRead = bus.Read(addr, false);
+                Console.WriteLine("APU read?? addr: {0:X2}; data: {1:X2}", addr, dataRead);
+            }
+            else
+            {
+                dataRead = bus.Read(addr, false);
+            }
+
+            return dataRead;
         }
 
         /// <summary>
