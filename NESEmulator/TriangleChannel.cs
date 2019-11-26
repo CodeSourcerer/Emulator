@@ -49,7 +49,7 @@ namespace NESEmulator
                 case ADDR_LINEARCOUNTER:
                 case ADDR_TIMERLOW:
                 case ADDR_TIMERHI_LENCOUNTERLOAD:
-                    Console.WriteLine("Triangle Channel Write: addr: {0:X2}; data: {1:X2}", addr, data);
+                    // Console.WriteLine("Triangle Channel Write: addr: {0:X2}; data: {1:X2}", addr, data);
                     break;
             }
         }

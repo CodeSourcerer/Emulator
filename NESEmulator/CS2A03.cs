@@ -11,8 +11,9 @@ namespace NESEmulator
 
         private const float CLOCK_NTSC_MHZ = 1.789773f;
 
-        private const ushort ADDR_PULSE_LO = 0x4000;
-        private const ushort ADDR_PULSE_HI = 0x4007;
+        private const ushort ADDR_PULSE1_LO = 0x4000;
+        private const ushort ADDR_PULSE1_HI = 0x4003;
+        private const ushort ADDR_PULSE2_HI = 0x4007;
         private const ushort ADDR_TRI_LO   = 0x4008;
         private const ushort ADDR_TRI_HI   = 0x400B;
         private const ushort ADDR_NOISE_LO = 0x400C;
@@ -29,14 +30,16 @@ namespace NESEmulator
         private ushort _apuClockCounter;
         private uint _cpuClockCounter;
         private byte _sequenceStep;
+        private PulseChannel _pulseChannel1;
         private TriangleChannel _triangleChannel;
         private DMCChannel _dmcChannel;
 
         public CS2A03()
         {
+            _pulseChannel1   = new PulseChannel(1);
             _triangleChannel = new TriangleChannel();
             _dmcChannel      = new DMCChannel(this);
-            Channel[] audioChannels = { _triangleChannel, _dmcChannel };
+            Channel[] audioChannels = { _pulseChannel1, _triangleChannel, _dmcChannel };
 
             _frameCounter = new APUFrameCounter(audioChannels, this);
         }
@@ -64,7 +67,7 @@ namespace NESEmulator
             bool dataRead = false;
             data = 0x00;
 
-            if (addr >= ADDR_PULSE_LO && addr <= ADDR_PULSE_HI)
+            if (addr >= ADDR_PULSE1_LO && addr <= ADDR_PULSE2_HI)
             {
                 dataRead = true;
                 Console.WriteLine("Pulse channel address read: {0:X2}", addr);
@@ -110,10 +113,11 @@ namespace NESEmulator
         {
             bool dataWritten = false;
 
-            if (addr >= ADDR_PULSE_LO && addr <= ADDR_PULSE_HI)
+            if (addr >= ADDR_PULSE1_LO && addr <= ADDR_PULSE1_HI)
             {
+                _pulseChannel1.Write(addr, data);
                 dataWritten = true;
-                Console.WriteLine("Pulse channel address written: {0:X2}; data: {1:X2}", addr, data);
+                Console.WriteLine("Pulse channel 1 address written: {0:X2}; data: {1:X2}", addr, data);
             }
             else if (addr >= ADDR_TRI_LO && addr <= ADDR_TRI_HI)
             {

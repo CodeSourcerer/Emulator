@@ -23,6 +23,7 @@ namespace NESEmulatorApp
         private BusDevice[] busDevices;
         private CS6502 cpu;
         private CS2C02 ppu;
+        private CS2A03 apu;
         private NESController nesController;
         private Dictionary<ushort, string> mapAsm;
         private bool runEmulation;
@@ -47,13 +48,15 @@ namespace NESEmulatorApp
 
         public void Start(Cartridge cartridge)
         {
+            apu = new CS2A03();
             ppu = new CS2C02();
             ram = new Ram(0x07FF, 0x1FFF);
             cpu = new CS6502();
             nesController = new NESController();
-            busDevices = new BusDevice[] { cpu, ram, ppu, nesController };
+            busDevices = new BusDevice[] { cpu, ram, ppu, nesController, apu };
             nesBus = new Bus(busDevices);
             cpu.ConnectBus(nesBus);
+            apu.ConnectBus(nesBus);
 
             if (!cartridge.ImageValid)
                 throw new ApplicationException("Invalid ROM image");
