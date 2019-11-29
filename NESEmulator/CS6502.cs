@@ -2047,17 +2047,13 @@ namespace NESEmulator
             switch (flag)
             {
                 case FLAGS6502.B:
-                    break;
                 case FLAGS6502.C:
-                    break;
                 case FLAGS6502.D:
+                case FLAGS6502.U:
+                case FLAGS6502.V:
                     break;
                 case FLAGS6502.N:
                     setFlag(flag, (data & 0x0080) != 0);
-                    break;
-                case FLAGS6502.U:
-                    break;
-                case FLAGS6502.V:
                     break;
                 case FLAGS6502.Z:
                     setFlag(flag, (data & 0x00FF) == 0);

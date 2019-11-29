@@ -1,4 +1,6 @@
 ﻿using System;
+using log4net;
+
 namespace NESEmulator
 {
     public class TriangleChannel : Channel
@@ -6,6 +8,8 @@ namespace NESEmulator
         private const ushort ADDR_LINEARCOUNTER          = 0x4008;
         private const ushort ADDR_TIMERLOW               = 0x400A;
         private const ushort ADDR_TIMERHI_LENCOUNTERLOAD = 0x400B;
+
+        private static ILog Log = LogManager.GetLogger(typeof(TriangleChannel));
 
         private ushort _timer;
         private byte _lengthCounter;
@@ -49,7 +53,7 @@ namespace NESEmulator
                 case ADDR_LINEARCOUNTER:
                 case ADDR_TIMERLOW:
                 case ADDR_TIMERHI_LENCOUNTERLOAD:
-                    // Console.WriteLine("Triangle Channel Write: addr: {0:X2}; data: {1:X2}", addr, data);
+                    Log.Debug($"Triangle channel write: [addr={addr:X2}] [data={data:X2}]");
                     break;
             }
         }

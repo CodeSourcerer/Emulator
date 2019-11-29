@@ -3,10 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
 using csPixelGameEngine;
 using csPixelGameEngine.enums;
+using log4net;
+using log4net.Config;
 using NESEmulator;
 using OpenTK;
 using OpenTK.Input;
@@ -18,6 +21,8 @@ namespace EmulatorApp
     {
         private const int SCREEN_WIDTH = 500;
         private const int SCREEN_HEIGHT = 240;
+
+        private static ILog Log = LogManager.GetLogger(typeof(Demo));
 
         private PixelGameEngine pge;
         private GLWindow window;
@@ -45,6 +50,8 @@ namespace EmulatorApp
 
         static void Main(string[] args)
         {
+            Thread.CurrentThread.Name = "main";
+            Log.Info("Demo app started");
             Demo demo = new Demo("NES Emulator");
             //Cartridge cartridge = demo.LoadCartridge("tests\\5.nmi_suppression.nes");
             // Oh, it's on! Like...

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using log4net;
 
 namespace NESEmulator
 {
@@ -10,6 +11,7 @@ namespace NESEmulator
         public override BusDeviceType DeviceType => BusDeviceType.APU;
         public override event InterruptingDeviceHandler RaiseInterrupt;
 
+        private static ILog Log = LogManager.GetLogger(typeof(CS2A03));
         private const float CLOCK_NTSC_MHZ = 1.789773f;
 
         private const ushort ADDR_PULSE1_LO = 0x4000;
@@ -81,34 +83,34 @@ namespace NESEmulator
             if (addr >= ADDR_PULSE1_LO && addr <= ADDR_PULSE2_HI)
             {
                 dataRead = true;
-                Console.WriteLine("Pulse channel address read: {0:X2}", addr);
+                Log.Debug($"Pulse channel address read [addr={addr:X2}]");
             }
             else if (addr >= ADDR_TRI_LO && addr <= ADDR_TRI_HI)
             {
                 dataRead = true;
                 data = _triangleChannel.Read(addr);
-                Console.WriteLine("Triangle channel address read: {0:X2}", addr);
+                Log.Debug($"Triangle channel address read [addr={addr:X2}]");
             }
             else if (addr >= ADDR_NOISE_LO && addr <= ADDR_NOISE_HI)
             {
                 dataRead = true;
-                Console.WriteLine("Noise channel address read: {0:X2}", addr);
+                Log.Debug($"Noise channel address read [addr={addr:X2}]");
             }
             else if (addr >= ADDR_DMC_LO && addr <= ADDR_DMC_HI)
             {
                 dataRead = true;
                 data = _dmcChannel.Read(addr);
-                Console.WriteLine("DMC channel address read: {0:X2}", addr);
+                Log.Debug($"DMC channel address read [addr{addr:X2}]");
             }
             else if (addr == ADDR_STATUS)
             {
                 dataRead = true;
-                Console.WriteLine("Status register read");
+                Log.Debug("Status register read");
             }
             else if (addr == ADDR_FRAME_COUNTER)
             {
                 dataRead = true;
-                Console.WriteLine("Frame counter read");
+                Log.Debug("Frame counter read");
             }
 
             return dataRead;
@@ -128,13 +130,13 @@ namespace NESEmulator
             {
                 _pulseChannel1.Write(addr, data);
                 dataWritten = true;
-                Console.WriteLine("Pulse channel 1 address written: {0:X2}; data: {1:X2}", addr, data);
+                Log.Debug($"Pulse channel 1 address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr >= ADDR_TRI_LO && addr <= ADDR_TRI_HI)
             {
                 dataWritten = true;
                 _triangleChannel.Write(addr, data);
-                Console.WriteLine("Triangle channel address written: {0:X2}; data: {1:X2}", addr, data);
+                Log.Debug($"Triangle channel address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr >= ADDR_NOISE_LO && addr <= ADDR_NOISE_HI)
             {
@@ -150,12 +152,12 @@ namespace NESEmulator
             else if (addr == ADDR_STATUS)
             {
                 dataWritten = true;
-                Console.WriteLine("Status register written with data: {0:X2}", data);
+                Log.Debug($"Status register written [data={data:X2}]");
             }
             else if (addr == ADDR_FRAME_COUNTER)
             {
                 dataWritten = true;
-                Console.WriteLine("Frame counter written; data: {0:X2}", data);
+                Log.Debug($"Frame counter written [data={data:X2}]");
             }
 
             return dataWritten;
