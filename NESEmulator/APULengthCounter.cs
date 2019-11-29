@@ -3,10 +3,58 @@ using System.Collections.Generic;
 
 namespace NESEmulator
 {
+    /// <summary>
+    /// Length counter (aka sequencer) for audio channels
+    /// </summary>
     public class APULengthCounter
     {
         public bool Halt { get; set; }
-        public byte LinearLength { get; private set; }
+
+        private bool _enabled;
+        public bool Enabled
+        {
+            get => _enabled;
+            set
+            {
+                _enabled = value;
+
+                if (!_enabled)
+                    _linearLength = 0;
+            }
+        }
+
+        private ushort _timerReload;
+        public ushort TimerReload
+        {
+            get => _timerReload;
+            set
+            {
+                if (Enabled)
+                    _timerReload = value;
+            }
+        }
+
+        private ushort _timer;
+        public ushort Timer
+        {
+            get => _timer;
+            set
+            {
+                if (Enabled)
+                    _timer = value;
+            }
+        }
+
+        private ushort _linearLength;
+        public ushort LinearLength
+        {
+            get => _linearLength;
+            set
+            {
+                if (Enabled)
+                    _linearLength = value;
+            }
+        }
 
         public event EventHandler CounterElapsed;
 
@@ -23,12 +71,15 @@ namespace NESEmulator
 
         public void Clock()
         {
-            if (this.LinearLength > 0 && !Halt)
+            if (!Halt)
             {
-                this.LinearLength--;
+                this.Timer--;
 
-                if (this.LinearLength == 0)
+                if (this.Timer == 0xFFFF)
+                {
                     this.CounterElapsed?.Invoke(this, EventArgs.Empty);
+                    this.Timer = this.TimerReload;
+                }
             }
         }
 

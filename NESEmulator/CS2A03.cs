@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace NESEmulator
@@ -30,6 +31,7 @@ namespace NESEmulator
         private ushort _apuClockCounter;
         private uint _cpuClockCounter;
         private byte _sequenceStep;
+        private Channel[] _audioChannels;
         private PulseChannel _pulseChannel1;
         private TriangleChannel _triangleChannel;
         private DMCChannel _dmcChannel;
@@ -39,9 +41,9 @@ namespace NESEmulator
             _pulseChannel1   = new PulseChannel(1);
             _triangleChannel = new TriangleChannel();
             _dmcChannel      = new DMCChannel(this);
-            Channel[] audioChannels = { _pulseChannel1, _triangleChannel, _dmcChannel };
+            _audioChannels   = new Channel[] { _pulseChannel1, _triangleChannel, _dmcChannel };
 
-            _frameCounter = new APUFrameCounter(audioChannels, this);
+            _frameCounter = new APUFrameCounter(_audioChannels, this);
         }
 
         public void ConnectBus(Bus bus)
@@ -51,10 +53,19 @@ namespace NESEmulator
 
         public override void Clock(ulong clockCounter)
         {
+            // Clock all audio channels, letting them determine whether or not to actually do something or not
+            foreach (var audioChannel in _audioChannels)
+            {
+                audioChannel.Clock(clockCounter);
+            }
+
+            // APU clocks every other CPU cycle
             if (clockCounter % 6 == 0)
             {
                 ++_apuClockCounter;
             }
+
+            // Clock frame counter every CPU cycle
             if (clockCounter % 3 == 0)
             {
                 ++_cpuClockCounter;
@@ -128,13 +139,13 @@ namespace NESEmulator
             else if (addr >= ADDR_NOISE_LO && addr <= ADDR_NOISE_HI)
             {
                 dataWritten = true;
-                Console.WriteLine("Noise channel address written: {0:X2}; data: {1:X2}", addr, data);
+                //Console.WriteLine("Noise channel address written: {0:X2}; data: {1:X2}", addr, data);
             }
             else if (addr >= ADDR_DMC_LO && addr <= ADDR_DMC_HI)
             {
                 dataWritten = true;
                 _dmcChannel.Write(addr, data);
-                Console.WriteLine("DMC channel address written: {0:X2}; data: {1:X2}", addr, data);
+                //Console.WriteLine("DMC channel address written: {0:X2}; data: {1:X2}", addr, data);
             }
             else if (addr == ADDR_STATUS)
             {

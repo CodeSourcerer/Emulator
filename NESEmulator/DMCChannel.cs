@@ -126,22 +126,22 @@ namespace NESEmulator
             {
                 case ADDR_FLAGSANDRATE:
                     this.FlagsAndRate = data;
-                    Console.WriteLine("DMC Flags and Rate: {0:X2}", data);
+                    //Console.WriteLine("DMC Flags and Rate: {0:X2}", data);
                     break;
 
                 case ADDR_DIRECTLOAD:
                     this.DirectLoad = data;
-                     Console.WriteLine("DMC Direct Load: {0:X2}", data);
+                    //Console.WriteLine("DMC Direct Load: {0:X2}", data);
                     break;
 
                 case ADDR_SAMPLEADDR:
                     this.SampleAddress = data;
-                    Console.WriteLine("DMC Sample Address set: {0:X2}", data);
+                    //Console.WriteLine("DMC Sample Address set: {0:X2}", data);
                     break;
 
                 case ADDR_SAMPLELENGTH:
                     this.SampleLength = data;
-                    Console.WriteLine("DMC Sample Length set: {0:X2}", data);
+                    //Console.WriteLine("DMC Sample Length set: {0:X2}", data);
                     break;
             }
         }

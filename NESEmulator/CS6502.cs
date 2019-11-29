@@ -540,7 +540,6 @@ namespace NESEmulator
             if (addr >= 0xC000 && addr <= 0xFFFF)
             {
                 dataRead = bus.Read(addr, false);
-                Console.WriteLine("APU read?? addr: {0:X2}; data: {1:X2}", addr, dataRead);
             }
             else
             {
