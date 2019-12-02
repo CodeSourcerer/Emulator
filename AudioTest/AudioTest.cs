@@ -9,6 +9,7 @@ namespace AudioTest
     class AudioTest
     {
         AudioContext context;
+        private const int NUM_AUDIO_BUFFERS = 2;
 
         public static void Main(string[] args)
         {
@@ -26,17 +27,16 @@ namespace AudioTest
 
                 int[] tribuffers, sinbuffers, sources;
                 sinbuffers = AL.GenBuffers(2);
-                tribuffers = AL.GenBuffers(2);
+                tribuffers = AL.GenBuffers(NUM_AUDIO_BUFFERS);
                 sources = AL.GenSources(1);
 
-                int sampleFreq = 44100;
+                int sampleRate = 44100;
                 //var sinData1 = generateSinWave(100, sampleFreq, 1000);
                 //var sinData2 = generateSinWave(1500, sampleFreq, 500);
                 //var triData1 = generateTriWave(440, sampleFreq, 500);
                 //var triData2 = generateTriWave(100, sampleFreq, 500);
-                var sqData1 = generateSquareWave(10000, sampleFreq, 2000);
+                short[][] sqData = new short[2][];
 
-                AL.BufferData(tribuffers[0], ALFormat.Mono16, sqData1, sqData1.Length, sampleFreq);
                 //AL.BufferData(tribuffers[1], ALFormat.Mono16, triData2, triData2.Length, sampleFreq);
 
                 //AL.Source(trisource, ALSourcei.Buffer, tribuffer);
@@ -46,9 +46,18 @@ namespace AudioTest
                 //Console.WriteLine("Triangle Waves");
 
                 int oscillations = 0;
-                int sourceNum = oscillations % 2;
-                AL.SourceQueueBuffer(sources[0], tribuffers[sourceNum]);
-                AL.SourcePlay(sources[sourceNum]);
+                Random rnd = new Random();
+                for (;oscillations < 50; oscillations++)
+                {
+                    sqData[0] = generateSquareWave(rnd.Next(100, 10000), sampleRate, 100);
+                    //sqData[1] = generateSquareWave(500, sampleRate, 100);
+                    AL.BufferData(tribuffers[oscillations % NUM_AUDIO_BUFFERS], ALFormat.Mono16, sqData[0], sqData[0].Length, sampleRate);
+                    AL.SourceQueueBuffer(sources[0], tribuffers[oscillations % NUM_AUDIO_BUFFERS]);
+                    AL.SourceUnqueueBuffer(sources[0]);
+                    if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
+                        AL.SourcePlay(sources[0]);
+                    Thread.Sleep(100);
+                }
                 //do
                 //{
                 //    oscillations++;
