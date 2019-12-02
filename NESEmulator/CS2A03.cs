@@ -13,17 +13,19 @@ namespace NESEmulator
 
         private static ILog Log = LogManager.GetLogger(typeof(CS2A03));
         private const float CLOCK_NTSC_MHZ = 1.789773f;
+        private const int SAMPLE_SIZE = 20;
 
-        private const ushort ADDR_PULSE1_LO = 0x4000;
-        private const ushort ADDR_PULSE1_HI = 0x4003;
-        private const ushort ADDR_PULSE2_HI = 0x4007;
-        private const ushort ADDR_TRI_LO   = 0x4008;
-        private const ushort ADDR_TRI_HI   = 0x400B;
-        private const ushort ADDR_NOISE_LO = 0x400C;
-        private const ushort ADDR_NOISE_HI = 0x400F;
-        private const ushort ADDR_DMC_LO   = 0x4010;
-        private const ushort ADDR_DMC_HI   = 0x4013;
-        private const ushort ADDR_STATUS   = 0x4015;
+        private const ushort ADDR_PULSE1_LO     = 0x4000;
+        private const ushort ADDR_PULSE1_HI     = 0x4003;
+        private const ushort ADDR_PULSE2_LO     = 0x4004;
+        private const ushort ADDR_PULSE2_HI     = 0x4007;
+        private const ushort ADDR_TRI_LO        = 0x4008;
+        private const ushort ADDR_TRI_HI        = 0x400B;
+        private const ushort ADDR_NOISE_LO      = 0x400C;
+        private const ushort ADDR_NOISE_HI      = 0x400F;
+        private const ushort ADDR_DMC_LO        = 0x4010;
+        private const ushort ADDR_DMC_HI        = 0x4013;
+        private const ushort ADDR_STATUS        = 0x4015;
         private const ushort ADDR_FRAME_COUNTER = 0x4017;
 
         private Bus _bus;
@@ -35,15 +37,25 @@ namespace NESEmulator
         private byte _sequenceStep;
         private Channel[] _audioChannels;
         private PulseChannel _pulseChannel1;
+        private PulseChannel _pulseChannel2;
         private TriangleChannel _triangleChannel;
         private DMCChannel _dmcChannel;
 
+        private List<short> _audioBuffer;
+
+        public List<short> AudioBuffer
+        {
+            get { return _audioBuffer; }
+        }
+
         public CS2A03()
         {
+            _audioBuffer = new List<short>(4500);
             _pulseChannel1   = new PulseChannel(1);
+            _pulseChannel2   = new PulseChannel(2);
             _triangleChannel = new TriangleChannel();
             _dmcChannel      = new DMCChannel(this);
-            _audioChannels   = new Channel[] { _pulseChannel1, _triangleChannel, _dmcChannel };
+            _audioChannels   = new Channel[] { _pulseChannel1, _pulseChannel2, _triangleChannel, _dmcChannel };
 
             _frameCounter = new APUFrameCounter(_audioChannels, this);
         }
@@ -65,6 +77,10 @@ namespace NESEmulator
             if (clockCounter % 6 == 0)
             {
                 ++_apuClockCounter;
+                if (_apuClockCounter % SAMPLE_SIZE == 0)
+                {
+                    _audioBuffer.Add(GetMixedAudioSample());
+                }
             }
 
             // Clock frame counter every CPU cycle
@@ -100,7 +116,7 @@ namespace NESEmulator
             {
                 dataRead = true;
                 data = _dmcChannel.Read(addr);
-                Log.Debug($"DMC channel address read [addr{addr:X2}]");
+                Log.Debug($"DMC channel address read [addr={addr:X2}]");
             }
             else if (addr == ADDR_STATUS)
             {
@@ -132,6 +148,12 @@ namespace NESEmulator
                 dataWritten = true;
                 Log.Debug($"Pulse channel 1 address written [addr={addr:X2}] [data={data:X2}]");
             }
+            else if (addr >= ADDR_PULSE2_LO && addr <= ADDR_PULSE2_HI)
+            {
+                _pulseChannel2.Write(addr, data);
+                dataWritten = true;
+                Log.Debug($"Pulse channel 2 address written [addr={addr:X2}] [data={data:X2}]");
+            }
             else if (addr >= ADDR_TRI_LO && addr <= ADDR_TRI_HI)
             {
                 dataWritten = true;
@@ -141,13 +163,13 @@ namespace NESEmulator
             else if (addr >= ADDR_NOISE_LO && addr <= ADDR_NOISE_HI)
             {
                 dataWritten = true;
-                //Console.WriteLine("Noise channel address written: {0:X2}; data: {1:X2}", addr, data);
+                Log.Debug($"Noise channel address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr >= ADDR_DMC_LO && addr <= ADDR_DMC_HI)
             {
                 dataWritten = true;
                 _dmcChannel.Write(addr, data);
-                //Console.WriteLine("DMC channel address written: {0:X2}; data: {1:X2}", addr, data);
+                //Log.Debug($"DMC channel address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr == ADDR_STATUS)
             {
@@ -186,6 +208,22 @@ namespace NESEmulator
         public void IRQ()
         {
             this.RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.IRQ));
+        }
+
+        public short GetMixedAudioSample()
+        {
+            short pulse1 = this._pulseChannel1.GetOutput();
+            short pulse2 = this._pulseChannel2.GetOutput();
+            long average = (pulse1 + pulse2) / 2;
+            return (short)(average);
+        }
+
+        public short[] GetCurrentAudioSample()
+        {
+            // dump this for now
+            this._pulseChannel2.EmptyBuffer();
+
+            return this._pulseChannel1.EmptyBuffer();
         }
     }
 }

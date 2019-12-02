@@ -34,7 +34,7 @@ namespace AudioTest
                 //var sinData2 = generateSinWave(1500, sampleFreq, 500);
                 //var triData1 = generateTriWave(440, sampleFreq, 500);
                 //var triData2 = generateTriWave(100, sampleFreq, 500);
-                var sqData1 = generateSquareWave(940, sampleFreq, 2000);
+                var sqData1 = generateSquareWave(10000, sampleFreq, 2000);
 
                 AL.BufferData(tribuffers[0], ALFormat.Mono16, sqData1, sqData1.Length, sampleFreq);
                 //AL.BufferData(tribuffers[1], ALFormat.Mono16, triData2, triData2.Length, sampleFreq);
@@ -122,7 +122,7 @@ namespace AudioTest
             int dataCount = (int)(sampleRate * (sampleLengthMS / 1000.0f));
             double dt = 2 * Math.PI / sampleRate;
             var data = new short[dataCount];
-            double amp = short.MaxValue * 0.5;
+            double amp = short.MaxValue * 0.25;
 
             for (int i = 0; i < data.Length; i++)
             {

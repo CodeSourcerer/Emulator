@@ -168,5 +168,10 @@ namespace NESEmulator
                 { 0x0F, 54  }
             };
         }
+
+        public short[] EmptyBuffer()
+        {
+            throw new NotImplementedException();
+        }
     }
 }
