@@ -158,12 +158,12 @@ namespace NESEmulator
             {
                 dataWritten = true;
                 _triangleChannel.Write(addr, data);
-                Log.Debug($"Triangle channel address written [addr={addr:X2}] [data={data:X2}]");
+                //Log.Debug($"Triangle channel address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr >= ADDR_NOISE_LO && addr <= ADDR_NOISE_HI)
             {
                 dataWritten = true;
-                Log.Debug($"Noise channel address written [addr={addr:X2}] [data={data:X2}]");
+                //Log.Debug($"Noise channel address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr >= ADDR_DMC_LO && addr <= ADDR_DMC_HI)
             {

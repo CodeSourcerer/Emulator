@@ -23,7 +23,7 @@ namespace EmulatorApp
     {
         private const int SCREEN_WIDTH = 500;
         private const int SCREEN_HEIGHT = 240;
-        private const int NUM_AUDIO_BUFFERS = 2;
+        private const int NUM_AUDIO_BUFFERS = 100;
 
         private static ILog Log = LogManager.GetLogger(typeof(Demo));
 
@@ -56,6 +56,8 @@ namespace EmulatorApp
 
         private void pge_OnDestroy(object sender, EventArgs e)
         {
+            AL.DeleteBuffers(buffers);
+            AL.DeleteSources(sources);
             audioContext?.Dispose();
         }
 
@@ -217,6 +219,7 @@ namespace EmulatorApp
         private int _frameCount;
         private int _fps;
         private DateTime dtStart = DateTime.Now;
+        private DateTime dtStartAudio = DateTime.Now;
         private float residualTime = 0.0f;
         private void pge_OnUpdate(object sender, FrameUpdateEventArgs frameUpdateArgs)
         {
@@ -245,9 +248,9 @@ namespace EmulatorApp
                     // Get audio data
                     if (apu.AudioBuffer.Count >= 4410)
                     {
-                        Log.Info("Playing");
+                        Log.Info($"Playing time delta: {(DateTime.Now - dtStartAudio).TotalMilliseconds} ms");
+                        dtStartAudio = DateTime.Now;
                         AL.BufferData(buffers[_audioFrames % NUM_AUDIO_BUFFERS], ALFormat.Mono16, apu.AudioBuffer.ToArray(), apu.AudioBuffer.Count, 44100);
-                        AL.SourceUnqueueBuffer(sources[0]);
                         AL.SourceQueueBuffer(sources[0], buffers[_audioFrames % NUM_AUDIO_BUFFERS]);
                         if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
                         {
@@ -256,41 +259,7 @@ namespace EmulatorApp
                         _audioFrames++;
                         apu.AudioBuffer.Clear();
                     }
-                    //int numAudioDataPointsForFrame = (int)(44100 * frameUpdateArgs.ElapsedTime);
-                    //var audioSample = apu.GetCurrentAudioSample();
-                    //if (audioSample.Length > 0)
-                    //{
-                    //    var scalingFactor = ((double)numAudioDataPointsForFrame / audioSample.Length);
-                    //    if (scalingFactor > 1)
-                    //    {
-                    //        for (int x = 0; x < scalingFactor; x++)
-                    //        {
-                    //            _audioData.AddRange(audioSample);
-                    //        }
-                    //    }
-                    //    else
-                    //    {
-                    //        scalingFactor = audioSample.Length / (double)numAudioDataPointsForFrame;
-
-                    //        for (int x = 0; x < audioSample.Length; x+= (int)scalingFactor)
-                    //        {
-
-                    //        }
-                    //    }
-                    //    //_audioData.AddRange(audioSample);
-                    //    if (_frameCount % 5 == 0)
-                    //    {
-                    //        Log.Info("Playing");
-                    //        //audioSample = _audioData.ToArray();
-                    //        AL.BufferData(buffers[_audioFrames % NUM_AUDIO_BUFFERS], ALFormat.Mono16, _audioData.ToArray(), _audioData.Count, 44100);
-                    //        AL.SourceQueueBuffer(sources[0], buffers[_audioFrames % NUM_AUDIO_BUFFERS]);
-                    //        AL.SourceUnqueueBuffer(sources[0]);
-                    //        if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
-                    //            AL.SourcePlay(sources[0]);
-                    //        _audioData.Clear();
-                    //        _audioFrames++;
-                    //    }
-                    //}
+                    AL.SourceUnqueueBuffer(sources[0]);
 
                     if (DateTime.Now - dtStart >= TimeSpan.FromSeconds(1))
                     {

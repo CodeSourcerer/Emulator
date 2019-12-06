@@ -70,6 +70,8 @@
     <None Include="tests\3.Forward_Branch.nes" />
     <None Include="tests\apu_test.nes" />
     <None Include="tests\branch_timing_tests.zip" />
+    <None Include="tests\nestest.nes" />
+    <None Include="tests\smb.nes" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="lib\csPixelGameEngine.dll" />
