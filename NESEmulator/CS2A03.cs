@@ -42,16 +42,13 @@ namespace NESEmulator
         private TriangleChannel _triangleChannel;
         private DMCChannel _dmcChannel;
 
-        private List<short> _audioBuffer;
-
-        public List<short> AudioBuffer
-        {
-            get { return _audioBuffer; }
-        }
+        private const int AUDIO_BUFFER_SIZE = (int)(44100 * 0.3) + 2;
+        private bool _audioReadyToPlay;
+        private short[] _audioBuffer;
 
         public CS2A03()
         {
-            _audioBuffer = new List<short>(2500);
+            _audioBuffer     = new short[AUDIO_BUFFER_SIZE];
             _pulseChannel1   = new PulseChannel(1);
             _pulseChannel2   = new PulseChannel(2);
             _triangleChannel = new TriangleChannel();
@@ -78,10 +75,6 @@ namespace NESEmulator
             if (clockCounter % 6 == 0)
             {
                 ++_apuClockCounter;
-                if (_apuClockCounter % SAMPLE_SIZE == 0)
-                {
-                    _audioBuffer.Add(GetMixedAudioSample());
-                }
             }
 
             // Clock frame counter every CPU cycle
@@ -89,6 +82,16 @@ namespace NESEmulator
             {
                 ++_cpuClockCounter;
                 _frameCounter.Clock(_cpuClockCounter);
+            }
+
+            if (_pulseChannel1.IsBufferFull())
+            {
+                var pulse1Buffer = _pulseChannel1.ReadAndResetBuffer();
+                for (int i = 0; i < PulseChannel.CHANNEL_BUFFER_SIZE; i++)
+                {
+                    _audioBuffer[(int)(i / 20.29)] = pulse1Buffer[i];
+                }
+                _audioReadyToPlay = true;
             }
         }
 
@@ -224,12 +227,26 @@ namespace NESEmulator
             this.RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.IRQ));
         }
 
-        public short GetMixedAudioSample()
+        public short[] GetSamples(TimeSpan timeElapsed)
         {
-            short pulse1 = this._pulseChannel1.GetOutput();
-            short pulse2 = this._pulseChannel2.GetOutput();
-            long average = pulse1; // (pulse1 + pulse2) / 2;
-            return (short)(average);
+            var timebuffer = timeElapsed.TotalMilliseconds * 0.2;
+            return this._pulseChannel1.GenerateWave((int)(timeElapsed.TotalMilliseconds + 12));
         }
+
+        //public short GetMixedAudioSample()
+        //{
+        //    short pulse1 = this._pulseChannel1.GetOutput();
+        //    short pulse2 = this._pulseChannel2.GetOutput();
+        //    long average = pulse1; // (pulse1 + pulse2) / 2;
+        //    return (short)(average);
+        //}
+
+        public short[] ReadAndResetAudio()
+        {
+            _audioReadyToPlay = false;
+            return _audioBuffer;
+        }
+
+        public bool IsAudioBufferReadyToPlay() => _audioReadyToPlay;
     }
 }

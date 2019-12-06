@@ -9,7 +9,7 @@ namespace AudioTest
     class AudioTest
     {
         AudioContext context;
-        private const int NUM_AUDIO_BUFFERS = 2;
+        private const int NUM_AUDIO_BUFFERS = 30;
 
         public static void Main(string[] args)
         {
@@ -35,7 +35,7 @@ namespace AudioTest
                 //var sinData2 = generateSinWave(1500, sampleFreq, 500);
                 //var triData1 = generateTriWave(440, sampleFreq, 500);
                 //var triData2 = generateTriWave(100, sampleFreq, 500);
-                short[][] sqData = new short[2][];
+                short[][] sqData = new short[NUM_AUDIO_BUFFERS][];
 
                 //AL.BufferData(tribuffers[1], ALFormat.Mono16, triData2, triData2.Length, sampleFreq);
 
@@ -47,16 +47,15 @@ namespace AudioTest
 
                 int oscillations = 0;
                 Random rnd = new Random();
-                for (;oscillations < 50; oscillations++)
+                for (;oscillations < 75; oscillations++)
                 {
-                    sqData[0] = generateSquareWave(rnd.Next(100, 10000), sampleRate, 100);
+                    sqData[oscillations % NUM_AUDIO_BUFFERS] = generateSquareWave(rnd.Next(100, 1000), sampleRate, rnd.Next(100, 200));
                     //sqData[1] = generateSquareWave(500, sampleRate, 100);
-                    AL.BufferData(tribuffers[oscillations % NUM_AUDIO_BUFFERS], ALFormat.Mono16, sqData[0], sqData[0].Length, sampleRate);
+                    AL.BufferData(tribuffers[oscillations % NUM_AUDIO_BUFFERS], ALFormat.Mono16, sqData[oscillations % NUM_AUDIO_BUFFERS], sqData[oscillations % NUM_AUDIO_BUFFERS].Length, sampleRate);
                     AL.SourceQueueBuffer(sources[0], tribuffers[oscillations % NUM_AUDIO_BUFFERS]);
                     AL.SourceUnqueueBuffer(sources[0]);
                     if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
                         AL.SourcePlay(sources[0]);
-                    Thread.Sleep(100);
                 }
                 //do
                 //{

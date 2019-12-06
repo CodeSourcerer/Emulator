@@ -23,7 +23,7 @@ namespace EmulatorApp
     {
         private const int SCREEN_WIDTH = 500;
         private const int SCREEN_HEIGHT = 240;
-        private const int NUM_AUDIO_BUFFERS = 10;
+        private const int NUM_AUDIO_BUFFERS = 100;
 
         private static ILog Log = LogManager.GetLogger(typeof(Demo));
 
@@ -175,6 +175,7 @@ namespace EmulatorApp
             {
                 case OpenTK.Input.Key.Space:
                     runEmulation = !runEmulation;
+                    dtStartAudio = DateTime.Now;
                     break;
 
                 case OpenTK.Input.Key.R:
@@ -238,21 +239,17 @@ namespace EmulatorApp
                 else
                 {
                     residualTime += (1.0f / 60.0f) - (float)frameUpdateArgs.ElapsedTime;
-                    do
-                    {
-                        nesBus.clock();
-                    } while (!ppu.FrameComplete);
-                    ppu.FrameComplete = false;
-                    _frameCount++;
 
                     // Get audio data
-                    if (apu.AudioBuffer.Count >= 2000)
+                    if (apu.IsAudioBufferReadyToPlay())
+                    //if ((DateTime.Now - dtStartAudio).TotalMilliseconds > 30)
                     {
-                        var soundDelta = DateTime.Now - dtStartAudio;
-                        Log.Info($"Playing time delta: {soundDelta.TotalMilliseconds} ms");
-                        dtStartAudio = DateTime.Now;
-                        AL.BufferData(buffers[_audioFrames % NUM_AUDIO_BUFFERS], ALFormat.Mono16, apu.AudioBuffer.ToArray(), apu.AudioBuffer.Count, 44100);
-                        apu.AudioBuffer.Clear();
+                        //var soundDelta = DateTime.Now - dtStartAudio;
+                        //Log.Info($"Playing time delta: {soundDelta.TotalMilliseconds} ms");
+                        //dtStartAudio = DateTime.Now;
+                        //var soundData = apu.GetSamples(soundDelta);
+                        var soundData = apu.ReadAndResetAudio();
+                        AL.BufferData(buffers[_audioFrames % NUM_AUDIO_BUFFERS], ALFormat.Mono16, soundData, soundData.Length, 44100);
                         AL.SourceQueueBuffer(sources[0], buffers[_audioFrames % NUM_AUDIO_BUFFERS]);
                         if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
                         {
@@ -261,6 +258,13 @@ namespace EmulatorApp
                         _audioFrames++;
                     }
                     AL.SourceUnqueueBuffer(sources[0]);
+
+                    do
+                    {
+                        nesBus.clock();
+                    } while (!ppu.FrameComplete);
+                    ppu.FrameComplete = false;
+                    _frameCount++;
 
                     if (DateTime.Now - dtStart >= TimeSpan.FromSeconds(1))
                     {
