@@ -23,7 +23,7 @@ namespace EmulatorApp
     {
         private const int SCREEN_WIDTH = 500;
         private const int SCREEN_HEIGHT = 240;
-        private const int NUM_AUDIO_BUFFERS = 100;
+        private const int NUM_AUDIO_BUFFERS = 10;
 
         private static ILog Log = LogManager.GetLogger(typeof(Demo));
 
@@ -233,35 +233,16 @@ namespace EmulatorApp
                 //if ((DateTime.Now - dtLastTick) > TimeSpan.FromMilliseconds(18))
                 //    Console.WriteLine("Taking too long! Frame took {0} ms", (DateTime.Now - dtLastTick).TotalMilliseconds);
                 //dtLastTick = DateTime.Now;
-
                 if (residualTime > 0.0f)
                     residualTime -= (float)frameUpdateArgs.ElapsedTime;
                 else
                 {
                     residualTime += (1.0f / 60.0f) - (float)frameUpdateArgs.ElapsedTime;
 
-                    // Get audio data
-                    if (apu.IsAudioBufferReadyToPlay())
-                    //if ((DateTime.Now - dtStartAudio).TotalMilliseconds > 30)
-                    {
-                        //var soundDelta = DateTime.Now - dtStartAudio;
-                        //Log.Info($"Playing time delta: {soundDelta.TotalMilliseconds} ms");
-                        //dtStartAudio = DateTime.Now;
-                        //var soundData = apu.GetSamples(soundDelta);
-                        var soundData = apu.ReadAndResetAudio();
-                        AL.BufferData(buffers[_audioFrames % NUM_AUDIO_BUFFERS], ALFormat.Mono16, soundData, soundData.Length, 44100);
-                        AL.SourceQueueBuffer(sources[0], buffers[_audioFrames % NUM_AUDIO_BUFFERS]);
-                        if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
-                        {
-                            AL.SourcePlay(sources[0]);
-                        }
-                        _audioFrames++;
-                    }
-                    AL.SourceUnqueueBuffer(sources[0]);
-
                     do
                     {
                         nesBus.clock();
+                        playAudioWhenReady();
                     } while (!ppu.FrameComplete);
                     ppu.FrameComplete = false;
                     _frameCount++;
@@ -324,6 +305,28 @@ namespace EmulatorApp
             //cpu.Reset();
 
             pge.Clear(Pixel.BLUE);
+        }
+
+        private void playAudioWhenReady()
+        {
+            // Get audio data
+            if (apu.IsAudioBufferReadyToPlay())
+            //if ((DateTime.Now - dtStartAudio).TotalMilliseconds > 30)
+            {
+                //var soundDelta = DateTime.Now - dtStartAudio;
+                //Log.Info($"Playing time delta: {soundDelta.TotalMilliseconds} ms");
+                //dtStartAudio = DateTime.Now;
+                //var soundData = apu.GetSamples(soundDelta);
+                var soundData = apu.ReadAndResetAudio();
+                AL.BufferData(buffers[_audioFrames % NUM_AUDIO_BUFFERS], ALFormat.Mono16, soundData, soundData.Length, 44100);
+                AL.SourceQueueBuffer(sources[0], buffers[_audioFrames % NUM_AUDIO_BUFFERS]);
+                AL.SourceUnqueueBuffer(sources[0]);
+                if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
+                {
+                    AL.SourcePlay(sources[0]);
+                }
+                _audioFrames++;
+            }
         }
 
         void DrawRam(int x, int y, ushort nAddr, int nRows, int nColumns)

@@ -11,6 +11,7 @@ namespace NESEmulator
     {
         public override BusDeviceType DeviceType => BusDeviceType.APU;
         public override event InterruptingDeviceHandler RaiseInterrupt;
+        public const int SOUND_BUFFER_SIZE_MS = 200;
 
         private static ILog Log = LogManager.GetLogger(typeof(CS2A03));
         private const float CLOCK_NTSC_MHZ = 1.789773f;
@@ -42,7 +43,7 @@ namespace NESEmulator
         private TriangleChannel _triangleChannel;
         private DMCChannel _dmcChannel;
 
-        private const int AUDIO_BUFFER_SIZE = (int)(44100 * 0.3) + 2;
+        private const int AUDIO_BUFFER_SIZE = (int)(44100 * (SOUND_BUFFER_SIZE_MS / 1000.0));// + 2;
         private bool _audioReadyToPlay;
         private short[] _audioBuffer;
 
@@ -87,9 +88,10 @@ namespace NESEmulator
             if (_pulseChannel1.IsBufferFull())
             {
                 var pulse1Buffer = _pulseChannel1.ReadAndResetBuffer();
-                for (int i = 0; i < PulseChannel.CHANNEL_BUFFER_SIZE; i++)
+                for (int i = 0, si = 0; i < AUDIO_BUFFER_SIZE; i++, si += 20)
                 {
-                    _audioBuffer[(int)(i / 20.29)] = pulse1Buffer[i];
+                    //_audioBuffer[(int)(i / 20.29)] = pulse1Buffer[i];
+                    _audioBuffer[i] = pulse1Buffer[si];
                 }
                 _audioReadyToPlay = true;
             }

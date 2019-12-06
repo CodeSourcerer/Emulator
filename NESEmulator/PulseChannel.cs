@@ -42,7 +42,7 @@ namespace NESEmulator
             }
         }
 
-        public const int CHANNEL_BUFFER_SIZE = (int)(CLOCK_NTSC_APU * 0.2) + 1;
+        public const int CHANNEL_BUFFER_SIZE = (int)(CLOCK_NTSC_APU * (CS2A03.SOUND_BUFFER_SIZE_MS / 1000.0)) + 1;
 
         public PulseChannel(int channel)
         {
@@ -81,8 +81,7 @@ namespace NESEmulator
                 _sequencer.Clock();
                 if (_bufferWritePtr < CHANNEL_BUFFER_SIZE)
                 {
-                    _buffer[_bufferWritePtr] = _output;
-                    ++_bufferWritePtr;
+                    _buffer[_bufferWritePtr++] = _output;
                 }
             }
         }
@@ -149,7 +148,7 @@ namespace NESEmulator
         public short[] ReadAndResetBuffer()
         {
             _bufferWritePtr = 0;
-            return (short[])_buffer.Clone();
+            return _buffer;
         }
 
         public short[] GenerateWave(int lengthInMS)
