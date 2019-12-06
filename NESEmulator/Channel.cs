@@ -9,6 +9,5 @@ namespace NESEmulator
         void Clock(ulong clockCycles);
         byte Read(ushort addr);
         void Write(ushort addr, byte data);
-        short[] EmptyBuffer();
     }
 }

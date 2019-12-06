@@ -12,6 +12,7 @@ namespace NESEmulator
         private static ILog Log = LogManager.GetLogger(typeof(PulseChannel));
 
         private APULengthCounter _lengthCounter;
+        private APUSequencer _sequencer;
 
         private static byte[] DUTY_CYCLE = new byte[]
         {
@@ -23,6 +24,7 @@ namespace NESEmulator
 
         private byte _dutyCycle;
         private int _dutyCycleIndex;
+        private byte _volume;
         private List<short> _buffer;
         private short _output;
         public short Output
@@ -30,21 +32,38 @@ namespace NESEmulator
             get { return _output; }
         }
 
+        public bool Enabled
+        {
+            set
+            {
+                this._lengthCounter.ClearLength();
+            }
+        }
+
+
         public PulseChannel(int channel)
         {
             this.ChannelNum = channel;
             this._dutyCycleIndex = 0;
             this._dutyCycle = DUTY_CYCLE[0];
-            this._buffer = new List<short>(25);
+            this._buffer = new List<short>(50);
             this._lengthCounter = new APULengthCounter();
-            this._lengthCounter.CounterElapsed += generateWave;
+            this._lengthCounter.CounterElapsed += lengthCounterElapsed;
+            this._lengthCounter.Enabled = true;
+            this._sequencer = new APUSequencer();
+            this._sequencer.TimerElapsed += generateWave;
+        }
+
+        private void lengthCounterElapsed(object sender, EventArgs e)
+        {
+
         }
 
         private void generateWave(object sender, EventArgs e)
         {
             short volume = (short)(short.MaxValue * 0.25);
             _output = _dutyCycle.TestBit(_dutyCycleIndex) ? volume : (short)(-volume);
-            if (_lengthCounter.TimerReload > 8 && _lengthCounter.LinearLength > 0)
+            //if (_lengthCounter.TimerReload > 8 && _lengthCounter.LinearLength > 0 && this._volume > 0)
             {
                 _dutyCycleIndex += 1;
                 _dutyCycleIndex %= 8;
@@ -55,13 +74,14 @@ namespace NESEmulator
         {
             if (clockCycles % 6 == 0)
             {
-                _lengthCounter.Clock();
+                _sequencer.Clock();
                 _buffer.Add(_output);
             }
         }
 
         public void ClockHalfFrame()
         {
+            _lengthCounter.Clock();
         }
 
         public void ClockQuarterFrame()
@@ -79,27 +99,30 @@ namespace NESEmulator
             {
                 this._lengthCounter.Halt = data.TestBit(5);
                 this._dutyCycle = DUTY_CYCLE[data >> 6];
-                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Duty={data >> 6}] [Halt={_lengthCounter.Halt}] [ConstantVolume={data.TestBit(4)}] [Volume={data & 0x0F}]");
+                this._volume = (byte)(data & 0x0F);
+                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Duty={data >> 6}] [Halt={_lengthCounter.Halt}] [ConstantVolume={data.TestBit(4)}] [Volume={this._volume}]");
             }
             if (addr == 0x4001 || addr == 0x4005)
             {
-                _lengthCounter.Enabled = data.TestBit(7);
-                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Enabled={_lengthCounter.Enabled}]");
+                // This should be sweep enabled
+                //_lengthCounter.Enabled = data.TestBit(7);
+                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written.");
             }
             // Pulse channel 1 & 2 timer low bits
             if (addr == 0x4002 || addr == 0x4006)
             {
-                _lengthCounter.TimerReload &= 0xFF00;
-                _lengthCounter.TimerReload |= data;
-                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [TimerReload={_lengthCounter.TimerReload}]");
+                _sequencer.TimerReload &= 0xFF00;
+                _sequencer.TimerReload |= data;
+                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [TimerReload={_sequencer.TimerReload}]");
             }
             // Pulse channel 1 & 2 length counter load and timer high bits
             if (addr == 0x4003 || addr == 0x4007)
             {
                 _lengthCounter.LoadLength((byte)(data >> 3));
-                _lengthCounter.TimerReload &= 0x00FF;
-                _lengthCounter.TimerReload |= (ushort)((data & 0x07) << 8);
-                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [LinearLength={_lengthCounter.LinearLength}] [TimerReload={_lengthCounter.TimerReload}]");
+                _sequencer.TimerReload &= 0x00FF;
+                _sequencer.TimerReload |= (ushort)((data & 0x07) << 8);
+                _dutyCycleIndex = 0;
+                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [LinearLength={_lengthCounter.LinearLength}] [TimerReload={_sequencer.TimerReload}]");
             }
         }
 
@@ -107,20 +130,13 @@ namespace NESEmulator
         {
             short[] buffer = this._buffer.ToArray();
             this._buffer.Clear();
-            long average = 0;
-            foreach (var bufferVal in buffer)
-                average += bufferVal;
-            average /= buffer.Length;
+            //long average = 0;
+            //foreach (var bufferVal in buffer)
+            //    average += bufferVal;
+            //average /= buffer.Length;
 
-            return (short)average;
+            return (short)_output;
         }
 
-        public short[] EmptyBuffer()
-        {
-            var bufferedData = this._buffer.ToArray();
-            this._buffer.Clear();
-
-            return bufferedData;
-        }
     }
 }

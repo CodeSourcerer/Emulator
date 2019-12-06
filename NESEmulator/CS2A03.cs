@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using log4net;
+using NESEmulator.Util;
 
 namespace NESEmulator
 {
@@ -13,7 +14,7 @@ namespace NESEmulator
 
         private static ILog Log = LogManager.GetLogger(typeof(CS2A03));
         private const float CLOCK_NTSC_MHZ = 1.789773f;
-        private const int SAMPLE_SIZE = 20;
+        private const int SAMPLE_SIZE = 18;
 
         private const ushort ADDR_PULSE1_LO     = 0x4000;
         private const ushort ADDR_PULSE1_HI     = 0x4003;
@@ -50,7 +51,7 @@ namespace NESEmulator
 
         public CS2A03()
         {
-            _audioBuffer = new List<short>(4500);
+            _audioBuffer = new List<short>(2500);
             _pulseChannel1   = new PulseChannel(1);
             _pulseChannel2   = new PulseChannel(2);
             _triangleChannel = new TriangleChannel();
@@ -175,10 +176,23 @@ namespace NESEmulator
             {
                 dataWritten = true;
                 Log.Debug($"Status register written [data={data:X2}]");
+                if (data.TestBit(0) == false)
+                {
+                    _pulseChannel1.Enabled = false;
+                }
             }
             else if (addr == ADDR_FRAME_COUNTER)
             {
                 dataWritten = true;
+                _frameCounter.Reset();
+                if (data.TestBit(7) == false)
+                {
+                    _frameCounter.Mode = SequenceMode.FourStep;
+                }
+                else
+                {
+                    _frameCounter.Mode = SequenceMode.FiveStep;
+                }
                 Log.Debug($"Frame counter written [data={data:X2}]");
             }
 
@@ -214,16 +228,8 @@ namespace NESEmulator
         {
             short pulse1 = this._pulseChannel1.GetOutput();
             short pulse2 = this._pulseChannel2.GetOutput();
-            long average = (pulse1 + pulse2) / 2;
+            long average = pulse1; // (pulse1 + pulse2) / 2;
             return (short)(average);
-        }
-
-        public short[] GetCurrentAudioSample()
-        {
-            // dump this for now
-            this._pulseChannel2.EmptyBuffer();
-
-            return this._pulseChannel1.EmptyBuffer();
         }
     }
 }

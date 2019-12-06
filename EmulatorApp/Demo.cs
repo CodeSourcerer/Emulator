@@ -23,7 +23,7 @@ namespace EmulatorApp
     {
         private const int SCREEN_WIDTH = 500;
         private const int SCREEN_HEIGHT = 240;
-        private const int NUM_AUDIO_BUFFERS = 100;
+        private const int NUM_AUDIO_BUFFERS = 10;
 
         private static ILog Log = LogManager.GetLogger(typeof(Demo));
 
@@ -68,7 +68,7 @@ namespace EmulatorApp
             Demo demo = new Demo("NES Emulator");
             //Cartridge cartridge = demo.LoadCartridge("tests\\5.nmi_suppression.nes");
             // Oh, it's on! Like...
-            Cartridge cartridge = demo.LoadCartridge("tests\\smb.nes"); 
+            Cartridge cartridge = demo.LoadCartridge("tests\\donkey kong.nes"); 
             demo.Start(cartridge);
         }
 
@@ -246,18 +246,19 @@ namespace EmulatorApp
                     _frameCount++;
 
                     // Get audio data
-                    if (apu.AudioBuffer.Count >= 4410)
+                    if (apu.AudioBuffer.Count >= 2000)
                     {
-                        Log.Info($"Playing time delta: {(DateTime.Now - dtStartAudio).TotalMilliseconds} ms");
+                        var soundDelta = DateTime.Now - dtStartAudio;
+                        Log.Info($"Playing time delta: {soundDelta.TotalMilliseconds} ms");
                         dtStartAudio = DateTime.Now;
                         AL.BufferData(buffers[_audioFrames % NUM_AUDIO_BUFFERS], ALFormat.Mono16, apu.AudioBuffer.ToArray(), apu.AudioBuffer.Count, 44100);
+                        apu.AudioBuffer.Clear();
                         AL.SourceQueueBuffer(sources[0], buffers[_audioFrames % NUM_AUDIO_BUFFERS]);
                         if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
                         {
                             AL.SourcePlay(sources[0]);
                         }
                         _audioFrames++;
-                        apu.AudioBuffer.Clear();
                     }
                     AL.SourceUnqueueBuffer(sources[0]);
 
@@ -275,7 +276,7 @@ namespace EmulatorApp
             //DrawRam(516, 32, 0x0200, 16, 16);
             //DrawRam(2, 182, 0x0100, 16, 16);
             // DrawCpu(516, 2);
-            pge.DrawString(340, 2, string.Format("FPS: {0}", _fps), Pixel.WHITE);
+            pge.DrawString(340, 2, $"FPS: {_fps}", Pixel.WHITE);
             // DrawCode(516, 72, 26);
 
             //DrawOam(516, 72);

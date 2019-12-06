@@ -13,7 +13,20 @@ namespace NESEmulator
     {
         public bool InterruptInhibit { get; set; }
 
-        public SequenceMode Mode { get; set; }
+        private SequenceMode _mode;
+        public SequenceMode Mode
+        {
+            get => _mode;
+            set
+            {
+                _mode = value;
+                foreach(var channel in _audioChannels)
+                {
+                    channel.ClockQuarterFrame();
+                    channel.ClockHalfFrame();
+                }
+            }
+        }
 
         private const ulong STEP1 = 7457;
         private const ulong STEP2 = 14913;
@@ -98,6 +111,11 @@ namespace NESEmulator
                     }
                 }
             }
+        }
+
+        public void Reset()
+        {
+            _clockCounter = 0; // not quite, but whatever
         }
 
         private void buildSequencers()

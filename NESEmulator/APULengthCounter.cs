@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace NESEmulator
 {
     /// <summary>
-    /// Length counter (aka sequencer) for audio channels
+    /// Length counter for audio channels
     /// </summary>
     public class APULengthCounter
     {
@@ -73,13 +73,16 @@ namespace NESEmulator
         {
             if (!Halt)
             {
-                this.Timer--;
-
-                if (this.Timer == 0xFFFF)
-                {
+                this.LinearLength--;
+                if (this.LinearLength == 0)
                     this.CounterElapsed?.Invoke(this, EventArgs.Empty);
-                    this.Timer = this.TimerReload;
-                }
+                //this.Timer--;
+
+                //if (this.Timer == 0xFFFF)
+                //{
+                //    this.CounterElapsed?.Invoke(this, EventArgs.Empty);
+                //    this.Timer = (ushort)(this.TimerReload + 1);
+                //}
             }
         }
 
