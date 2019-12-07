@@ -26,7 +26,14 @@ namespace NESEmulator
             }
         }
 
-        public event EventHandler TimerElapsed;
+        public delegate void TimerElapsed();
+
+        private TimerElapsed _timerCallback;
+
+        public APUSequencer(TimerElapsed callback)
+        {
+            _timerCallback = callback;
+        }
 
         public void Clock()
         {
@@ -34,7 +41,7 @@ namespace NESEmulator
 
             if (this.Timer == 0xFFFF)
             {
-                this.TimerElapsed?.Invoke(this, EventArgs.Empty);
+                _timerCallback();
                 this.Timer = (ushort)(this.TimerReload + 1);
             }
         }

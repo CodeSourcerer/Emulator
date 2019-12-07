@@ -51,6 +51,7 @@ namespace EmulatorApp
             pge.Construct(SCREEN_WIDTH, SCREEN_HEIGHT, window);
             pge.OnCreate += pge_OnCreate;
             pge.OnFrameUpdate += pge_OnUpdate;
+            //pge.OnFrameUpdate += pge_OnSoundUpdate;
             pge.OnDestroy += pge_OnDestroy;
         }
 
@@ -216,7 +217,8 @@ namespace EmulatorApp
         }
 
         private int _audioFrames;
-        private List<short> _audioData = new List<short>();
+        private int _audioDataLength;
+        private short[] _audioData = new short[44100];
         private int _frameCount;
         private int _fps;
         private DateTime dtStart = DateTime.Now;
@@ -247,6 +249,8 @@ namespace EmulatorApp
                     ppu.FrameComplete = false;
                     _frameCount++;
 
+                    //playAudio();
+
                     if (DateTime.Now - dtStart >= TimeSpan.FromSeconds(1))
                     {
                         dtStart = DateTime.Now;
@@ -257,11 +261,15 @@ namespace EmulatorApp
                 }
             }
 
-            // Draw Ram Page 0x00		
+            pge.DrawString(340, 2, $"FPS: {_fps}", Pixel.WHITE);
+
+            // Draw rendered output
+            pge.DrawSprite(0, 0, ppu.GetScreen(), 1);
+
+            // Draw Ram Page 0x00
             //DrawRam(516, 32, 0x0200, 16, 16);
             //DrawRam(2, 182, 0x0100, 16, 16);
             // DrawCpu(516, 2);
-            pge.DrawString(340, 2, $"FPS: {_fps}", Pixel.WHITE);
             // DrawCode(516, 72, 26);
 
             //DrawOam(516, 72);
@@ -283,9 +291,6 @@ namespace EmulatorApp
             //pge.DrawSprite(516, 348, ppu.GetPatternTable(0, (byte)selectedPalette));
             //pge.DrawSprite(648, 348, ppu.GetPatternTable(1, (byte)selectedPalette));
 
-            // Draw rendered output
-            pge.DrawSprite(0, 0, ppu.GetScreen(), 1);
-
             //for (int y = 0; y < 30; y++)
             //{
             //    for (int x = 0; x < 32; x++)
@@ -297,10 +302,16 @@ namespace EmulatorApp
             //}
         }
 
+        private void pge_OnSoundUpdate(object sender, FrameUpdateEventArgs frameUpdateArgs)
+        {
+            playAudioWhenReady();
+
+        }
+
         private void pge_OnCreate(object sender, EventArgs e)
         {
             // Extract disassembly
-            mapAsm = cpu.Disassemble(0x0000, 0xFFFF);
+            // mapAsm = cpu.Disassemble(0x0000, 0xFFFF);
 
             //cpu.Reset();
 
@@ -311,12 +322,7 @@ namespace EmulatorApp
         {
             // Get audio data
             if (apu.IsAudioBufferReadyToPlay())
-            //if ((DateTime.Now - dtStartAudio).TotalMilliseconds > 30)
             {
-                //var soundDelta = DateTime.Now - dtStartAudio;
-                //Log.Info($"Playing time delta: {soundDelta.TotalMilliseconds} ms");
-                //dtStartAudio = DateTime.Now;
-                //var soundData = apu.GetSamples(soundDelta);
                 var soundData = apu.ReadAndResetAudio();
                 AL.BufferData(buffers[_audioFrames % NUM_AUDIO_BUFFERS], ALFormat.Mono16, soundData, soundData.Length, 44100);
                 AL.SourceQueueBuffer(sources[0], buffers[_audioFrames % NUM_AUDIO_BUFFERS]);
@@ -326,6 +332,29 @@ namespace EmulatorApp
                     AL.SourcePlay(sources[0]);
                 }
                 _audioFrames++;
+            }
+        }
+
+        private void playAudio()
+        {
+            if (_audioDataLength > 4410)
+            {
+                AL.BufferData(buffers[_audioFrames % NUM_AUDIO_BUFFERS], ALFormat.Mono16, _audioData, _audioDataLength, 44100);
+                _audioDataLength = 0;
+                AL.SourceQueueBuffer(sources[0], buffers[_audioFrames % NUM_AUDIO_BUFFERS]);
+                AL.SourceUnqueueBuffer(sources[0]);
+                if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
+                {
+                    AL.SourcePlay(sources[0]);
+                }
+                _audioFrames++;
+            }
+            var timeDelta = DateTime.Now - dtStartAudio;
+            dtStartAudio = DateTime.Now;
+            var _newAudioData = apu.GetSamples(timeDelta);
+            for (int i = 0; i < _newAudioData.Length; i++)
+            {
+                _audioData[_audioDataLength++] = _newAudioData[i];
             }
         }
 
