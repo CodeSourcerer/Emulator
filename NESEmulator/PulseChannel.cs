@@ -64,7 +64,7 @@ namespace NESEmulator
 
         private void generateWave()
         {
-            short volume = (short)(short.MaxValue >> 4);
+            short volume = (short)(2047 * _volume);
             _output = _dutyCycle.TestBit(_dutyCycleIndex) ? volume : (short)(-volume);
             if (_lengthCounter.LinearLength > 0 && _volume > 0)
             {
