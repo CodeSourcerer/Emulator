@@ -14,8 +14,8 @@ namespace NESEmulator
         public const int SOUND_BUFFER_SIZE_MS = 50;
 
         private static ILog Log = LogManager.GetLogger(typeof(CS2A03));
-        private const float CLOCK_NTSC_MHZ = 1.789773f;
-        private const int SAMPLE_SIZE = 18;
+        private const float CLOCK_NTSC_HZ       = 1789773.0f;
+        private const int   SAMPLE_FREQUENCY    = 20;
 
         private const ushort ADDR_PULSE1_LO     = 0x4000;
         private const ushort ADDR_PULSE1_HI     = 0x4003;
@@ -32,22 +32,20 @@ namespace NESEmulator
 
         private Bus _bus;
 
+        private ushort  _apuClockCounter;
+        private uint    _cpuClockCounter;
         private APUFrameCounter _frameCounter;
-
-        private ushort _apuClockCounter;
-        private uint _cpuClockCounter;
-        private byte _sequenceStep;
-        private Channel[] _audioChannels;
-        private PulseChannel _pulseChannel1;
-        private PulseChannel _pulseChannel2;
+        private Channel[]       _audioChannels;
+        private PulseChannel    _pulseChannel1;
+        private PulseChannel    _pulseChannel2;
         private TriangleChannel _triangleChannel;
-        private DMCChannel _dmcChannel;
+        private DMCChannel      _dmcChannel;
 
-        private const int AUDIO_BUFFER_SIZE = (int)(44100 * (SOUND_BUFFER_SIZE_MS / 1000.0));
-        private bool _audioReadyToPlay;
-        private int _audioBufferPtr;
+        private const int AUDIO_BUFFER_SIZE     = (int)(44100 * (SOUND_BUFFER_SIZE_MS / 1000.0));
+        private const int AUDIO_BUFFER_PADDING  = AUDIO_BUFFER_SIZE;
+        private bool    _audioReadyToPlay;
+        private int     _audioBufferPtr;
         private short[] _audioBuffer;
-        private const int AUDIO_BUFFER_PADDING = (int)(AUDIO_BUFFER_SIZE);
 
         public CS2A03()
         {
@@ -58,7 +56,7 @@ namespace NESEmulator
             _dmcChannel      = new DMCChannel(this);
             _audioChannels   = new Channel[] { _pulseChannel1, _pulseChannel2, _triangleChannel, _dmcChannel };
 
-            _frameCounter = new APUFrameCounter(_audioChannels, this);
+            _frameCounter    = new APUFrameCounter(_audioChannels, this);
         }
 
         public void ConnectBus(Bus bus)
@@ -78,14 +76,15 @@ namespace NESEmulator
             if (clockCounter % 6 == 0)
             {
                 ++_apuClockCounter;
-                if (_apuClockCounter % 20 == 0)
+                if (_apuClockCounter % SAMPLE_FREQUENCY == 0)
                 {
                     if (_audioBufferPtr < AUDIO_BUFFER_SIZE)
                     {
-                        _audioBuffer[_audioBufferPtr++] = (short)((_pulseChannel1.Output + _pulseChannel2.Output) / 2);
+                        _audioBuffer[_audioBufferPtr++] = GetMixedAudioSample();
                     }
                     else
                     {
+                        // Once buffer is full, duplicate audio to fill remaining buffer
                         Array.Copy(_audioBuffer, _audioBufferPtr - AUDIO_BUFFER_PADDING, _audioBuffer, _audioBufferPtr, AUDIO_BUFFER_PADDING);
                         _audioReadyToPlay = true;
                     }
@@ -144,7 +143,6 @@ namespace NESEmulator
         public override void Reset()
         {
             _apuClockCounter = 0;
-            _sequenceStep = 0;
         }
 
         public override bool Write(ushort addr, byte data)
@@ -155,13 +153,13 @@ namespace NESEmulator
             {
                 _pulseChannel1.Write(addr, data);
                 dataWritten = true;
-                Log.Debug($"Pulse channel 1 address written [addr={addr:X2}] [data={data:X2}]");
+                //Log.Debug($"Pulse channel 1 address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr >= ADDR_PULSE2_LO && addr <= ADDR_PULSE2_HI)
             {
                 _pulseChannel2.Write(addr, data);
                 dataWritten = true;
-                Log.Debug($"Pulse channel 2 address written [addr={addr:X2}] [data={data:X2}]");
+                //Log.Debug($"Pulse channel 2 address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr >= ADDR_TRI_LO && addr <= ADDR_TRI_HI)
             {
@@ -227,23 +225,19 @@ namespace NESEmulator
             }
         }
 
+        /// <summary>
+        /// This allows the APU to signal an interrupt to the CPU
+        /// </summary>
         public void IRQ()
         {
             this.RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.IRQ));
         }
 
-        public short[] GetSamples(TimeSpan timeElapsed)
+        public short GetMixedAudioSample()
         {
-            return this._pulseChannel1.GenerateWave((int)(timeElapsed.TotalMilliseconds) + 1);
+            short average = (short)((_pulseChannel1.Output + _pulseChannel2.Output) / 2);
+            return average;
         }
-
-        //public short GetMixedAudioSample()
-        //{
-        //    short pulse1 = this._pulseChannel1.GetOutput();
-        //    short pulse2 = this._pulseChannel2.GetOutput();
-        //    long average = pulse1; // (pulse1 + pulse2) / 2;
-        //    return (short)(average);
-        //}
 
         public short[] ReadAndResetAudio()
         {

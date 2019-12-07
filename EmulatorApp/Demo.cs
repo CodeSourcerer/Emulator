@@ -180,7 +180,7 @@ namespace EmulatorApp
             {
                 case OpenTK.Input.Key.Space:
                     runEmulation = !runEmulation;
-                    dtStartAudio = DateTime.Now;
+                    //dtStartAudio = DateTime.Now;
                     break;
 
                 case OpenTK.Input.Key.R:
@@ -220,13 +220,9 @@ namespace EmulatorApp
             }
         }
 
-        private int _audioFrames;
-        private int _audioDataLength;
-        private short[] _audioData = new short[44100];
         private int _frameCount;
         private int _fps;
         private DateTime dtStart = DateTime.Now;
-        private DateTime dtStartAudio = DateTime.Now;
         private float residualTime = 0.0f;
         private void pge_OnUpdate(object sender, FrameUpdateEventArgs frameUpdateArgs)
         {
@@ -252,8 +248,6 @@ namespace EmulatorApp
                     } while (!ppu.FrameComplete);
                     ppu.FrameComplete = false;
                     _frameCount++;
-
-                    //playAudio();
 
                     if (DateTime.Now - dtStart >= TimeSpan.FromSeconds(1))
                     {
@@ -334,7 +328,6 @@ namespace EmulatorApp
                 {
                     AL.SourcePlay(sources[0]);
                 }
-                _audioFrames++;
             }
         }
 
@@ -347,29 +340,6 @@ namespace EmulatorApp
                 var buffersDequeued = AL.SourceUnqueueBuffers(sources[0], processed);
                 foreach (var dqBuf in buffersDequeued)
                     _availableBuffers.Enqueue(dqBuf);
-            }
-        }
-
-        private void playAudio()
-        {
-            if (_audioDataLength > 4410)
-            {
-                AL.BufferData(buffers[_audioFrames % NUM_AUDIO_BUFFERS], ALFormat.Mono16, _audioData, _audioDataLength, 44100);
-                _audioDataLength = 0;
-                AL.SourceQueueBuffer(sources[0], buffers[_audioFrames % NUM_AUDIO_BUFFERS]);
-                AL.SourceUnqueueBuffer(sources[0]);
-                if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
-                {
-                    AL.SourcePlay(sources[0]);
-                }
-                _audioFrames++;
-            }
-            var timeDelta = DateTime.Now - dtStartAudio;
-            dtStartAudio = DateTime.Now;
-            var _newAudioData = apu.GetSamples(timeDelta);
-            for (int i = 0; i < _newAudioData.Length; i++)
-            {
-                _audioData[_audioDataLength++] = _newAudioData[i];
             }
         }
 

@@ -23,17 +23,15 @@ namespace NESEmulator
             0b11111100
         };
 
+        private static readonly short[] VOLUME_LOOKUP = new short[] {     0,  2184,  4369,  6553,  8738, 10922, 13107, 15291, 
+                                                                      17476, 19660, 21845, 24029, 26214, 28398, 30583, 32767 };
         private byte _dutyCycle;
         private int _dutyCycleIndex;
         private bool _constantVolume;
         private byte _volume;
         private int _bufferWritePtr;
         private short[] _buffer;
-        private short _output;
-        public short Output
-        {
-            get { return _output; }
-        }
+        public short Output { get; private set; }
 
         public bool Enabled
         {
@@ -54,7 +52,8 @@ namespace NESEmulator
             this._lengthCounter = new APULengthCounter();
             this._lengthCounter.CounterElapsed += lengthCounterElapsed;
             this._lengthCounter.Enabled = true;
-            this._sequencer = new APUSequencer(generateWave);
+            this._sequencer = new APUSequencer();
+            this._sequencer.OnTimerElapsed += sequencer_GenerateWave;
         }
 
         private void lengthCounterElapsed(object sender, EventArgs e)
@@ -62,11 +61,10 @@ namespace NESEmulator
 
         }
 
-        private void generateWave()
+        private void sequencer_GenerateWave(object sender, EventArgs e)
         {
-            short volume = (short)(2047 * _volume);
-            _output = _dutyCycle.TestBit(_dutyCycleIndex) ? volume : (short)(-volume);
-            if (_lengthCounter.LinearLength > 0 && _volume > 0)
+            this.Output = _dutyCycle.TestBit(_dutyCycleIndex) ? VOLUME_LOOKUP[_volume] : (short)(-VOLUME_LOOKUP[_volume]);
+            if (_lengthCounter.LinearLength > 0 && (_volume > 0 && this.Output != 0))
             {
                 _dutyCycleIndex = (++_dutyCycleIndex) & 7;
             }
@@ -104,13 +102,13 @@ namespace NESEmulator
                 this._dutyCycle = DUTY_CYCLE[data >> 6];
                 this._constantVolume = data.TestBit(4);
                 this._volume = (byte)(data & 0x0F);
-                //Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Duty={data >> 6}] [Halt={_lengthCounter.Halt}] [ConstantVolume={data.TestBit(4)}] [Volume={this._volume}]");
+                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Duty={data >> 6}] [Halt={_lengthCounter.Halt}] [ConstantVolume={_constantVolume}] [Volume={_volume}]");
             }
             else if (addr == 0x4001 || addr == 0x4005)
             {
                 // This should be sweep enabled
                 //_lengthCounter.Enabled = data.TestBit(7);
-                //Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written.");
+                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written.");
             }
             // Pulse channel 1 & 2 timer low bits
             else if (addr == 0x4002 || addr == 0x4006)
@@ -126,7 +124,7 @@ namespace NESEmulator
                 _sequencer.TimerReload &= 0x00FF;
                 _sequencer.TimerReload |= (ushort)((data & 0x07) << 8);
                 _dutyCycleIndex = 0;
-                //Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [LinearLength={_lengthCounter.LinearLength}] [TimerReload={_sequencer.TimerReload}]");
+                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [LinearLength={_lengthCounter.LinearLength}] [TimerReload={_sequencer.TimerReload}]");
             }
         }
 
@@ -146,25 +144,6 @@ namespace NESEmulator
         {
             _bufferWritePtr = 0;
             return _buffer;
-        }
-
-        public short[] GenerateWave(int lengthInMS)
-        {
-            int freq = (int)(CLOCK_NTSC_APU / (16.0 * _sequencer.TimerReload + 1));
-            int dataCount = (int)(44100 * (lengthInMS / 1000.0f));
-            double dt = 2 * Math.PI / 44100;
-            var data = new short[dataCount];
-            short amp = short.MaxValue >> 2;
-
-            //Log.Debug($"Generating pulse wave for {lengthInMS} ms, freq {freq} hz");
-
-            var cacheDTxFreq = dt * freq;
-            for (int i = 0; i < data.Length; i++)
-            {
-                data[i] = (short)(amp * Math.Sign(Math.Sin(i * cacheDTxFreq)));
-            }
-
-            return data;
         }
     }
 }
