@@ -12,14 +12,24 @@ namespace NESEmulator
 
         private int _counter;
 
+        public event EventHandler DividerReachedZero;
+
         public APUDivider(DividerType dividerType)
         {
             this.TypeOfDivider = dividerType;
         }
 
-        public void Clock(ulong cycleCount)
+        public void Clock()
         {
-
+            if (_counter == 0)
+            {
+                _counter = CounterReload;
+                DividerReachedZero?.Invoke(this, EventArgs.Empty);
+            }
+            else
+            {
+                --_counter;
+            }
         }
     }
 }

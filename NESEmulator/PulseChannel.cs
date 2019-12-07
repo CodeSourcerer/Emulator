@@ -14,6 +14,7 @@ namespace NESEmulator
 
         private APULengthCounter _lengthCounter;
         private APUSequencer _sequencer;
+        private APUVolumeEnvelope _volumeEnvelope;
 
         private static byte[] DUTY_CYCLE = new byte[]
         {
@@ -27,8 +28,8 @@ namespace NESEmulator
                                                                       17476, 19660, 21845, 24029, 26214, 28398, 30583, 32767 };
         private byte _dutyCycle;
         private int _dutyCycleIndex;
-        private bool _constantVolume;
-        private byte _volume;
+        //private bool _constantVolume;
+        //private byte _volume;
         private int _bufferWritePtr;
         private short[] _buffer;
         public short Output { get; private set; }
@@ -46,6 +47,7 @@ namespace NESEmulator
         public PulseChannel(int channel)
         {
             this.ChannelNum = channel;
+            this._volumeEnvelope = new APUVolumeEnvelope();
             this._dutyCycleIndex = 0;
             this._dutyCycle = DUTY_CYCLE[0];
             this._buffer = new short[CHANNEL_BUFFER_SIZE];
@@ -63,8 +65,8 @@ namespace NESEmulator
 
         private void sequencer_GenerateWave(object sender, EventArgs e)
         {
-            this.Output = _dutyCycle.TestBit(_dutyCycleIndex) ? VOLUME_LOOKUP[_volume] : (short)(-VOLUME_LOOKUP[_volume]);
-            if (_lengthCounter.LinearLength > 0 && (_volume > 0 && this.Output != 0))
+            this.Output = _dutyCycle.TestBit(_dutyCycleIndex) ? VOLUME_LOOKUP[_volumeEnvelope.Volume] : (short)(-VOLUME_LOOKUP[_volumeEnvelope.Volume]);
+            if (_lengthCounter.LinearLength > 0 && (_volumeEnvelope.Volume > 0 && this.Output != 0))
             {
                 _dutyCycleIndex = (++_dutyCycleIndex) & 7;
             }
@@ -76,17 +78,31 @@ namespace NESEmulator
         {
             if (clockCycles % 6 == 0)
             {
+                // Clock the sequencer every APU cycle
                 _sequencer.Clock();
             }
         }
 
+        /// <summary>
+        /// Called from APU when FrameCounter detects we are on a half frame.
+        /// </summary>
+        /// <remarks>
+        /// This is where we update the length counter and sweep unit.
+        /// </remarks>
         public void ClockHalfFrame()
         {
             _lengthCounter.Clock();
         }
 
+        /// <summary>
+        /// Called from APU when FrameCounter detects we are on a quarter frame.
+        /// </summary>
+        /// <remarks>
+        /// This is where we update envelopes
+        /// </remarks>
         public void ClockQuarterFrame()
         {
+            _volumeEnvelope.Clock();
         }
 
         public byte Read(ushort addr)
@@ -100,9 +116,11 @@ namespace NESEmulator
             {
                 this._lengthCounter.Halt = data.TestBit(5);
                 this._dutyCycle = DUTY_CYCLE[data >> 6];
-                this._constantVolume = data.TestBit(4);
-                this._volume = (byte)(data & 0x0F);
-                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Duty={data >> 6}] [Halt={_lengthCounter.Halt}] [ConstantVolume={_constantVolume}] [Volume={_volume}]");
+                //this._constantVolume = data.TestBit(4);
+                //this._volume = (byte)(data & 0x0F);
+                this._volumeEnvelope.ConstantVolume = data.TestBit(4);
+                this._volumeEnvelope.Volume = (byte)(data & 0x0F);
+                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Duty={data >> 6}] [Halt={_lengthCounter.Halt}] [ConstantVolume={_volumeEnvelope.ConstantVolume}] [Volume={_volumeEnvelope.Volume}]");
             }
             else if (addr == 0x4001 || addr == 0x4005)
             {
@@ -124,6 +142,7 @@ namespace NESEmulator
                 _sequencer.TimerReload &= 0x00FF;
                 _sequencer.TimerReload |= (ushort)((data & 0x07) << 8);
                 _dutyCycleIndex = 0;
+                _volumeEnvelope.Start = true;
                 Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [LinearLength={_lengthCounter.LinearLength}] [TimerReload={_sequencer.TimerReload}]");
             }
         }
