@@ -42,9 +42,11 @@ namespace EmulatorApp
         private bool runEmulation;
         private int selectedPalette;
         private int[] buffers, sources;
+        private Queue<int> _availableBuffers;
 
         public Demo(string appName)
         {
+            _availableBuffers = new Queue<int>(NUM_AUDIO_BUFFERS);
             window = new GLWindow(SCREEN_WIDTH, SCREEN_HEIGHT, 4, 4, appName);
             window.KeyDown += Window_KeyDown;
             pge = new PixelGameEngine(appName);
@@ -102,6 +104,8 @@ namespace EmulatorApp
             audioContext = new AudioContext();
             buffers = AL.GenBuffers(NUM_AUDIO_BUFFERS);
             sources = AL.GenSources(1);
+            foreach (int buf in buffers)
+                _availableBuffers.Enqueue(buf);
         }
 
         DateTime dtLastTick;
@@ -317,15 +321,32 @@ namespace EmulatorApp
             // Get audio data
             if (apu.IsAudioBufferReadyToPlay())
             {
+                dequeueProcessedBuffers();
+
                 var soundData = apu.ReadAndResetAudio();
-                AL.BufferData(buffers[_audioFrames % NUM_AUDIO_BUFFERS], ALFormat.Mono16, soundData, soundData.Length, 44100);
-                AL.SourceQueueBuffer(sources[0], buffers[_audioFrames % NUM_AUDIO_BUFFERS]);
-                AL.SourceUnqueueBuffer(sources[0]);
+                if (_availableBuffers.Count > 0)
+                {
+                    int buffer = _availableBuffers.Dequeue();
+                    AL.BufferData(buffer, ALFormat.Mono16, soundData, soundData.Length, 44100);
+                    AL.SourceQueueBuffer(sources[0], buffer);
+                }
                 if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
                 {
                     AL.SourcePlay(sources[0]);
                 }
                 _audioFrames++;
+            }
+        }
+
+        private void dequeueProcessedBuffers()
+        {
+            int processed;
+            AL.GetSource(sources[0], ALGetSourcei.BuffersProcessed, out processed);
+            if (processed > 0)
+            {
+                var buffersDequeued = AL.SourceUnqueueBuffers(sources[0], processed);
+                foreach (var dqBuf in buffersDequeued)
+                    _availableBuffers.Enqueue(dqBuf);
             }
         }
 
