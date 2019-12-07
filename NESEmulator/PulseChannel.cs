@@ -25,6 +25,7 @@ namespace NESEmulator
 
         private byte _dutyCycle;
         private int _dutyCycleIndex;
+        private bool _constantVolume;
         private byte _volume;
         private int _bufferWritePtr;
         private short[] _buffer;
@@ -54,7 +55,6 @@ namespace NESEmulator
             this._lengthCounter.CounterElapsed += lengthCounterElapsed;
             this._lengthCounter.Enabled = true;
             this._sequencer = new APUSequencer(generateWave);
-            //this._sequencer.TimerElapsed += generateWave;
         }
 
         private void lengthCounterElapsed(object sender, EventArgs e)
@@ -66,7 +66,7 @@ namespace NESEmulator
         {
             short volume = (short)(short.MaxValue >> 4);
             _output = _dutyCycle.TestBit(_dutyCycleIndex) ? volume : (short)(-volume);
-            //if (_lengthCounter.TimerReload > 8 && _lengthCounter.LinearLength > 0 && this._volume > 0)
+            if (_lengthCounter.LinearLength > 0 && _volume > 0)
             {
                 _dutyCycleIndex = (++_dutyCycleIndex) & 7;
             }
@@ -79,10 +79,6 @@ namespace NESEmulator
             if (clockCycles % 6 == 0)
             {
                 _sequencer.Clock();
-                //if (_bufferWritePtr < CHANNEL_BUFFER_SIZE)
-                //{
-                //    _buffer[_bufferWritePtr++] = _output;
-                //}
             }
         }
 
@@ -106,6 +102,7 @@ namespace NESEmulator
             {
                 this._lengthCounter.Halt = data.TestBit(5);
                 this._dutyCycle = DUTY_CYCLE[data >> 6];
+                this._constantVolume = data.TestBit(4);
                 this._volume = (byte)(data & 0x0F);
                 //Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Duty={data >> 6}] [Halt={_lengthCounter.Halt}] [ConstantVolume={data.TestBit(4)}] [Volume={this._volume}]");
             }

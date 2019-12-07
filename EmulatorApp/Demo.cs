@@ -23,7 +23,7 @@ namespace EmulatorApp
     {
         private const int SCREEN_WIDTH = 500;
         private const int SCREEN_HEIGHT = 240;
-        private const int NUM_AUDIO_BUFFERS = 10;
+        private const int NUM_AUDIO_BUFFERS = 20;
 
         private static ILog Log = LogManager.GetLogger(typeof(Demo));
 
@@ -300,12 +300,6 @@ namespace EmulatorApp
             //        pge.DrawPartialSprite(x * 16, y * 16, ppu.GetPatternTable(0, (byte)selectedPalette), (id & 0x0F) << 3, ((id >> 4) & 0x0F) << 3, 8, 8, 2);
             //    }
             //}
-        }
-
-        private void pge_OnSoundUpdate(object sender, FrameUpdateEventArgs frameUpdateArgs)
-        {
-            playAudioWhenReady();
-
         }
 
         private void pge_OnCreate(object sender, EventArgs e)
