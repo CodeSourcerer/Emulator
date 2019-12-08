@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using log4net;
+using NESEmulator.APU;
 using NESEmulator.Util;
 
 namespace NESEmulator.Channels
