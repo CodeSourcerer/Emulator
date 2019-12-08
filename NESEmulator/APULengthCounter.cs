@@ -76,13 +76,6 @@ namespace NESEmulator
                 this.LinearLength--;
                 if (this.LinearLength == 0)
                     this.CounterElapsed?.Invoke(this, EventArgs.Empty);
-                //this.Timer--;
-
-                //if (this.Timer == 0xFFFF)
-                //{
-                //    this.CounterElapsed?.Invoke(this, EventArgs.Empty);
-                //    this.Timer = (ushort)(this.TimerReload + 1);
-                //}
             }
         }
 
