@@ -11,11 +11,11 @@ namespace NESEmulator
     {
         public override BusDeviceType DeviceType => BusDeviceType.APU;
         public override event InterruptingDeviceHandler RaiseInterrupt;
-        public const int SOUND_BUFFER_SIZE_MS = 20;
+        public const int SOUND_BUFFER_SIZE_MS   = 25;
 
         private static ILog Log = LogManager.GetLogger(typeof(CS2A03));
         private const float CLOCK_NTSC_HZ       = 1789773.0f;
-        private const int   SAMPLE_FREQUENCY    = 20;
+        private const int   SAMPLE_FREQUENCY    = 18;
 
         private const ushort ADDR_PULSE1_LO     = 0x4000;
         private const ushort ADDR_PULSE1_HI     = 0x4003;
@@ -32,8 +32,8 @@ namespace NESEmulator
 
         private Bus _bus;
 
-        private ushort  _apuClockCounter;
-        private uint    _cpuClockCounter;
+        private ushort          _apuClockCounter;
+        private uint            _cpuClockCounter;
         private APUFrameCounter _frameCounter;
         private Channel[]       _audioChannels;
         private PulseChannel    _pulseChannel1;
@@ -182,10 +182,8 @@ namespace NESEmulator
             {
                 dataWritten = true;
                 Log.Debug($"Status register written [data={data:X2}]");
-                if (data.TestBit(0) == false)
-                {
-                    _pulseChannel1.Enabled = false;
-                }
+                _pulseChannel1.Enabled = data.TestBit(0);
+                _pulseChannel2.Enabled = data.TestBit(1);
             }
             else if (addr == ADDR_FRAME_COUNTER)
             {

@@ -31,5 +31,10 @@ namespace NESEmulator
                 --_counter;
             }
         }
+
+        public void Reset()
+        {
+            _counter = CounterReload;
+        }
     }
 }

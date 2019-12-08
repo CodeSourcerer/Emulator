@@ -69,9 +69,7 @@ namespace EmulatorApp
             Thread.CurrentThread.Name = "main";
             Log.Info("Demo app started");
             Demo demo = new Demo("NES Emulator");
-            //Cartridge cartridge = demo.LoadCartridge("tests\\5.nmi_suppression.nes");
-            // Oh, it's on! Like...
-            Cartridge cartridge = demo.LoadCartridge("tests\\donkey kong.nes"); 
+            Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes"); 
             demo.Start(cartridge);
         }
 
@@ -239,7 +237,7 @@ namespace EmulatorApp
                     residualTime -= (float)frameUpdateArgs.ElapsedTime;
                 else
                 {
-                    residualTime += (1.0f / 60.0f) - (float)frameUpdateArgs.ElapsedTime;
+                    residualTime += (1.0f / 60.0988f) - (float)frameUpdateArgs.ElapsedTime;
 
                     do
                     {
