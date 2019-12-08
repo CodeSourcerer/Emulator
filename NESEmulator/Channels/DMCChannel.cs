@@ -11,6 +11,8 @@ namespace NESEmulator.Channels
         private const ushort ADDR_SAMPLEADDR    = 0x4012;
         private const ushort ADDR_SAMPLELENGTH  = 0x4013;
 
+        public short Output { get; private set; }
+
         public byte FlagsAndRate { get; set; }
 
         public bool IRQEnable

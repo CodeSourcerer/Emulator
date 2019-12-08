@@ -1,5 +1,6 @@
 ﻿using System;
 using log4net;
+using NESEmulator.APU;
 
 namespace NESEmulator.Channels
 {
@@ -11,13 +12,13 @@ namespace NESEmulator.Channels
 
         private static ILog Log = LogManager.GetLogger(typeof(TriangleChannel));
 
-        private ushort _timer;
-        private byte _lengthCounter;
-        private byte _linearCounter;
-        private bool _linearCounterControl;
+        private APULengthCounter _lengthCounter;
+
+        public short Output { get; private set; }
 
         public TriangleChannel()
         {
+            _lengthCounter = new APULengthCounter();
         }
 
         /// <summary>
@@ -56,11 +57,6 @@ namespace NESEmulator.Channels
                     //Log.Debug($"Triangle channel write: [addr={addr:X2}] [data={data:X2}]");
                     break;
             }
-        }
-
-        public short[] EmptyBuffer()
-        {
-            throw new NotImplementedException();
         }
     }
 }

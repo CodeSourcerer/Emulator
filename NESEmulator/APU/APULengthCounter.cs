@@ -23,28 +23,6 @@ namespace NESEmulator.APU
             }
         }
 
-        private ushort _timerReload;
-        public ushort TimerReload
-        {
-            get => _timerReload;
-            set
-            {
-                if (Enabled)
-                    _timerReload = value;
-            }
-        }
-
-        private ushort _timer;
-        public ushort Timer
-        {
-            get => _timer;
-            set
-            {
-                if (Enabled)
-                    _timer = value;
-            }
-        }
-
         private ushort _linearLength;
         public ushort LinearLength
         {
