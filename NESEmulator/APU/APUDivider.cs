@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NESEmulator
+namespace NESEmulator.APU
 {
     public class APUDivider
     {

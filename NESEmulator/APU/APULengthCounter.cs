@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace NESEmulator
+namespace NESEmulator.APU
 {
     /// <summary>
     /// Length counter for audio channels

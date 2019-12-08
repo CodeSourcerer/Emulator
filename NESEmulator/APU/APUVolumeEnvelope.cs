@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace NESEmulator
+namespace NESEmulator.APU
 {
     public class APUVolumeEnvelope
     {

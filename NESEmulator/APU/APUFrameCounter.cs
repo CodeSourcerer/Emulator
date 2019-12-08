@@ -4,7 +4,7 @@ using System.Text;
 
 using NESEmulator.Util;
 
-namespace NESEmulator
+namespace NESEmulator.APU
 {
     public enum SequenceMode { FourStep, FiveStep }
     public enum SequenceAction { QuarterFrame, HalfFrame, Interrupt }

@@ -2,8 +2,11 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace NESEmulator
+namespace NESEmulator.APU
 {
+    /// <summary>
+    /// Represents the pulse channel sweep unit
+    /// </summary>
     public class APUSweep
     {
         private const int MAX_TARGET_PERIOD = 0x7FF;
