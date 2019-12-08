@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using log4net;
 using NESEmulator.Util;
 
-namespace NESEmulator
+namespace NESEmulator.Channels
 {
     public class PulseChannel : Channel
     {

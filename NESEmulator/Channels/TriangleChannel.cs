@@ -1,7 +1,7 @@
 ﻿using System;
 using log4net;
 
-namespace NESEmulator
+namespace NESEmulator.Channels
 {
     public class TriangleChannel : Channel
     {

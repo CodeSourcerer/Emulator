@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using NESEmulator.Util;
 
-namespace NESEmulator
+namespace NESEmulator.Channels
 {
     public class DMCChannel : Channel
     {
