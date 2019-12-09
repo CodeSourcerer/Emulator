@@ -2,21 +2,28 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Timers;
 using csPixelGameEngine;
+using log4net;
+using log4net.Config;
 using NESEmulator;
 using OpenTK;
+using OpenTK.Audio;
+using OpenTK.Audio.OpenAL;
 using OpenTK.Input;
 
 namespace NESEmulatorApp
 {
     class Demo
     {
-        private const int SCREEN_WIDTH = 500;
+        private const int SCREEN_WIDTH = 360;
         private const int SCREEN_HEIGHT = 240;
+        private const int NUM_AUDIO_BUFFERS = 20;
 
         private PixelGameEngine pge;
         private GLWindow window;
+        private AudioContext audioContext;
         // private NESClock nesClock;
         private Bus nesBus;
         private BusDevice ram;
@@ -28,21 +35,29 @@ namespace NESEmulatorApp
         private Dictionary<ushort, string> mapAsm;
         private bool runEmulation;
         private int selectedPalette;
+        private int[] buffers, sources;
+        private Queue<int> _availableBuffers;
 
         public Demo(string appName)
         {
+            _availableBuffers = new Queue<int>(NUM_AUDIO_BUFFERS);
+            initAudioStuff();
             window = new GLWindow(SCREEN_WIDTH, SCREEN_HEIGHT, 4, 4, appName);
             window.KeyDown += Window_KeyDown;
             pge = new PixelGameEngine(appName);
             pge.Construct(SCREEN_WIDTH, SCREEN_HEIGHT, window);
             pge.OnCreate += pge_OnCreate;
             pge.OnFrameUpdate += pge_OnUpdate;
+            pge.OnDestroy += pge_OnDestroy;
         }
 
         static void Main(string[] args)
         {
+            var logRepository = LogManager.GetRepository(Assembly.GetEntryAssembly());
+            XmlConfigurator.Configure(logRepository, new FileInfo("log4net.config"));
+
             Demo demo = new Demo("NES Emulator");
-            Cartridge cartridge = demo.LoadCartridge("tests/smb.nes");
+            Cartridge cartridge = demo.LoadCartridge("tests/donkey kong.nes");
             demo.Start(cartridge);
         }
 
@@ -56,18 +71,23 @@ namespace NESEmulatorApp
             busDevices = new BusDevice[] { cpu, ram, ppu, nesController, apu };
             nesBus = new Bus(busDevices);
             cpu.ConnectBus(nesBus);
-            apu.ConnectBus(nesBus);
+            //apu.ConnectBus(nesBus);
 
             if (!cartridge.ImageValid)
                 throw new ApplicationException("Invalid ROM image");
             nesBus.InsertCartridge(cartridge);
             nesBus.Reset();
 
-            //nesClock = new NESClock();
-            //dtLastTick = DateTime.Now;
-            //nesClock.OnClockTick += NesClock_OnClockTick;
-
             pge.Start();
+        }
+
+        private void initAudioStuff()
+        {
+            audioContext = new AudioContext();
+            buffers = AL.GenBuffers(NUM_AUDIO_BUFFERS);
+            sources = AL.GenSources(1);
+            foreach (int buf in buffers)
+                _availableBuffers.Enqueue(buf);
         }
 
         DateTime dtLastTick;
@@ -178,29 +198,35 @@ namespace NESEmulatorApp
                     residualTime -= (float)frameUpdateArgs.ElapsedTime;
                 else
                 {
-                    residualTime += (1.0f / 60.0f) - (float)frameUpdateArgs.ElapsedTime;
-                    _frameTime = DateTime.Now;
+                    residualTime += (1.0f / 60.0988f) - (float)frameUpdateArgs.ElapsedTime;
+
                     do
                     {
                         nesBus.clock();
+                        playAudioWhenReady();
                     } while (!ppu.FrameComplete);
                     ppu.FrameComplete = false;
                     _frameCount++;
+
                     if (DateTime.Now - dtStart >= TimeSpan.FromSeconds(1))
                     {
                         dtStart = DateTime.Now;
                         _fps = _frameCount;
                         _frameCount = 0;
                     }
-                    Console.WriteLine("PPU frame time: {0} ms", (DateTime.Now - _frameTime).TotalMilliseconds);
+                    //Console.WriteLine("PPU frame time: {0} ms", (DateTime.Now - _frameTime).TotalMilliseconds);
                 }
             }
+
+            pge.DrawString(280, 2, $"FPS: {_fps}", Pixel.WHITE);
+
+            // Draw rendered output
+            pge.DrawSprite(0, 0, ppu.GetScreen(), 1);
 
             // Draw Ram Page 0x00
             //DrawRam(2, 2, 0x0000, 16, 16);
             //DrawRam(2, 182, 0x0100, 16, 16);
             //DrawCpu(516, 2);
-            pge.DrawString(340, 2, string.Format("FPS: {0}", _fps), Pixel.WHITE);
             //DrawCode(516, 72, 26);
             //DrawOam(516, 72);
 
@@ -213,19 +239,56 @@ namespace NESEmulatorApp
             // Generate Pattern Tables
             //pge.DrawSprite(516, 348, ppu.GetPatternTable(0, (byte)selectedPalette));
             //pge.DrawSprite(648, 348, ppu.GetPatternTable(1, (byte)selectedPalette));
-
-            // Draw rendered output
-            pge.DrawSprite(0, 0, ppu.GetScreen(), 1);
         }
 
         private void pge_OnCreate(object sender, EventArgs e)
         {
             // Extract disassembly
-            mapAsm = cpu.Disassemble(0x0000, 0xFFFF);
+            //mapAsm = cpu.Disassemble(0x0000, 0xFFFF);
 
             //cpu.Reset();
 
             pge.Clear(Pixel.BLUE);
+        }
+
+        private void pge_OnDestroy(object sender, EventArgs e)
+        {
+            AL.DeleteBuffers(buffers);
+            AL.DeleteSources(sources);
+            audioContext?.Dispose();
+        }
+
+        private void playAudioWhenReady()
+        {
+            // Get audio data
+            if (apu.IsAudioBufferReadyToPlay())
+            {
+                dequeueProcessedBuffers();
+
+                var soundData = apu.ReadAndResetAudio();
+                if (_availableBuffers.Count > 0)
+                {
+                    int buffer = _availableBuffers.Dequeue();
+                    AL.BufferData(buffer, ALFormat.Mono16, soundData, soundData.Length, 44100);
+                    AL.SourceQueueBuffer(sources[0], buffer);
+                }
+                if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
+                {
+                    AL.SourcePlay(sources[0]);
+                }
+            }
+        }
+
+        private void dequeueProcessedBuffers()
+        {
+            int processed;
+            AL.GetSource(sources[0], ALGetSourcei.BuffersProcessed, out processed);
+            if (processed > 0)
+            {
+                var buffersDequeued = AL.SourceUnqueueBuffers(sources[0], processed);
+                foreach (var dqBuf in buffersDequeued)
+                    _availableBuffers.Enqueue(dqBuf);
+            }
         }
 
         void DrawPalettes(int x, int y)

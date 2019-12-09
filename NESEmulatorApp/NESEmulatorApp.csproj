@@ -6,14 +6,25 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="OpenTK" Version="3.1.0" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\NESEmulator\NESEmulator.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <None Update="OpenTK.dll.config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="log4net.config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="OpenTK.NetStandard" Version="1.0.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="lib\" />
+  </ItemGroup>
+  <ItemGroup>
     <Reference Include="csPixelGameEngine">
-      <HintPath>..\EmulatorApp\lib\csPixelGameEngine.dll</HintPath>
+      <HintPath>lib\csPixelGameEngine.dll</HintPath>
     </Reference>
   </ItemGroup>
 </Project>
