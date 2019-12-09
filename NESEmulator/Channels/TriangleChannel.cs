@@ -1,6 +1,7 @@
 ﻿using System;
 using log4net;
 using NESEmulator.APU;
+using NESEmulator.Util;
 
 namespace NESEmulator.Channels
 {
@@ -12,34 +13,104 @@ namespace NESEmulator.Channels
 
         private static ILog Log = LogManager.GetLogger(typeof(TriangleChannel));
 
+        private static readonly short[] VOLUME_LOOKUP = new short[] {     0,  2184,  4369,  6553,  8738, 10922, 13107, 15291,
+                                                                      17476, 19660, 21845, 24029, 26214, 28398, 30583, 32767 };
+
         private APULengthCounter _lengthCounter;
+        private APUSequencer _sequencer;
+        private bool _linearCounterReloadFlag;
+        private byte _linearCounterReload;
+        private byte _linearCounter;
+        private int _sequenceDirection;
+        private int _sequencePtr;
 
         public short Output { get; private set; }
+        public bool Enabled
+        {
+            set
+            {
+                if (!value)
+                    _lengthCounter.ClearLength();
+            }
+            get
+            {
+                return _lengthCounter.Length > 0;
+            }
+        }
+
+        public bool ChannelMuted { get; private set; }
 
         public TriangleChannel()
         {
             _lengthCounter = new APULengthCounter();
+            _lengthCounter.Enabled = true;
+            _sequencer = new APUSequencer();
+            _sequencer.OnTimerElapsed += sequencer_GenerateWave;
+
+            _sequenceDirection = -1;
+            _sequencePtr = 15;
+        }
+
+        private void sequencer_GenerateWave(object sender, EventArgs e)
+        {
+            this.Output = VOLUME_LOOKUP[_sequencePtr];
+
+            if (!ChannelMuted)
+            {
+                if (_sequenceDirection < 0 && _sequencePtr == 0)
+                {
+                    _sequenceDirection = 1;
+                }
+                else if (_sequenceDirection > 0 && _sequencePtr == 15)
+                {
+                    _sequenceDirection = -1;
+                }
+                else
+                {
+                    _sequencePtr += _sequenceDirection;
+                }
+            }
         }
 
         /// <summary>
-        /// Called by frame sequencer every half frame
+        /// Called from APU when FrameCounter detects we are on a half frame.
         /// </summary>
+        /// <remarks>
+        /// This is where we update the length counter.
+        /// </remarks>
         public void ClockHalfFrame()
         {
-            // Triangle channel ignores half frames
+            _lengthCounter.Clock();
         }
 
         /// <summary>
-        /// Called by frame sequencer every quarter frame
+        /// Called from APU when FrameCounter detects we are on a quarter frame.
         /// </summary>
+        /// <remarks>
+        /// This is where we update envelopes and the linear counter
+        /// </remarks>
         public void ClockQuarterFrame()
         {
-            //Console.WriteLine("Triangle channel quarter frame");
+            if (_linearCounterReloadFlag && _linearCounter == 0)
+            {
+                _linearCounter = _linearCounterReload;
+            }
+
+            if (_linearCounter > 0)
+                --_linearCounter;
+
+            if (_lengthCounter.Halt) // also control flag
+                _linearCounterReloadFlag = false;
         }
 
         public void Clock(ulong clockCyles)
         {
-
+            if (clockCyles % 3 == 0)
+            {
+                // Sequencer is clocked at CPU rate on the triangle channel
+                if (_linearCounter > 0 && _lengthCounter.Length > 0)
+                    _sequencer.Clock();
+            }
         }
 
         public byte Read(ushort addr)
@@ -52,9 +123,22 @@ namespace NESEmulator.Channels
             switch (addr)
             {
                 case ADDR_LINEARCOUNTER:
+                    _lengthCounter.Halt = data.TestBit(7);
+                    _linearCounterReload = (byte)(data & 0x7F);
+                    _linearCounter = _linearCounterReload;
+                    _linearCounterReloadFlag = true;
+                    Log.Debug($"Triangle channel write: [LenCounterHalt={_lengthCounter.Halt}] [LinearLength={_linearCounterReload}]");
+                    break;
                 case ADDR_TIMERLOW:
+                    _sequencer.TimerReload &= 0xFF00; // Preserve data in high byte, clearing data in low byte
+                    _sequencer.TimerReload |= data;
+                    break;
                 case ADDR_TIMERHI_LENCOUNTERLOAD:
-                    //Log.Debug($"Triangle channel write: [addr={addr:X2}] [data={data:X2}]");
+                    _lengthCounter.LoadLength((byte)(data >> 3));
+                    _sequencer.TimerReload &= 0x00FF; // Clear data in high byte, preserving data in low byte
+                    _sequencer.TimerReload |= (ushort)((data & 0x07) << 8);
+                    _linearCounterReloadFlag = true;
+                    Log.Debug($"Triangle channel write: [data={data:X2}] [Timer={_sequencer.TimerReload}] [LengthCounter={_lengthCounter.Length}]");
                     break;
             }
         }

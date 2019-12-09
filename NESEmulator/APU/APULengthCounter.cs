@@ -19,18 +19,18 @@ namespace NESEmulator.APU
                 _enabled = value;
 
                 if (!_enabled)
-                    _linearLength = 0;
+                    _length = 0;
             }
         }
 
-        private ushort _linearLength;
-        public ushort LinearLength
+        private ushort _length;
+        public ushort Length
         {
-            get => _linearLength;
+            get => _length;
             set
             {
                 if (Enabled)
-                    _linearLength = value;
+                    _length = value;
             }
         }
 
@@ -51,8 +51,8 @@ namespace NESEmulator.APU
         {
             if (!Halt)
             {
-                this.LinearLength--;
-                if (this.LinearLength == 0)
+                this.Length--;
+                if (this.Length == 0)
                     this.CounterElapsed?.Invoke(this, EventArgs.Empty);
             }
         }
@@ -60,12 +60,12 @@ namespace NESEmulator.APU
         public void LoadLength(byte tableEntry)
         {
             if (tableEntry < 0x20)
-                LinearLength = _lengthTable[tableEntry];
+                Length = _lengthTable[tableEntry];
         }
 
         public void ClearLength()
         {
-            LinearLength = 0;
+            Length = 0;
         }
 
         private static void buildLengthTable()

@@ -39,11 +39,11 @@ namespace NESEmulator.Channels
             set
             {
                 if (!value)
-                    this._lengthCounter.ClearLength();
+                    _lengthCounter.ClearLength();
             }
             get
             {
-                return this._lengthCounter.LinearLength > 0;
+                return _lengthCounter.Length > 0;
             }
         }
 
@@ -52,22 +52,22 @@ namespace NESEmulator.Channels
         public PulseChannel(int channel)
         {
             this.ChannelNum = channel;
-            this._volumeEnvelope = new APUVolumeEnvelope();
-            this._sweepUnit = new APUSweep(channel);
-            this._sweepUnit.PeriodUpdate += _sweepUnit_PeriodUpdate;
-            this._dutyCycleIndex = 0;
-            this._dutyCycle = DUTY_CYCLE[0];
-            this._buffer = new short[CHANNEL_BUFFER_SIZE];
-            this._lengthCounter = new APULengthCounter();
-            this._lengthCounter.CounterElapsed += lengthCounterElapsed;
-            this._lengthCounter.Enabled = true;
-            this._sequencer = new APUSequencer();
-            this._sequencer.OnTimerElapsed += sequencer_GenerateWave;
+            _volumeEnvelope = new APUVolumeEnvelope();
+            _sweepUnit = new APUSweep(channel);
+            _sweepUnit.PeriodUpdate += _sweepUnit_PeriodUpdate;
+            _dutyCycleIndex = 0;
+            _dutyCycle = DUTY_CYCLE[0];
+            _buffer = new short[CHANNEL_BUFFER_SIZE];
+            _lengthCounter = new APULengthCounter();
+            _lengthCounter.CounterElapsed += lengthCounterElapsed;
+            _lengthCounter.Enabled = true;
+            _sequencer = new APUSequencer();
+            _sequencer.OnTimerElapsed += sequencer_GenerateWave;
         }
 
         private void _sweepUnit_PeriodUpdate(object sender, EventArgs e)
         {
-            this._sequencer.TimerReload = this._sweepUnit.ChannelPeriod;
+            _sequencer.TimerReload = _sweepUnit.ChannelPeriod;
         }
 
         private void lengthCounterElapsed(object sender, EventArgs e)
@@ -104,7 +104,7 @@ namespace NESEmulator.Channels
         public void ClockHalfFrame()
         {
             _lengthCounter.Clock();
-            _sweepUnit.Clock();
+            //_sweepUnit.Clock();
         }
 
         /// <summary>
@@ -127,38 +127,37 @@ namespace NESEmulator.Channels
         {
             if (addr == 0x4000 || addr == 0x4004)
             {
-                this._lengthCounter.Halt = data.TestBit(5);
-                this._dutyCycle = DUTY_CYCLE[data >> 6];
-                this._volumeEnvelope.ConstantVolume = data.TestBit(4);
-                this._volumeEnvelope.Volume = (byte)(data & 0x0F);
-                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Duty={data >> 6}] [Halt={_lengthCounter.Halt}] [ConstantVolume={_volumeEnvelope.ConstantVolume}] [Volume={_volumeEnvelope.Volume}]");
+                _lengthCounter.Halt = data.TestBit(5);
+                _dutyCycle = DUTY_CYCLE[data >> 6];
+                _volumeEnvelope.ConstantVolume = data.TestBit(4);
+                _volumeEnvelope.Volume = (byte)(data & 0x0F);
+                //Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Duty={data >> 6}] [Halt={_lengthCounter.Halt}] [ConstantVolume={_volumeEnvelope.ConstantVolume}] [Volume={_volumeEnvelope.Volume}]");
             }
             else if (addr == 0x4001 || addr == 0x4005)
             {
                 // This should be sweep enabled
-                this._sweepUnit.Enabled = data.TestBit(7);
-                this._sweepUnit.Negate = data.TestBit(3);
-                this._sweepUnit.DividerPeriod = ((data >> 4) & 7) + 1;
-                this._sweepUnit.ShiftCount = (byte)(data & 7);
-                this._sweepUnit.Reload = true;
-                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [SweepEnabled={_sweepUnit.Enabled}] [DividerPeriod={_sweepUnit.DividerPeriod}] [Negate={_sweepUnit.Negate}] [ShiftCount={_sweepUnit.ShiftCount}]");
+                _sweepUnit.Enabled = data.TestBit(7);
+                _sweepUnit.Negate = data.TestBit(3);
+                _sweepUnit.DividerPeriod = ((data >> 4) & 7) + 1;
+                _sweepUnit.ShiftCount = (byte)(data & 7);
+                _sweepUnit.Reload = true;
+                //Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [SweepEnabled={_sweepUnit.Enabled}] [DividerPeriod={_sweepUnit.DividerPeriod}] [Negate={_sweepUnit.Negate}] [ShiftCount={_sweepUnit.ShiftCount}]");
             }
             // Pulse channel 1 & 2 timer low bits
             else if (addr == 0x4002 || addr == 0x4006)
             {
-                _sequencer.TimerReload &= 0xFF00;
+                _sequencer.TimerReload &= 0xFF00; // Preserve data in high byte, clearing data in low byte
                 _sequencer.TimerReload |= data;
-                //Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [TimerReload={_sequencer.TimerReload}]");
             }
             // Pulse channel 1 & 2 length counter load and timer high bits
             else if (addr == 0x4003 || addr == 0x4007)
             {
                 _lengthCounter.LoadLength((byte)(data >> 3));
-                _sequencer.TimerReload &= 0x00FF;
+                _sequencer.TimerReload &= 0x00FF; // Clear data in high byte, preserving data in low byte
                 _sequencer.TimerReload |= (ushort)((data & 0x07) << 8);
                 _dutyCycleIndex = 0;
                 _volumeEnvelope.Start = true;
-                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [LinearLength={_lengthCounter.LinearLength}] [TimerReload={_sequencer.TimerReload}]");
+                //Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [LinearLength={_lengthCounter.Length}] [TimerReload={_sequencer.TimerReload}]");
             }
         }
 
@@ -170,7 +169,7 @@ namespace NESEmulator.Channels
 
         private bool isChannelMuted()
         {
-            bool isMuted = (_lengthCounter.LinearLength == 0 ||
+            bool isMuted = (_lengthCounter.Length == 0 ||
                             _volumeEnvelope.Volume == 0 ||
                             Output == 0 ||
                             _sequencer.TimerReload < 8 &&

@@ -1323,6 +1323,12 @@ namespace NESEmulator
             _palScreen[0x3F] = new Pixel(0, 0, 0);
         }
 
+        /// <summary>
+        /// This function builds a list of operations to perform for each cycle on each scanline
+        /// </summary>
+        /// <remarks>
+        /// TODO: Add foreground processing
+        /// </remarks>
         private void buildCycleOperations()
         {
             // Scanlines

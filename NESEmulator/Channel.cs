@@ -11,5 +11,6 @@ namespace NESEmulator
         void Write(ushort addr, byte data);
 
         short Output { get; }
+        bool Enabled { get; set; }
     }
 }

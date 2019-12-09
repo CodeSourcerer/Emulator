@@ -21,7 +21,7 @@ namespace EmulatorApp
 {
     class Demo
     {
-        private const int SCREEN_WIDTH = 500;
+        private const int SCREEN_WIDTH = 360;
         private const int SCREEN_HEIGHT = 240;
         private const int NUM_AUDIO_BUFFERS = 20;
 
@@ -69,7 +69,8 @@ namespace EmulatorApp
             Thread.CurrentThread.Name = "main";
             Log.Info("Demo app started");
             Demo demo = new Demo("NES Emulator");
-            Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes"); 
+            //Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes"); 
+            Cartridge cartridge = demo.LoadCartridge("tests\\donkey kong.nes");
             demo.Start(cartridge);
         }
 
@@ -257,7 +258,7 @@ namespace EmulatorApp
                 }
             }
 
-            pge.DrawString(340, 2, $"FPS: {_fps}", Pixel.WHITE);
+            pge.DrawString(280, 2, $"FPS: {_fps}", Pixel.WHITE);
 
             // Draw rendered output
             pge.DrawSprite(0, 0, ppu.GetScreen(), 1);
