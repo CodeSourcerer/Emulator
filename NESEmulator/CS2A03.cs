@@ -236,7 +236,7 @@ namespace NESEmulator
 
         public short GetMixedAudioSample()
         {
-            short average = (short)((_pulseChannel1.Output + _pulseChannel2.Output) / 3); // + 4 * _triangleChannel.Output) / 8);
+            short average = (short)((_pulseChannel1.Output + _pulseChannel2.Output + 5 * _triangleChannel.Output) / 7);
             //average += (short)(_triangleChannel.Output * 0.5);
             //short average = _triangleChannel.Output;
             return average;

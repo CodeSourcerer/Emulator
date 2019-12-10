@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using log4net;
 
 namespace NESEmulator.APU
 {
@@ -9,6 +10,8 @@ namespace NESEmulator.APU
     /// </summary>
     public class APUSweep
     {
+        private static ILog Log = LogManager.GetLogger(typeof(APUSweep));
+
         private const int MAX_TARGET_PERIOD = 0x7FF;
 
         public bool Enabled { get; set; }
@@ -30,7 +33,7 @@ namespace NESEmulator.APU
                 MuteChannel = shouldMuteChannel();
             }
         }
-        public ushort ChannelPeriod { get; private set; }
+        public ushort ChannelPeriod { get; set; }
 
         //public event EventHandler PeriodUpdate;
         private EventHandler _periodUpdate;
@@ -51,10 +54,7 @@ namespace NESEmulator.APU
         {
             calcTargetPeriod();
 
-            if (this.Enabled)
-            {
-                this._divider.Clock();
-            }
+            this._divider.Clock();
 
             if (this.Reload)
             {
@@ -65,13 +65,15 @@ namespace NESEmulator.APU
 
         private void divider_ReachedZero(object sender, EventArgs e)
         {
-            if (!this.MuteChannel)
+            if (!this.MuteChannel && Enabled && _shiftCount > 0)
             {
                 this.ChannelPeriod = (ushort)this._targetPeriod;
-                this.MuteChannel   = shouldMuteChannel();
+                this.MuteChannel = shouldMuteChannel();
                 //this.PeriodUpdate?.Invoke(this, EventArgs.Empty);
                 _periodUpdate(this, EventArgs.Empty);
             }
+            else
+                Log.Debug("Sweep unit is muting channel");
         }
 
         private void calcTargetPeriod()
@@ -90,6 +92,6 @@ namespace NESEmulator.APU
             this.MuteChannel = shouldMuteChannel();
         }
 
-        private bool shouldMuteChannel() => _targetPeriod > MAX_TARGET_PERIOD || _shiftCount == 0 || ChannelPeriod < 8;
+        private bool shouldMuteChannel() => _targetPeriod > MAX_TARGET_PERIOD || ChannelPeriod < 8;
     }
 }
