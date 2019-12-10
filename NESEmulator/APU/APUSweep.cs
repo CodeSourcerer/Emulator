@@ -20,20 +20,31 @@ namespace NESEmulator.APU
             get => _divider.CounterReload;
             set => _divider.CounterReload = value;
         }
-        public byte ShiftCount { get; set; }
-        public ushort ChannelPeriod { get; set; }
+        private byte _shiftCount;
+        public byte ShiftCount
+        {
+            get => _shiftCount;
+            set
+            {
+                _shiftCount = value;
+                MuteChannel = shouldMuteChannel();
+            }
+        }
+        public ushort ChannelPeriod { get; private set; }
 
-        public event EventHandler PeriodUpdate;
+        //public event EventHandler PeriodUpdate;
+        private EventHandler _periodUpdate;
 
         private APUDivider _divider;
         private int _pulseChannelNumber;
         private int _targetPeriod;
 
-        public APUSweep(int pulseChannelNumber)
+        public APUSweep(int pulseChannelNumber, EventHandler callback)
         {
-            this._pulseChannelNumber = pulseChannelNumber;
-            this._divider = new APUDivider(APUDivider.DividerType.COUNTDOWN);
-            this._divider.DividerReachedZero += divider_ReachedZero;
+            _pulseChannelNumber = pulseChannelNumber;
+            _periodUpdate = callback;
+            _divider = new APUDivider(APUDivider.DividerType.COUNTDOWN, divider_ReachedZero);
+            //this._divider.DividerReachedZero += divider_ReachedZero;
         }
 
         public void Clock()
@@ -54,11 +65,12 @@ namespace NESEmulator.APU
 
         private void divider_ReachedZero(object sender, EventArgs e)
         {
-            if (this._targetPeriod <= MAX_TARGET_PERIOD && this.ShiftCount > 0 && this.MuteChannel == false)
+            if (!this.MuteChannel)
             {
                 this.ChannelPeriod = (ushort)this._targetPeriod;
-                this.MuteChannel   = this.ChannelPeriod < 8;
-                this.PeriodUpdate?.Invoke(this, EventArgs.Empty);
+                this.MuteChannel   = shouldMuteChannel();
+                //this.PeriodUpdate?.Invoke(this, EventArgs.Empty);
+                _periodUpdate(this, EventArgs.Empty);
             }
         }
 
@@ -75,7 +87,9 @@ namespace NESEmulator.APU
             }
 
             this._targetPeriod = this.ChannelPeriod + shiftAmount;
-            this.MuteChannel = this._targetPeriod > MAX_TARGET_PERIOD;
+            this.MuteChannel = shouldMuteChannel();
         }
+
+        private bool shouldMuteChannel() => _targetPeriod > MAX_TARGET_PERIOD || _shiftCount == 0 || ChannelPeriod < 8;
     }
 }

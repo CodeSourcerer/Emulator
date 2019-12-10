@@ -26,12 +26,12 @@ namespace NESEmulator.Channels
             0b11111100
         };
 
-        private static readonly short[] VOLUME_LOOKUP = new short[] {     0,  2184,  4369,  6553,  8738, 10922, 13107, 15291, 
-                                                                      17476, 19660, 21845, 24029, 26214, 28398, 30583, 32767 };
+        //private static readonly short[] VOLUME_LOOKUP = new short[] {     0,  2184,  4369,  6553,  8738, 10922, 13107, 15291, 
+        //                                                              17476, 19660, 21845, 24029, 26214, 28398, 30583, 32000 };
+        private static readonly short[] VOLUME_LOOKUP = new short[] {     0,  2184,  4369,  6553,  8738, 10922, 13107, 15291,
+                                                                      17476, 19660, 21845, 24029, 26214, 28398, 30000, 31000 };
         private byte _dutyCycle;
         private int _dutyCycleIndex;
-        private int _bufferWritePtr;
-        private short[] _buffer;
         public short Output { get; private set; }
 
         public bool Enabled
@@ -47,19 +47,16 @@ namespace NESEmulator.Channels
             }
         }
 
-        public const int CHANNEL_BUFFER_SIZE = (int)(CLOCK_NTSC_APU * (CS2A03.SOUND_BUFFER_SIZE_MS / 1000.0)) + 1;
-
         public PulseChannel(int channel)
         {
             this.ChannelNum = channel;
             _volumeEnvelope = new APUVolumeEnvelope();
-            _sweepUnit = new APUSweep(channel);
-            _sweepUnit.PeriodUpdate += _sweepUnit_PeriodUpdate;
+            _sweepUnit = new APUSweep(channel, _sweepUnit_PeriodUpdate);
+            //_sweepUnit.PeriodUpdate += _sweepUnit_PeriodUpdate;
             _dutyCycleIndex = 0;
             _dutyCycle = DUTY_CYCLE[0];
-            _buffer = new short[CHANNEL_BUFFER_SIZE];
-            _lengthCounter = new APULengthCounter();
-            _lengthCounter.CounterElapsed += lengthCounterElapsed;
+            _lengthCounter = new APULengthCounter(lengthCounterElapsed);
+//            _lengthCounter.CounterElapsed += lengthCounterElapsed;
             _lengthCounter.Enabled = true;
             _sequencer = new APUSequencer();
             _sequencer.OnTimerElapsed += sequencer_GenerateWave;
@@ -67,7 +64,11 @@ namespace NESEmulator.Channels
 
         private void _sweepUnit_PeriodUpdate(object sender, EventArgs e)
         {
-            _sequencer.TimerReload = _sweepUnit.ChannelPeriod;
+            if (!_sweepUnit.MuteChannel)
+            {
+                _sequencer.TimerReload = _sweepUnit.ChannelPeriod;
+                _sequencer.Timer = _sequencer.TimerReload; // ??
+            }
         }
 
         private void lengthCounterElapsed(object sender, EventArgs e)
@@ -77,14 +78,18 @@ namespace NESEmulator.Channels
 
         private void sequencer_GenerateWave(object sender, EventArgs e)
         {
-            this.Output = _dutyCycle.TestBit(_dutyCycleIndex) ? VOLUME_LOOKUP[_volumeEnvelope.Volume] : (short)(-VOLUME_LOOKUP[_volumeEnvelope.Volume]);
             if (!isChannelMuted())
             {
-                _dutyCycleIndex = (++_dutyCycleIndex) & 7;
+                this.Output = _dutyCycle.TestBit(_dutyCycleIndex) ? VOLUME_LOOKUP[_volumeEnvelope.Volume] : (short)(-VOLUME_LOOKUP[_volumeEnvelope.Volume]);
+                _dutyCycleIndex = (--_dutyCycleIndex) & 7;
+            }
+            else
+            {
+                this.Output = 0;
             }
         }
 
-        public bool IsBufferFull() => !(_bufferWritePtr < CHANNEL_BUFFER_SIZE);
+        //public bool IsBufferFull() => !(_bufferWritePtr < CHANNEL_BUFFER_SIZE);
 
         public void Clock(ulong clockCycles)
         {
@@ -104,7 +109,7 @@ namespace NESEmulator.Channels
         public void ClockHalfFrame()
         {
             _lengthCounter.Clock();
-            //_sweepUnit.Clock();
+            _sweepUnit.Clock();
         }
 
         /// <summary>
@@ -123,6 +128,7 @@ namespace NESEmulator.Channels
             throw new NotImplementedException();
         }
 
+        private ushort _timerTemp;
         public void Write(ushort addr, byte data)
         {
             if (addr == 0x4000 || addr == 0x4004)
@@ -131,7 +137,7 @@ namespace NESEmulator.Channels
                 _dutyCycle = DUTY_CYCLE[data >> 6];
                 _volumeEnvelope.ConstantVolume = data.TestBit(4);
                 _volumeEnvelope.Volume = (byte)(data & 0x0F);
-                //Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Duty={data >> 6}] [Halt={_lengthCounter.Halt}] [ConstantVolume={_volumeEnvelope.ConstantVolume}] [Volume={_volumeEnvelope.Volume}]");
+                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Duty={data >> 6}] [Halt={_lengthCounter.Halt}] [ConstantVolume={_volumeEnvelope.ConstantVolume}] [Volume/Period={_volumeEnvelope.Volume}]");
             }
             else if (addr == 0x4001 || addr == 0x4005)
             {
@@ -141,38 +147,37 @@ namespace NESEmulator.Channels
                 _sweepUnit.DividerPeriod = ((data >> 4) & 7) + 1;
                 _sweepUnit.ShiftCount = (byte)(data & 7);
                 _sweepUnit.Reload = true;
-                //Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [SweepEnabled={_sweepUnit.Enabled}] [DividerPeriod={_sweepUnit.DividerPeriod}] [Negate={_sweepUnit.Negate}] [ShiftCount={_sweepUnit.ShiftCount}]");
+                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [SweepEnabled={_sweepUnit.Enabled}] [DividerPeriod={_sweepUnit.DividerPeriod}] [Negate={_sweepUnit.Negate}] [ShiftCount={_sweepUnit.ShiftCount}]");
             }
             // Pulse channel 1 & 2 timer low bits
             else if (addr == 0x4002 || addr == 0x4006)
             {
-                _sequencer.TimerReload &= 0xFF00; // Preserve data in high byte, clearing data in low byte
-                _sequencer.TimerReload |= data;
+                _timerTemp &= 0xFF00;
+                _timerTemp |= data;
+                //_sequencer.TimerReload &= 0xFF00; // Preserve data in high byte, clearing data in low byte
+                //_sequencer.TimerReload |= data;
             }
             // Pulse channel 1 & 2 length counter load and timer high bits
             else if (addr == 0x4003 || addr == 0x4007)
             {
                 _lengthCounter.LoadLength((byte)(data >> 3));
-                _sequencer.TimerReload &= 0x00FF; // Clear data in high byte, preserving data in low byte
-                _sequencer.TimerReload |= (ushort)((data & 0x07) << 8);
+                _timerTemp &= 0x00FF;
+                _timerTemp |= (ushort)((data & 0x07) << 8);
+                //_sequencer.TimerReload &= 0x00FF; // Clear data in high byte, preserving data in low byte
+                //_sequencer.TimerReload |= (ushort)((data & 0x07) << 8);
+                _sequencer.TimerReload = _timerTemp;
                 _dutyCycleIndex = 0;
                 _volumeEnvelope.Start = true;
                 //Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [LinearLength={_lengthCounter.Length}] [TimerReload={_sequencer.TimerReload}]");
             }
         }
 
-        public short[] ReadAndResetBuffer()
-        {
-            _bufferWritePtr = 0;
-            return _buffer;
-        }
-
         private bool isChannelMuted()
         {
             bool isMuted = (_lengthCounter.Length == 0 ||
                             _volumeEnvelope.Volume == 0 ||
-                            Output == 0 ||
-                            _sequencer.TimerReload < 8 &&
+                            //Output == 0 ||
+                            _sequencer.TimerReload < 8 ||
                             _sweepUnit.MuteChannel);
 
             return isMuted;
