@@ -86,7 +86,7 @@ namespace NESEmulator
                     }
                     else
                     {
-                        // Once buffer is full, duplicate audio to fill remaining buffer
+                        // Once buffer is full, duplicate audio 2x to fill remaining buffer
                         Array.Copy(_audioBuffer, _audioBufferPtr - AUDIO_BUFFER_PADDING, _audioBuffer, _audioBufferPtr, AUDIO_BUFFER_PADDING);
                         _audioReadyToPlay = true;
                     }
@@ -236,9 +236,9 @@ namespace NESEmulator
 
         public short GetMixedAudioSample()
         {
-            //short average = (short)((_pulseChannel1.Output + _pulseChannel2.Output) / 4);
+            short average = (short)((_pulseChannel1.Output + _pulseChannel2.Output) / 3); // + 4 * _triangleChannel.Output) / 8);
             //average += (short)(_triangleChannel.Output * 0.5);
-            short average = (short)_triangleChannel.Output;
+            //short average = _triangleChannel.Output;
             return average;
         }
 

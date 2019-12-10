@@ -43,8 +43,10 @@ namespace NESEmulator.APU
             buildLengthTable();
         }
 
-        public APULengthCounter()
+        private EventHandler _callback;
+        public APULengthCounter(EventHandler counterElapsedCallback)
         {
+            _callback = counterElapsedCallback;
         }
 
         public void Clock()
@@ -53,7 +55,10 @@ namespace NESEmulator.APU
             {
                 this.Length--;
                 if (this.Length == 0)
-                    this.CounterElapsed?.Invoke(this, EventArgs.Empty);
+                {
+                    _callback(this, EventArgs.Empty);
+                    //this.CounterElapsed?.Invoke(this, EventArgs.Empty);
+                }
             }
         }
 

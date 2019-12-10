@@ -8,15 +8,26 @@ namespace NESEmulator.APU
 
         public DividerType TypeOfDivider { get; set; }
 
-        public int CounterReload { get; set; }
+        private int _counterReload;
+        public int CounterReload
+        {
+            get => _counterReload;
+            set
+            {
+                _counterReload = value;
+                _counter = _counterReload;
+            }
+        }
 
         private int _counter;
 
-        public event EventHandler DividerReachedZero;
+        //public event EventHandler DividerReachedZero;
+        private EventHandler _dividerReachedZero;
 
-        public APUDivider(DividerType dividerType)
+        public APUDivider(DividerType dividerType, EventHandler callback)
         {
-            this.TypeOfDivider = dividerType;
+            TypeOfDivider = dividerType;
+            _dividerReachedZero = callback;
         }
 
         public void Clock()
@@ -24,7 +35,8 @@ namespace NESEmulator.APU
             if (_counter == 0)
             {
                 _counter = CounterReload;
-                DividerReachedZero?.Invoke(this, EventArgs.Empty);
+                //DividerReachedZero?.Invoke(this, EventArgs.Empty);
+                _dividerReachedZero(this, EventArgs.Empty);
             }
             else
             {

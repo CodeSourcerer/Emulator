@@ -20,6 +20,8 @@ namespace NESEmulator.APU
             set
             {
                 _volume = value;
+                if (!ConstantVolume)
+                    _divider.CounterReload = _volume + 1;
             }
         }
 
@@ -28,10 +30,11 @@ namespace NESEmulator.APU
 
         public APUVolumeEnvelope()
         {
-            _divider = new APUDivider(APUDivider.DividerType.COUNTDOWN);
-            _divider.DividerReachedZero += OnDividerReachedZero;
+            _divider = new APUDivider(APUDivider.DividerType.COUNTDOWN, OnDividerReachedZero);
+            //_divider.DividerReachedZero += OnDividerReachedZero;
         }
 
+        // Called on quarter frames
         public void Clock()
         {
             if (!ConstantVolume)
