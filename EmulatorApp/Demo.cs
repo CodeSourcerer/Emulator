@@ -46,7 +46,8 @@ namespace EmulatorApp
 
         public Demo(string appName)
         {
-            _availableBuffers = new Queue<int>(NUM_AUDIO_BUFFERS);
+			initAudioStuff();
+			_availableBuffers = new Queue<int>(NUM_AUDIO_BUFFERS);
             window = new GLWindow(SCREEN_WIDTH, SCREEN_HEIGHT, 4, 4, appName);
             window.KeyDown += Window_KeyDown;
             pge = new PixelGameEngine(appName);
@@ -76,7 +77,6 @@ namespace EmulatorApp
 
         public void Start(Cartridge cartridge)
         {
-            initAudioStuff();
             apu = new CS2A03();
             ppu = new CS2C02();
             ram = new Ram(0x07FF, 0x1FFF);
@@ -223,6 +223,7 @@ namespace EmulatorApp
         private int _fps;
         private DateTime dtStart = DateTime.Now;
         private float residualTime = 0.0f;
+		private DateTime _frameTime;
         private void pge_OnUpdate(object sender, FrameUpdateEventArgs frameUpdateArgs)
         {
             pge.Clear(Pixel.BLUE);
