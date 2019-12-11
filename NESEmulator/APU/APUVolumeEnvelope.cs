@@ -20,8 +20,8 @@ namespace NESEmulator.APU
             set
             {
                 _volume = value;
-                if (!ConstantVolume)
-                    _divider.CounterReload = _volume + 1;
+                //if (!ConstantVolume)
+                //    _divider.CounterReload = _volume + 1;
             }
         }
 

@@ -39,7 +39,10 @@ namespace NESEmulator.Channels
             set
             {
                 if (!value)
+                {
                     _lengthCounter.ClearLength();
+                    Output = 0;
+                }
             }
             get
             {
@@ -52,11 +55,9 @@ namespace NESEmulator.Channels
             this.ChannelNum = channel;
             _volumeEnvelope = new APUVolumeEnvelope();
             _sweepUnit = new APUSweep(channel, _sweepUnit_PeriodUpdate);
-            //_sweepUnit.PeriodUpdate += _sweepUnit_PeriodUpdate;
             _dutyCycleIndex = 0;
             _dutyCycle = DUTY_CYCLE[0];
             _lengthCounter = new APULengthCounter(lengthCounterElapsed);
-//            _lengthCounter.CounterElapsed += lengthCounterElapsed;
             _lengthCounter.Enabled = true;
             _sequencer = new APUSequencer();
             _sequencer.OnTimerElapsed += sequencer_GenerateWave;
@@ -77,10 +78,11 @@ namespace NESEmulator.Channels
 
         private void sequencer_GenerateWave(object sender, EventArgs e)
         {
+            _dutyCycleIndex = (--_dutyCycleIndex) & 7;
             if (!isChannelMuted())
             {
                 this.Output = _dutyCycle.TestBit(_dutyCycleIndex) ? VOLUME_LOOKUP[_volumeEnvelope.Volume] : (short)(-VOLUME_LOOKUP[_volumeEnvelope.Volume]);
-                _dutyCycleIndex = (--_dutyCycleIndex) & 7;
+                //_dutyCycleIndex = (--_dutyCycleIndex) & 7;
             }
             else
             {
@@ -169,7 +171,7 @@ namespace NESEmulator.Channels
         private bool isChannelMuted()
         {
             bool isMuted = (_lengthCounter.Length == 0 ||
-                            _volumeEnvelope.Volume == 0 ||
+                            //_volumeEnvelope.Volume == 0 ||
                             //Output == 0 ||
                             _sequencer.TimerReload < 8 ||
                             _sweepUnit.MuteChannel);

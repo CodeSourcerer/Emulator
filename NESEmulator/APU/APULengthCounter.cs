@@ -27,11 +27,11 @@ namespace NESEmulator.APU
         public ushort Length
         {
             get => _length;
-            set
-            {
-                if (Enabled)
-                    _length = value;
-            }
+            set => _length = value;
+            //{
+            //    if (Enabled)
+            //        _length = value;
+            //}
         }
 
         public event EventHandler CounterElapsed;

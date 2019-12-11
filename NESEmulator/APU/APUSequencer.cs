@@ -34,14 +34,14 @@ namespace NESEmulator.APU
 
         public void Clock()
         {
-            this.Timer--;
-
-            if (this.Timer == 0xFFFF)
+            if (this.Timer == 0)
             {
+                this.Timer = TimerReload;
                 //_timerCallback();
                 this.OnTimerElapsed?.Invoke(this, EventArgs.Empty);
-                this.Timer = (ushort)(this.TimerReload + 1);
             }
+            else
+                Timer--;
         }
     }
 }
