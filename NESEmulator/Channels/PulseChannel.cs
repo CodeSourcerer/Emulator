@@ -153,6 +153,7 @@ namespace NESEmulator.Channels
             {
                 _sequencer.TimerReload &= 0xFF00; // Preserve data in high byte, clearing data in low byte
                 _sequencer.TimerReload |= data;
+                _sweepUnit.ChannelPeriod = _sequencer.TimerReload;
             }
             // Pulse channel 1 & 2 length counter load and timer high bits
             else if (addr == 0x4003 || addr == 0x4007)
@@ -160,6 +161,8 @@ namespace NESEmulator.Channels
                 _lengthCounter.LoadLength((byte)(data >> 3));
                 _sequencer.TimerReload &= 0x00FF; // Clear data in high byte, preserving data in low byte
                 _sequencer.TimerReload |= (ushort)((data & 0x07) << 8);
+                _sweepUnit.ChannelPeriod = _sequencer.TimerReload;
+
                 _dutyCycleIndex = 0;
                 _volumeEnvelope.Start = true;
                 _sweepUnit.MuteChannel = false;

@@ -21,7 +21,7 @@ namespace NESEmulator.APU
             set => _divider.CounterReload = value;
         }
         public byte ShiftCount { get; set; }
-        public ushort ChannelPeriod { get; private set; }
+        public ushort ChannelPeriod { get; set; }
 
         //public event EventHandler PeriodUpdate;
         private EventHandler _periodUpdate;
@@ -47,7 +47,7 @@ namespace NESEmulator.APU
 
         private void divider_ReachedZero(object sender, EventArgs e)
         {
-            if (!this.MuteChannel && Enabled)
+            if (!MuteChannel && Enabled)
             {
                 ChannelPeriod = (ushort)_targetPeriod;
                 _periodUpdate(this, EventArgs.Empty);
@@ -76,7 +76,5 @@ namespace NESEmulator.APU
             if (_targetPeriod > MAX_TARGET_PERIOD)
                 MuteChannel = true;
         }
-
-        private bool shouldMuteChannel() => _targetPeriod > MAX_TARGET_PERIOD || ChannelPeriod < 8;
     }
 }
