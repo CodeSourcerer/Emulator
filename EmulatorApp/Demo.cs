@@ -24,7 +24,7 @@ namespace EmulatorApp
     {
         private const int SCREEN_WIDTH = 360;
         private const int SCREEN_HEIGHT = 240;
-        private const int NUM_AUDIO_BUFFERS = 20;
+        private const int NUM_AUDIO_BUFFERS = 8;
         private const int AUDIO_SAMPLE_RATE = 44100;
 
         private static ILog Log = LogManager.GetLogger(typeof(Demo));
@@ -78,8 +78,8 @@ namespace EmulatorApp
             Thread.CurrentThread.Name = "main";
             Log.Info("Demo app started");
             Demo demo = new Demo("NES Emulator");
-            //Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes"); 
-            Cartridge cartridge = demo.LoadCartridge("tests\\donkey kong.nes");
+            Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes"); 
+            //Cartridge cartridge = demo.LoadCartridge("tests\\donkey kong.nes");
             demo.Start(cartridge);
         }
 
@@ -116,7 +116,6 @@ namespace EmulatorApp
         private void audioThread()
         {
             short[] audioBuffer = new short[AUDIO_BUFFER_SIZE];
-            int audioBufferPtr = 0;
 
             try
             {
@@ -125,7 +124,10 @@ namespace EmulatorApp
                     dequeueProcessedBuffers();
 
                     if (_availableBuffers.Count == 0)
+                    {
+                        //Log.Warn("No buffers available!");
                         continue;
+                    }
 
                     for (int blockNum = 0; blockNum < AUDIO_BUFFER_SIZE; blockNum++)
                     {
@@ -286,8 +288,6 @@ namespace EmulatorApp
 
             if (runEmulation)
             {
-                nesController.ControllerState[(int)NESController.Controller.Controller1] = 0;
-
                 _frameCount++;
 
                 if (DateTime.Now - dtStart >= TimeSpan.FromSeconds(1))
@@ -342,7 +342,9 @@ namespace EmulatorApp
         private short getAudioSample()
         {
             if (runEmulation)
+            {
                 while (!nesBus.clock()) { }
+            }
 
             return nesBus.CurrentAudioSample;
         }

@@ -70,12 +70,6 @@ namespace NESEmulator
 
         public override void Clock(ulong clockCounter)
         {
-            // Clock all audio channels, letting them determine whether or not to actually do something or not
-            foreach (var audioChannel in _audioChannels)
-            {
-                audioChannel.Clock(clockCounter);
-            }
-
             // Clock frame counter every CPU cycle
             if (clockCounter % 3 == 0)
             {
@@ -83,23 +77,17 @@ namespace NESEmulator
                 _frameCounter.Clock(_cpuClockCounter);
             }
             
+            // Clock all audio channels, letting them determine whether or not to actually do something or not
+            foreach (var audioChannel in _audioChannels)
+            {
+                audioChannel.Clock(clockCounter);
+            }
+            
             // APU clocks every other CPU cycle
             if (clockCounter % 6 == 0)
             {
                 ++_apuClockCounter;
-                if (_apuClockCounter % SAMPLE_FREQUENCY == 0)
-                {
-                    //if (_audioBufferPtr < AUDIO_BUFFER_SIZE)
-                    //{
-                    //    _audioBuffer[_audioBufferPtr++] = CurrentAudioSample;
-                    //}
-                    //else
-                    //{
-                    //    // Once buffer is full, duplicate audio 2x to fill remaining buffer
-                    //    Array.Copy(_audioBuffer, _audioBufferPtr - AUDIO_BUFFER_PADDING, _audioBuffer, _audioBufferPtr, AUDIO_BUFFER_PADDING);
-                    //    _audioReadyToPlay = true;
-                    //}
-                }
+                //_highPrecisionAudioBuffer.Add(GetMixedAudioSample());
             }
         }
 
@@ -242,6 +230,22 @@ namespace NESEmulator
             //average += (short)(_triangleChannel.Output * 0.5);
             //short average = _triangleChannel.Output;
             return average;
+        }
+
+        public short GetSample()
+        {
+            int average = 0;
+
+            int count = 0;
+            for (int i = 0; i < _highPrecisionAudioBuffer.Count; i+=5)
+            {
+                average += _highPrecisionAudioBuffer[i];
+                count++;
+            }
+
+            average = (int)(average / (double)count);
+            _highPrecisionAudioBuffer.Clear();
+            return (short)average;
         }
 
         public short[] ReadAndResetAudio()

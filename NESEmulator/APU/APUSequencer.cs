@@ -18,7 +18,7 @@ namespace NESEmulator.APU
 
         public void Clock()
         {
-            if (Timer == 0)
+            if (Timer == 0xFFFF)
             {
                 Timer = TimerReload;
                 _timerElapsed(this, EventArgs.Empty);
