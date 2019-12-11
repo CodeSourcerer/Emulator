@@ -9,11 +9,23 @@ namespace NESEmulator
     /// </summary>
     public class Bus : IBus
     {
+        public short CurrentAudioSample { get; private set; }
+
         private List<BusDevice> _busDeviceList;
         private ulong _systemClockCounter;
+        private int _audioSampleRate;
+        private double _audioTimePerSystemSample;
+        private double _audioTimePerNESClock = 1.0 / 5369318.0;
+        private double _audioTime = 0;
 
-        public Bus(BusDevice[] busDevices)
+        private CS2A03 _apu;
+        private CS2C02 _ppu;
+
+        public Bus(BusDevice[] busDevices, int audioSampleRate)
         {
+            _audioSampleRate = audioSampleRate;
+            _audioTimePerSystemSample = 1.0 / _audioSampleRate;
+
             _busDeviceList = new List<BusDevice>(busDevices);
 
             List<InterruptingBusDevice> interruptingDevices = _busDeviceList.FindAll((bd) => bd is InterruptingBusDevice)
@@ -64,7 +76,7 @@ namespace NESEmulator
             ppu?.ConnectCartridge(cartridge);
         }
 
-        public void clock()
+        public bool clock()
         {
             // Clocking. The heart and soul of an emulator. The running frequency is controlled by whatever calls
             // this function. So here we "divide" the clock as necessary and call the peripheral devices Clock()
@@ -73,6 +85,18 @@ namespace NESEmulator
             _busDeviceList.ForEach(device => device.Clock(_systemClockCounter));
 
             _systemClockCounter++;
+
+            bool isAudioSampleReady = false;
+            _audioTime += _audioTimePerNESClock;
+
+            if (_audioTime >= _audioTimePerSystemSample)
+            {
+                _audioTime -= _audioTimePerSystemSample;
+                CurrentAudioSample = GetAPU().GetMixedAudioSample();
+                isAudioSampleReady = true;
+            }
+
+            return isAudioSampleReady;
         }
 
         public BusDevice GetDevice(BusDeviceType device)
@@ -82,7 +106,14 @@ namespace NESEmulator
 
         public CS2C02 GetPPU()
         {
-            return (CS2C02)GetDevice(BusDeviceType.PPU);
+            _ppu = (_ppu ?? (CS2C02)GetDevice(BusDeviceType.PPU));
+            return _ppu;
+        }
+
+        private CS2A03 GetAPU()
+        {
+            _apu = (_apu ?? (CS2A03)GetDevice(BusDeviceType.APU));
+            return _apu;
         }
     }
 }

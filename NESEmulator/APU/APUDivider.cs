@@ -2,6 +2,13 @@
 
 namespace NESEmulator.APU
 {
+    /// <summary>
+    /// This essentially a timer. When it reaches 0, it reloads the timer with the CounterReload
+    /// value and executes user code.
+    /// </summary>
+    /// <remarks>
+    /// LFSR timer not implemented yet!
+    /// </remarks>
     public class APUDivider
     {
         public enum DividerType { COUNTDOWN, LFSR }

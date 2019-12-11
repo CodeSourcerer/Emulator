@@ -28,10 +28,6 @@ namespace NESEmulator.APU
         {
             get => _length;
             set => _length = value;
-            //{
-            //    if (Enabled)
-            //        _length = value;
-            //}
         }
 
         public event EventHandler CounterElapsed;

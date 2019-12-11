@@ -25,6 +25,7 @@ namespace EmulatorApp
         private const int SCREEN_WIDTH = 360;
         private const int SCREEN_HEIGHT = 240;
         private const int NUM_AUDIO_BUFFERS = 20;
+        private const int AUDIO_SAMPLE_RATE = 44100;
 
         private static ILog Log = LogManager.GetLogger(typeof(Demo));
 
@@ -45,6 +46,9 @@ namespace EmulatorApp
         private int[] buffers, sources;
         private Stack<int> _availableBuffers;
 
+        private Thread _audioThread;
+        private Task _audioTask;
+
         public Demo(string appName)
         {
             _availableBuffers = new Stack<int>(NUM_AUDIO_BUFFERS);
@@ -61,6 +65,9 @@ namespace EmulatorApp
 
         private void pge_OnDestroy(object sender, EventArgs e)
         {
+            _audioThreadActive = false;
+            //_audioThread.Join();
+            _audioTask.Wait();
             AL.DeleteBuffers(buffers);
             AL.DeleteSources(sources);
             audioContext?.Dispose();
@@ -84,7 +91,7 @@ namespace EmulatorApp
             cpu = new CS6502();
             nesController = new NESController();
             busDevices = new BusDevice[] { cpu, ram, ppu, nesController, apu };
-            nesBus = new Bus(busDevices);
+            nesBus = new Bus(busDevices, AUDIO_SAMPLE_RATE);
             cpu.ConnectBus(nesBus);
 
             if (!cartridge.ImageValid)
@@ -96,7 +103,53 @@ namespace EmulatorApp
             //dtLastTick = DateTime.Now;
             //nesClock.OnClockTick += NesClock_OnClockTick;
 
+            _audioThreadActive = true;
+            _audioTask = Task.Factory.StartNew(audioThread, TaskCreationOptions.LongRunning);
             pge.Start();
+            //_audioThread = new Thread(new ThreadStart(audioThread));
+            //_audioThread.IsBackground = true;
+            //_audioThread.Start();
+        }
+
+        bool _audioThreadActive;
+
+        private void audioThread()
+        {
+            short[] audioBuffer = new short[AUDIO_BUFFER_SIZE];
+            int audioBufferPtr = 0;
+
+            try
+            {
+                while (_audioThreadActive)
+                {
+                    dequeueProcessedBuffers();
+
+                    if (_availableBuffers.Count == 0)
+                        continue;
+
+                    for (int blockNum = 0; blockNum < AUDIO_BUFFER_SIZE; blockNum++)
+                    {
+                        audioBuffer[blockNum] = getAudioSample();
+                    }
+
+                    int buffer = _availableBuffers.Pop();
+                    AL.BufferData(buffer, ALFormat.Mono16, audioBuffer, audioBuffer.Length*2, AUDIO_SAMPLE_RATE);
+                    AL.SourceQueueBuffer(sources[0], buffer);
+                    if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
+                    {
+                        Log.Warn("BUFFERS DEPLEATED!");
+                        AL.SourcePlay(sources[0]);
+                    }
+                }
+            }
+            catch (ThreadInterruptedException)
+            {
+
+            }
+            catch(Exception ex)
+            {
+                Log.Error("Something bad happened", ex);
+            }
         }
 
         private void initAudioStuff()
@@ -233,30 +286,15 @@ namespace EmulatorApp
 
             if (runEmulation)
             {
-                //if ((DateTime.Now - dtLastTick) > TimeSpan.FromMilliseconds(18))
-                //    Console.WriteLine("Taking too long! Frame took {0} ms", (DateTime.Now - dtLastTick).TotalMilliseconds);
-                //dtLastTick = DateTime.Now;
-                if (residualTime > 0.0f)
-                    residualTime -= (float)frameUpdateArgs.ElapsedTime;
-                else
+                nesController.ControllerState[(int)NESController.Controller.Controller1] = 0;
+
+                _frameCount++;
+
+                if (DateTime.Now - dtStart >= TimeSpan.FromSeconds(1))
                 {
-                    residualTime += (1.0f / 60.0988f) - (float)frameUpdateArgs.ElapsedTime;
-
-                    do
-                    {
-                        nesBus.clock();
-                        playAudioWhenReady();
-                    } while (!ppu.FrameComplete);
-                    ppu.FrameComplete = false;
-                    _frameCount++;
-
-                    if (DateTime.Now - dtStart >= TimeSpan.FromSeconds(1))
-                    {
-                        dtStart = DateTime.Now;
-                        _fps = _frameCount;
-                        _frameCount = 0;
-                    }
-                    nesController.ControllerState[(int)NESController.Controller.Controller1] = 0;
+                    dtStart = DateTime.Now;
+                    _fps = _frameCount;
+                    _frameCount = 0;
                 }
             }
 
@@ -301,6 +339,51 @@ namespace EmulatorApp
             //}
         }
 
+        private short getAudioSample()
+        {
+            if (runEmulation)
+                while (!nesBus.clock()) { }
+
+            return nesBus.CurrentAudioSample;
+        }
+
+        private const int AUDIO_BUFFER_SIZE = 256;
+        private short[] _audioBuffer = new short[AUDIO_BUFFER_SIZE];
+        private int _audioBufferPtr = 0;
+
+        private short runEmulationSyncedToSound()
+        {
+            while (!nesBus.clock()) { }
+            return nesBus.CurrentAudioSample;
+        }
+
+        private void runEmulationSyncedToVideo(FrameUpdateEventArgs frameUpdateArgs)
+        {
+            if (residualTime > 0.0f)
+                residualTime -= (float)frameUpdateArgs.ElapsedTime;
+            else
+            {
+                residualTime += (1.0f / 60.0988f) - (float)frameUpdateArgs.ElapsedTime;
+                do
+                {
+                    nesBus.clock();
+                    playAudioWhenReady();
+                } while (!ppu.FrameComplete);
+                ppu.FrameComplete = false;
+
+                _frameCount++;
+
+                if (DateTime.Now - dtStart >= TimeSpan.FromSeconds(1))
+                {
+                    dtStart = DateTime.Now;
+                    _fps = _frameCount;
+                    _frameCount = 0;
+                }
+
+                nesController.ControllerState[(int)NESController.Controller.Controller1] = 0;
+            }
+        }
+
         private void pge_OnCreate(object sender, EventArgs e)
         {
             // Extract disassembly
@@ -314,18 +397,20 @@ namespace EmulatorApp
         private void playAudioWhenReady()
         {
             // Get audio data
-            if (apu.IsAudioBufferReadyToPlay())
+            //if (apu.IsAudioBufferReadyToPlay())
             {
                 dequeueProcessedBuffers();
 
-                var soundData = apu.ReadAndResetAudio();
+                //var soundData = apu.ReadAndResetAudio();
+                var soundData = _audioBuffer;
                 if (_availableBuffers.Count > 0)
                 {
                     int buffer = _availableBuffers.Pop();
-                    AL.BufferData(buffer, ALFormat.Mono16, soundData, soundData.Length, 44100);
+                    AL.BufferData(buffer, ALFormat.Mono16, soundData, soundData.Length, AUDIO_SAMPLE_RATE);
                     AL.SourceQueueBuffer(sources[0], buffer);
                     if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
                     {
+                        Log.Warn("BUFFERS DEPLEATED!");
                         AL.SourcePlay(sources[0]);
                     }
                 }

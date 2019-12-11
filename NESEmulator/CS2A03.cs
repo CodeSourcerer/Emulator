@@ -48,10 +48,12 @@ namespace NESEmulator
         private bool    _audioReadyToPlay;
         private int     _audioBufferPtr;
         private short[] _audioBuffer;
+        private List<short> _highPrecisionAudioBuffer;
 
         public CS2A03()
         {
             _audioBuffer     = new short[AUDIO_BUFFER_SIZE + AUDIO_BUFFER_PADDING];
+            _highPrecisionAudioBuffer = new List<short>((int)((CLOCK_NTSC_HZ / 2.0) * (SOUND_BUFFER_SIZE_MS / 1000.0) + 1));
             _pulseChannel1   = new PulseChannel(1);
             _pulseChannel2   = new PulseChannel(2);
             _triangleChannel = new TriangleChannel();
@@ -74,30 +76,30 @@ namespace NESEmulator
                 audioChannel.Clock(clockCounter);
             }
 
+            // Clock frame counter every CPU cycle
+            if (clockCounter % 3 == 0)
+            {
+                ++_cpuClockCounter;
+                _frameCounter.Clock(_cpuClockCounter);
+            }
+            
             // APU clocks every other CPU cycle
             if (clockCounter % 6 == 0)
             {
                 ++_apuClockCounter;
                 if (_apuClockCounter % SAMPLE_FREQUENCY == 0)
                 {
-                    if (_audioBufferPtr < AUDIO_BUFFER_SIZE)
-                    {
-                        _audioBuffer[_audioBufferPtr++] = GetMixedAudioSample();
-                    }
-                    else
-                    {
-                        // Once buffer is full, duplicate audio 2x to fill remaining buffer
-                        Array.Copy(_audioBuffer, _audioBufferPtr - AUDIO_BUFFER_PADDING, _audioBuffer, _audioBufferPtr, AUDIO_BUFFER_PADDING);
-                        _audioReadyToPlay = true;
-                    }
+                    //if (_audioBufferPtr < AUDIO_BUFFER_SIZE)
+                    //{
+                    //    _audioBuffer[_audioBufferPtr++] = CurrentAudioSample;
+                    //}
+                    //else
+                    //{
+                    //    // Once buffer is full, duplicate audio 2x to fill remaining buffer
+                    //    Array.Copy(_audioBuffer, _audioBufferPtr - AUDIO_BUFFER_PADDING, _audioBuffer, _audioBufferPtr, AUDIO_BUFFER_PADDING);
+                    //    _audioReadyToPlay = true;
+                    //}
                 }
-            }
-
-            // Clock frame counter every CPU cycle
-            if (clockCounter % 3 == 0)
-            {
-                ++_cpuClockCounter;
-                _frameCounter.Clock(_cpuClockCounter);
             }
         }
 
@@ -236,7 +238,7 @@ namespace NESEmulator
 
         public short GetMixedAudioSample()
         {
-            short average = (short)((_pulseChannel1.Output + _pulseChannel2.Output) / 3); // + 4 * _triangleChannel.Output) / 8);
+            short average = (short)((_pulseChannel1.Output));// + _pulseChannel2.Output) / 2); // + 4 * _triangleChannel.Output) / 8);
             //average += (short)(_triangleChannel.Output * 0.5);
             //short average = _triangleChannel.Output;
             return average;
