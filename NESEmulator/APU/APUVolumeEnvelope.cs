@@ -43,7 +43,7 @@ namespace NESEmulator.APU
             {
                 Start = false;
                 _decayLevel = 15;
-                _divider.CounterReload = _volume;
+                _divider.CounterReload = _volume +1;
             }
         }
 

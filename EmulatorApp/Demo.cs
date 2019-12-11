@@ -92,10 +92,6 @@ namespace EmulatorApp
             nesBus.InsertCartridge(cartridge);
             nesBus.Reset();
 
-            //nesClock = new NESClock();
-            //dtLastTick = DateTime.Now;
-            //nesClock.OnClockTick += NesClock_OnClockTick;
-
             pge.Start();
         }
 
@@ -107,25 +103,6 @@ namespace EmulatorApp
             foreach (int buf in buffers)
                 _availableBuffers.Push(buf);
         }
-
-        DateTime dtLastTick;
-
-        //private void NesClock_OnClockTick(object sender, ElapsedEventArgs e)
-        //{
-        //    if (runEmulation)
-        //    {
-        //        if ((DateTime.Now - dtLastTick) > TimeSpan.FromMilliseconds(18))
-        //            Console.WriteLine("Taking too long! Frame took {0} ms", (DateTime.Now - dtLastTick).TotalMilliseconds);
-        //        dtLastTick = DateTime.Now;
-
-        //        CS2C02 ppu = (CS2C02)nesBus.GetPPU();
-        //        do
-        //        {
-        //            nesBus.clock();
-        //        } while (!ppu.FrameComplete);
-        //        ppu.FrameComplete = false;
-        //    }
-        //}
 
         public Cartridge LoadCartridge(string fileName)
         {
@@ -233,9 +210,6 @@ namespace EmulatorApp
 
             if (runEmulation)
             {
-                //if ((DateTime.Now - dtLastTick) > TimeSpan.FromMilliseconds(18))
-                //    Console.WriteLine("Taking too long! Frame took {0} ms", (DateTime.Now - dtLastTick).TotalMilliseconds);
-                //dtLastTick = DateTime.Now;
                 if (residualTime > 0.0f)
                     residualTime -= (float)frameUpdateArgs.ElapsedTime;
                 else

@@ -238,7 +238,10 @@ namespace NESEmulator
         {
             short pulse = (short)(_pulseChannel1.Output + _pulseChannel2.Output);
             double pulse_out = pulse == 0 ? 0 : 95.88 / (8128.0 / pulse + 100);
-            short mixedOutput = (short)(pulse_out * short.MaxValue);
+            double tnd = _triangleChannel.Output / 8227.0 + (0 / 12241.0) + 0;
+            double tnd_out = tnd == 0 ? 0 : 159.79 / (1 / tnd + 100);
+
+            short mixedOutput = (short)((pulse_out + tnd_out) * short.MaxValue);
             //short average = (short)((_pulseChannel1.Output + _pulseChannel2.Output) / 3); // + 4 * _triangleChannel.Output) / 8);
             //average += (short)(_triangleChannel.Output * 0.5);
             //short average = _triangleChannel.Output;
