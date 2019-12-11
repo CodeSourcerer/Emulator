@@ -37,8 +37,8 @@ namespace NESEmulator.APU
         // Called on quarter frames
         public void Clock()
         {
-            if (!ConstantVolume)
-            {
+            //if (!ConstantVolume)
+            //{
                 if (!Start)
                 {
                     _divider.Clock();
@@ -47,9 +47,9 @@ namespace NESEmulator.APU
                 {
                     Start = false;
                     _decayLevel = 15;
-                    _divider.CounterReload = Volume;
+                    _divider.CounterReload = _volume;
                 }
-            }
+            //}
         }
 
         private void OnDividerReachedZero(object sender, EventArgs e)

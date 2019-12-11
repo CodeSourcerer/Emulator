@@ -47,8 +47,8 @@ namespace EmulatorApp
 
         public Demo(string appName)
         {
-			initAudioStuff();
             _availableBuffers = new Stack<int>(NUM_AUDIO_BUFFERS);
+            initAudioStuff();
             window = new GLWindow(SCREEN_WIDTH, SCREEN_HEIGHT, 4, 4, appName);
             window.KeyDown += Window_KeyDown;
             pge = new PixelGameEngine(appName);

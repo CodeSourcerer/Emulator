@@ -66,8 +66,7 @@ namespace NESEmulator.Channels
         {
             if (!_sweepUnit.MuteChannel)
             {
-                _sequencer.TimerReload = _sweepUnit.ChannelPeriod;
-                _sequencer.Timer = _sequencer.TimerReload; // ??
+                _sequencer.Timer = _sweepUnit.ChannelPeriod;
             }
         }
 
@@ -128,7 +127,6 @@ namespace NESEmulator.Channels
             throw new NotImplementedException();
         }
 
-        private ushort _timerTemp;
         public void Write(ushort addr, byte data)
         {
             if (addr == 0x4000 || addr == 0x4004)
@@ -152,22 +150,18 @@ namespace NESEmulator.Channels
             // Pulse channel 1 & 2 timer low bits
             else if (addr == 0x4002 || addr == 0x4006)
             {
-                _timerTemp &= 0xFF00;
-                _timerTemp |= data;
-                //_sequencer.TimerReload &= 0xFF00; // Preserve data in high byte, clearing data in low byte
-                //_sequencer.TimerReload |= data;
+                _sequencer.TimerReload &= 0xFF00; // Preserve data in high byte, clearing data in low byte
+                _sequencer.TimerReload |= data;
             }
             // Pulse channel 1 & 2 length counter load and timer high bits
             else if (addr == 0x4003 || addr == 0x4007)
             {
                 _lengthCounter.LoadLength((byte)(data >> 3));
-                _timerTemp &= 0x00FF;
-                _timerTemp |= (ushort)((data & 0x07) << 8);
-                //_sequencer.TimerReload &= 0x00FF; // Clear data in high byte, preserving data in low byte
-                //_sequencer.TimerReload |= (ushort)((data & 0x07) << 8);
-                _sequencer.TimerReload = _timerTemp;
+                _sequencer.TimerReload &= 0x00FF; // Clear data in high byte, preserving data in low byte
+                _sequencer.TimerReload |= (ushort)((data & 0x07) << 8);
                 _dutyCycleIndex = 0;
                 _volumeEnvelope.Start = true;
+                _sweepUnit.MuteChannel = false;
                 //Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [LinearLength={_lengthCounter.Length}] [TimerReload={_sequencer.TimerReload}]");
             }
         }
