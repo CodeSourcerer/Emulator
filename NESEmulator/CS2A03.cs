@@ -17,7 +17,7 @@ namespace NESEmulator
 
         private static ILog Log = LogManager.GetLogger(typeof(CS2A03));
         private const float CLOCK_NTSC_HZ       = 1789773.0f;
-        private const int   SAMPLE_FREQUENCY    = 18;
+        private const int   SAMPLE_FREQUENCY    = 20;
 
         private const ushort ADDR_PULSE1_LO     = 0x4000;
         private const ushort ADDR_PULSE1_HI     = 0x4003;
@@ -44,14 +44,14 @@ namespace NESEmulator
         private DMCChannel      _dmcChannel;
 
         private const int AUDIO_BUFFER_SIZE     = (int)(44100 * (SOUND_BUFFER_SIZE_MS / 1000.0));
-        private const int AUDIO_BUFFER_PADDING  = AUDIO_BUFFER_SIZE;
+        //private const int AUDIO_BUFFER_PADDING  = AUDIO_BUFFER_SIZE;
         private bool    _audioReadyToPlay;
         private int     _audioBufferPtr;
         private short[] _audioBuffer;
 
         public CS2A03()
         {
-            _audioBuffer     = new short[AUDIO_BUFFER_SIZE + AUDIO_BUFFER_PADDING];
+            _audioBuffer     = new short[AUDIO_BUFFER_SIZE];
             _pulseChannel1   = new PulseChannel(1);
             _pulseChannel2   = new PulseChannel(2);
             _triangleChannel = new TriangleChannel();
@@ -87,7 +87,7 @@ namespace NESEmulator
                     else
                     {
                         // Once buffer is full, duplicate audio 2x to fill remaining buffer
-                        Array.Copy(_audioBuffer, _audioBufferPtr - AUDIO_BUFFER_PADDING, _audioBuffer, _audioBufferPtr, AUDIO_BUFFER_PADDING);
+                        //Array.Copy(_audioBuffer, _audioBufferPtr - AUDIO_BUFFER_PADDING, _audioBuffer, _audioBufferPtr, AUDIO_BUFFER_PADDING);
                         _audioReadyToPlay = true;
                     }
                 }
@@ -236,10 +236,13 @@ namespace NESEmulator
 
         public short GetMixedAudioSample()
         {
-            short average = (short)((_pulseChannel1.Output + _pulseChannel2.Output) / 3); // + 4 * _triangleChannel.Output) / 8);
+            short pulse = (short)(_pulseChannel1.Output + _pulseChannel2.Output);
+            double pulse_out = pulse == 0 ? 0 : 95.88 / (8128.0 / pulse + 100);
+            short mixedOutput = (short)(pulse_out * short.MaxValue);
+            //short average = (short)((_pulseChannel1.Output + _pulseChannel2.Output) / 3); // + 4 * _triangleChannel.Output) / 8);
             //average += (short)(_triangleChannel.Output * 0.5);
             //short average = _triangleChannel.Output;
-            return average;
+            return mixedOutput;
         }
 
         public short[] ReadAndResetAudio()

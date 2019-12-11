@@ -19,20 +19,11 @@ namespace NESEmulator.APU
                 _enabled = value;
 
                 if (!_enabled)
-                    _length = 0;
+                    Length = 0;
             }
         }
 
-        private ushort _length;
-        public ushort Length
-        {
-            get => _length;
-            set => _length = value;
-            //{
-            //    if (Enabled)
-            //        _length = value;
-            //}
-        }
+        public ushort Length { get; set; }
 
         public event EventHandler CounterElapsed;
 
@@ -53,12 +44,13 @@ namespace NESEmulator.APU
         {
             if (!Halt)
             {
-                this.Length--;
-                if (this.Length == 0)
+                if (Length == 0)
                 {
                     _callback(this, EventArgs.Empty);
                     //this.CounterElapsed?.Invoke(this, EventArgs.Empty);
                 }
+                else
+                    --Length;
             }
         }
 

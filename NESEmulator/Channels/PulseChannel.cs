@@ -81,12 +81,11 @@ namespace NESEmulator.Channels
             _dutyCycleIndex = (--_dutyCycleIndex) & 7;
             if (!isChannelMuted())
             {
-                this.Output = _dutyCycle.TestBit(_dutyCycleIndex) ? VOLUME_LOOKUP[_volumeEnvelope.Volume] : (short)(-VOLUME_LOOKUP[_volumeEnvelope.Volume]);
-                //_dutyCycleIndex = (--_dutyCycleIndex) & 7;
+                Output = _dutyCycle.TestBit(_dutyCycleIndex) ? _volumeEnvelope.Volume : (short)0;// ? VOLUME_LOOKUP[_volumeEnvelope.Volume] : (short)(-VOLUME_LOOKUP[_volumeEnvelope.Volume]);
             }
             else
             {
-                this.Output = 0;
+                Output = 0;
             }
         }
 
@@ -144,7 +143,7 @@ namespace NESEmulator.Channels
                 // This should be sweep enabled
                 _sweepUnit.Enabled = data.TestBit(7);
                 _sweepUnit.Negate = data.TestBit(3);
-                _sweepUnit.DividerPeriod = ((data >> 4) & 7) + 1;
+                _sweepUnit.DividerPeriod = ((data >> 4) & 7);
                 _sweepUnit.ShiftCount = (byte)(data & 7);
                 _sweepUnit.Reload = true;
                 Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [SweepEnabled={_sweepUnit.Enabled}] [DividerPeriod={_sweepUnit.DividerPeriod}] [Negate={_sweepUnit.Negate}] [ShiftCount={_sweepUnit.ShiftCount}]");
@@ -171,8 +170,6 @@ namespace NESEmulator.Channels
         private bool isChannelMuted()
         {
             bool isMuted = (_lengthCounter.Length == 0 ||
-                            //_volumeEnvelope.Volume == 0 ||
-                            //Output == 0 ||
                             _sequencer.TimerReload < 8 ||
                             _sweepUnit.MuteChannel);
 

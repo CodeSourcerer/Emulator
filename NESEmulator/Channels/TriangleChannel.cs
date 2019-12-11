@@ -133,7 +133,7 @@ namespace NESEmulator.Channels
                     _linearControlFlag = data.TestBit(7);
                     _linearCounterReload = (byte)(data & 0x7F);
                     _linearCounter = _linearCounterReload;
-                    Log.Debug($"Triangle channel write: [LinearControlFlag={_linearControlFlag}] [LinearLength={_linearCounterReload}]");
+                    //Log.Debug($"Triangle channel write: [LinearControlFlag={_linearControlFlag}] [LinearLength={_linearCounterReload}]");
                     break;
                 case ADDR_TIMERLOW:
                     _sequencer.TimerReload &= 0xFF00; // Preserve data in high byte, clearing data in low byte
@@ -144,7 +144,7 @@ namespace NESEmulator.Channels
                     _sequencer.TimerReload &= 0x00FF; // Clear data in high byte, preserving data in low byte
                     _sequencer.TimerReload |= (ushort)((data & 0x07) << 8);
                     _linearCounterReloadFlag = true;
-                    Log.Debug($"Triangle channel write: [data={data:X2}] [Timer={_sequencer.TimerReload}]"); // [LengthCounter={_lengthCounter.Length}]");
+                    //Log.Debug($"Triangle channel write: [data={data:X2}] [Timer={_sequencer.TimerReload}]"); // [LengthCounter={_lengthCounter.Length}]");
                     break;
             }
         }

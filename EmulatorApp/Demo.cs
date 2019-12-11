@@ -24,7 +24,7 @@ namespace EmulatorApp
     {
         private const int SCREEN_WIDTH = 360;
         private const int SCREEN_HEIGHT = 240;
-        private const int NUM_AUDIO_BUFFERS = 20;
+        private const int NUM_AUDIO_BUFFERS = 10;
 
         private static ILog Log = LogManager.GetLogger(typeof(Demo));
 
@@ -322,13 +322,16 @@ namespace EmulatorApp
                 if (_availableBuffers.Count > 0)
                 {
                     int buffer = _availableBuffers.Pop();
-                    AL.BufferData(buffer, ALFormat.Mono16, soundData, soundData.Length, 44100);
+                    AL.BufferData(buffer, ALFormat.Mono16, soundData, soundData.Length * 2, 44100);
                     AL.SourceQueueBuffer(sources[0], buffer);
                     if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
                     {
+                        Log.Warn("Starving audio buffer!");
                         AL.SourcePlay(sources[0]);
                     }
                 }
+                else
+                    Log.Warn("Full audio buffers!");
             }
         }
 
