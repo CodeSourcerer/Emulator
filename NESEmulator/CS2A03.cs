@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using log4net;
@@ -16,7 +17,7 @@ namespace NESEmulator
         public const int SOUND_BUFFER_SIZE_MS   = 20;
 
         private static ILog Log = LogManager.GetLogger(typeof(CS2A03));
-        private const float CLOCK_NTSC_HZ       = 1789773.0f;
+        private const float  CLOCK_NTSC_HZ      = 1789773.0f;
         private const double CLOCK_NTSC_APU     = 894886.5;
         private const int   SAMPLE_FREQUENCY    = 20;
 
@@ -46,7 +47,6 @@ namespace NESEmulator
         private DMCChannel      _dmcChannel;
 
         private const int AUDIO_BUFFER_SIZE     = (int)(44100 * (SOUND_BUFFER_SIZE_MS / 1000.0));
-        //private const int AUDIO_BUFFER_PADDING  = AUDIO_BUFFER_SIZE;
         private bool    _audioReadyToPlay;
         private int     _audioBufferPtr;
         private short[] _audioBuffer;
@@ -66,7 +66,7 @@ namespace NESEmulator
 
         public void ConnectBus(Bus bus)
         {
-            this._bus = bus;
+            _bus = bus;
         }
 
         public override void Clock(ulong clockCounter)
@@ -89,8 +89,6 @@ namespace NESEmulator
                     }
                     else
                     {
-                        // Once buffer is full, duplicate audio 2x to fill remaining buffer
-                        //Array.Copy(_audioBuffer, _audioBufferPtr - AUDIO_BUFFER_PADDING, _audioBuffer, _audioBufferPtr, AUDIO_BUFFER_PADDING);
                         _audioReadyToPlay = true;
                     }
                 }
@@ -187,10 +185,10 @@ namespace NESEmulator
             else if (addr == ADDR_STATUS)
             {
                 dataWritten = true;
-                //Log.Debug($"Status register written [data={data:X2}]");
                 _pulseChannel1.Enabled = data.TestBit(0);
                 _pulseChannel2.Enabled = data.TestBit(1);
                 _triangleChannel.Enabled = data.TestBit(2);
+                _dmcChannel.Enabled = data.TestBit(3);
             }
             else if (addr == ADDR_FRAME_COUNTER)
             {
@@ -235,21 +233,20 @@ namespace NESEmulator
         /// </summary>
         public void IRQ()
         {
-            this.RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.IRQ));
+            RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.IRQ));
         }
 
+        [SuppressMessage("Potential Code Quality Issues",
+                         "RECS0018:Comparison of floating point numbers with equality operator",
+                         Justification = "Condition should only be met when output is exactly 0.0 to avoid divide by 0 errors")]
         public short GetMixedAudioSample()
         {
-            short average = (short)((_pulseChannel1.Output + _pulseChannel2.Output + 5 * _triangleChannel.Output) / 7);
             short pulse = (short)(_pulseChannel1.Output + _pulseChannel2.Output);
             double pulse_out = pulse == 0 ? 0 : 95.88 / (8128.0 / pulse + 100);
             double tnd = _triangleChannel.Output / 8227.0 + (_noiseChannel.Output / 12241.0) + 0;
             double tnd_out = tnd == 0 ? 0 : 159.79 / (1 / tnd + 100);
 
             short mixedOutput = (short)((pulse_out + tnd_out) * short.MaxValue);
-            //short average = (short)((_pulseChannel1.Output + _pulseChannel2.Output) / 3); // + 4 * _triangleChannel.Output) / 8);
-            //average += (short)(_triangleChannel.Output * 0.5);
-            //short average = _triangleChannel.Output;
             return mixedOutput;
         }
 
