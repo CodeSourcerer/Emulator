@@ -23,20 +23,7 @@ namespace NESEmulator.APU
             get => _divider.CounterReload;
             set => _divider.CounterReload = value;
         }
-<<<<<<< HEAD
-        private byte _shiftCount;
-        public byte ShiftCount
-        {
-            get => _shiftCount;
-            set
-            {
-                _shiftCount = value;
-                MuteChannel = shouldMuteChannel();
-            }
-        }
-=======
         public byte ShiftCount { get; set; }
->>>>>>> ce03e04b96b58e1b8417a649d2d96dd97627ed52
         public ushort ChannelPeriod { get; set; }
 
         //public event EventHandler PeriodUpdate;
@@ -58,32 +45,11 @@ namespace NESEmulator.APU
         {
             calcTargetPeriod();
 
-<<<<<<< HEAD
-            this._divider.Clock();
-
-            if (this.Reload)
-            {
-                this._divider.Reset();
-                this.Reload = false;
-            }
-=======
             _divider.Clock();
->>>>>>> ce03e04b96b58e1b8417a649d2d96dd97627ed52
         }
 
         private void divider_ReachedZero(object sender, EventArgs e)
         {
-<<<<<<< HEAD
-            if (!this.MuteChannel && Enabled && _shiftCount > 0)
-            {
-                this.ChannelPeriod = (ushort)this._targetPeriod;
-                this.MuteChannel = shouldMuteChannel();
-                //this.PeriodUpdate?.Invoke(this, EventArgs.Empty);
-                _periodUpdate(this, EventArgs.Empty);
-            }
-            else
-                Log.Debug("Sweep unit is muting channel");
-=======
             if (!MuteChannel && Enabled)
             {
                 ChannelPeriod = (ushort)_targetPeriod;
@@ -95,7 +61,6 @@ namespace NESEmulator.APU
                 Reload = false;
                 _divider.Reset();
             }
->>>>>>> ce03e04b96b58e1b8417a649d2d96dd97627ed52
         }
 
         private void calcTargetPeriod()
@@ -114,10 +79,5 @@ namespace NESEmulator.APU
             if (_targetPeriod > MAX_TARGET_PERIOD)
                 MuteChannel = true;
         }
-<<<<<<< HEAD
-
-        private bool shouldMuteChannel() => _targetPeriod > MAX_TARGET_PERIOD || ChannelPeriod < 8;
-=======
->>>>>>> ce03e04b96b58e1b8417a649d2d96dd97627ed52
     }
 }
