@@ -18,11 +18,10 @@ namespace NESEmulator.APU
 
         public void Clock()
         {
-            if (this.Timer == 0)
+            if (Timer == 0)
             {
-                this.Timer = TimerReload;
-                //_timerCallback();
-                this.OnTimerElapsed?.Invoke(this, EventArgs.Empty);
+                Timer = TimerReload;
+                OnTimerElapsed?.Invoke(this, EventArgs.Empty);
             }
             else
                 Timer--;

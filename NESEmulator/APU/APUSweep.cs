@@ -24,19 +24,19 @@ namespace NESEmulator.APU
             set => _divider.CounterReload = value;
         }
         public byte ShiftCount { get; set; }
-        public ushort ChannelPeriod { get; set; }
+        //public ushort ChannelPeriod { get; set; }
 
         //public event EventHandler PeriodUpdate;
-        private EventHandler _periodUpdate;
 
         private APUDivider _divider;
+        private APUSequencer _pulseSequencer;
         private int _pulseChannelNumber;
         private int _targetPeriod;
 
-        public APUSweep(int pulseChannelNumber, EventHandler callback)
+        public APUSweep(int pulseChannelNumber, APUSequencer pulseSequencer)
         {
             _pulseChannelNumber = pulseChannelNumber;
-            _periodUpdate = callback;
+            _pulseSequencer = pulseSequencer;
             _divider = new APUDivider(divider_ReachedZero);
             //this._divider.DividerReachedZero += divider_ReachedZero;
         }
@@ -52,8 +52,7 @@ namespace NESEmulator.APU
         {
             if (!MuteChannel && Enabled)
             {
-                ChannelPeriod = (ushort)_targetPeriod;
-                _periodUpdate(this, EventArgs.Empty);
+                _pulseSequencer.TimerReload = (ushort)_targetPeriod;
             }
 
             if (Reload)
@@ -65,7 +64,7 @@ namespace NESEmulator.APU
 
         private void calcTargetPeriod()
         {
-            int shiftAmount = ChannelPeriod >> ShiftCount;
+            int shiftAmount = _pulseSequencer.TimerReload >> ShiftCount;
 
             if (Negate)
             {
@@ -75,7 +74,7 @@ namespace NESEmulator.APU
                     shiftAmount = -shiftAmount; // take 2's compliment
             }
 
-            _targetPeriod = ChannelPeriod + shiftAmount;
+            _targetPeriod = _pulseSequencer.TimerReload + shiftAmount;
             if (_targetPeriod > MAX_TARGET_PERIOD)
                 MuteChannel = true;
         }
