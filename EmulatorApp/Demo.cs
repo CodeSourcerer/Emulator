@@ -47,8 +47,8 @@ namespace EmulatorApp
 
         public Demo(string appName)
         {
-			initAudioStuff();
             _availableBuffers = new Stack<int>(NUM_AUDIO_BUFFERS);
+            initAudioStuff();
             window = new GLWindow(SCREEN_WIDTH, SCREEN_HEIGHT, 4, 4, appName);
             window.KeyDown += Window_KeyDown;
             pge = new PixelGameEngine(appName);
@@ -322,7 +322,7 @@ namespace EmulatorApp
                 if (_availableBuffers.Count > 0)
                 {
                     int buffer = _availableBuffers.Pop();
-                    AL.BufferData(buffer, ALFormat.Mono16, soundData, soundData.Length, 44100);
+                    AL.BufferData(buffer, ALFormat.Mono16, soundData, soundData.Length * 2, 44100);
                     AL.SourceQueueBuffer(sources[0], buffer);
                     if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
                     {
