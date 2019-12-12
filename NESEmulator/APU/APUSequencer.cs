@@ -6,25 +6,9 @@ namespace NESEmulator.APU
 {
     public class APUSequencer
     {
-        private ushort _timerReload;
-        public ushort TimerReload
-        {
-            get => _timerReload;
-            set
-            {
-                _timerReload = value;
-            }
-        }
+        public ushort TimerReload { get; set; }
 
-        private ushort _timer;
-        public ushort Timer
-        {
-            get => _timer;
-            set
-            {
-                _timer = value;
-            }
-        }
+        public ushort Timer { get; set; }
 
         public event EventHandler OnTimerElapsed;
 
@@ -34,14 +18,14 @@ namespace NESEmulator.APU
 
         public void Clock()
         {
-            this.Timer--;
-
-            if (this.Timer == 0xFFFF)
+            if (this.Timer == 0)
             {
+                this.Timer = TimerReload;
                 //_timerCallback();
                 this.OnTimerElapsed?.Invoke(this, EventArgs.Empty);
-                this.Timer = (ushort)(this.TimerReload + 1);
             }
+            else
+                Timer--;
         }
     }
 }

@@ -17,12 +17,13 @@ namespace NESEmulator.APU
         public bool Enabled { get; set; }
         public bool Reload { get; set; }
         public bool Negate { get; set; }
-        public bool MuteChannel { get; private set; }
+        public bool MuteChannel { get; set; }
         public int DividerPeriod
         {
             get => _divider.CounterReload;
             set => _divider.CounterReload = value;
         }
+<<<<<<< HEAD
         private byte _shiftCount;
         public byte ShiftCount
         {
@@ -33,6 +34,9 @@ namespace NESEmulator.APU
                 MuteChannel = shouldMuteChannel();
             }
         }
+=======
+        public byte ShiftCount { get; set; }
+>>>>>>> ce03e04b96b58e1b8417a649d2d96dd97627ed52
         public ushort ChannelPeriod { get; set; }
 
         //public event EventHandler PeriodUpdate;
@@ -46,7 +50,7 @@ namespace NESEmulator.APU
         {
             _pulseChannelNumber = pulseChannelNumber;
             _periodUpdate = callback;
-            _divider = new APUDivider(APUDivider.DividerType.COUNTDOWN, divider_ReachedZero);
+            _divider = new APUDivider(divider_ReachedZero);
             //this._divider.DividerReachedZero += divider_ReachedZero;
         }
 
@@ -54,6 +58,7 @@ namespace NESEmulator.APU
         {
             calcTargetPeriod();
 
+<<<<<<< HEAD
             this._divider.Clock();
 
             if (this.Reload)
@@ -61,10 +66,14 @@ namespace NESEmulator.APU
                 this._divider.Reset();
                 this.Reload = false;
             }
+=======
+            _divider.Clock();
+>>>>>>> ce03e04b96b58e1b8417a649d2d96dd97627ed52
         }
 
         private void divider_ReachedZero(object sender, EventArgs e)
         {
+<<<<<<< HEAD
             if (!this.MuteChannel && Enabled && _shiftCount > 0)
             {
                 this.ChannelPeriod = (ushort)this._targetPeriod;
@@ -74,24 +83,41 @@ namespace NESEmulator.APU
             }
             else
                 Log.Debug("Sweep unit is muting channel");
+=======
+            if (!MuteChannel && Enabled)
+            {
+                ChannelPeriod = (ushort)_targetPeriod;
+                _periodUpdate(this, EventArgs.Empty);
+            }
+
+            if (Reload)
+            {
+                Reload = false;
+                _divider.Reset();
+            }
+>>>>>>> ce03e04b96b58e1b8417a649d2d96dd97627ed52
         }
 
         private void calcTargetPeriod()
         {
-            int shiftAmount = this.ChannelPeriod >> this.ShiftCount;
+            int shiftAmount = ChannelPeriod >> ShiftCount;
 
-            if (this.Negate)
+            if (Negate)
             {
-                if (this._pulseChannelNumber == 1)
+                if (_pulseChannelNumber == 1)
                     shiftAmount = ~shiftAmount; // take 1's compliment
                 else
                     shiftAmount = -shiftAmount; // take 2's compliment
             }
 
-            this._targetPeriod = this.ChannelPeriod + shiftAmount;
-            this.MuteChannel = shouldMuteChannel();
+            _targetPeriod = ChannelPeriod + shiftAmount;
+            if (_targetPeriod > MAX_TARGET_PERIOD)
+                MuteChannel = true;
         }
+<<<<<<< HEAD
 
         private bool shouldMuteChannel() => _targetPeriod > MAX_TARGET_PERIOD || ChannelPeriod < 8;
+=======
+>>>>>>> ce03e04b96b58e1b8417a649d2d96dd97627ed52
     }
 }
