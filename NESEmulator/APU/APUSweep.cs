@@ -34,7 +34,7 @@ namespace NESEmulator.APU
         {
             _pulseChannelNumber = pulseChannelNumber;
             _periodUpdate = callback;
-            _divider = new APUDivider(APUDivider.DividerType.COUNTDOWN, divider_ReachedZero);
+            _divider = new APUDivider(divider_ReachedZero);
             //this._divider.DividerReachedZero += divider_ReachedZero;
         }
 

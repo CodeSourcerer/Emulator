@@ -11,7 +11,6 @@ namespace NESEmulator.Channels
         public int ChannelNum { get; private set; }
 
         private static ILog Log = LogManager.GetLogger(typeof(PulseChannel));
-        private const double CLOCK_NTSC_APU = 894886.5;
 
         private APULengthCounter _lengthCounter;
         private APUSequencer _sequencer;
@@ -28,8 +27,6 @@ namespace NESEmulator.Channels
 
         //private static readonly short[] VOLUME_LOOKUP = new short[] {     0,  2184,  4369,  6553,  8738, 10922, 13107, 15291, 
         //                                                              17476, 19660, 21845, 24029, 26214, 28398, 30583, 32000 };
-        private static readonly short[] VOLUME_LOOKUP = new short[] {     0,  2184,  4369,  6553,  8738, 10922, 13107, 15291,
-                                                                      17476, 19660, 21845, 24029, 26214, 28398, 30000, 31000 };
         private byte _dutyCycle;
         private int _dutyCycleIndex;
         public short Output { get; private set; }
@@ -89,8 +86,6 @@ namespace NESEmulator.Channels
             }
         }
 
-        //public bool IsBufferFull() => !(_bufferWritePtr < CHANNEL_BUFFER_SIZE);
-
         public void Clock(ulong clockCycles)
         {
             if (clockCycles % 6 == 0)
@@ -146,6 +141,7 @@ namespace NESEmulator.Channels
                 _sweepUnit.DividerPeriod = ((data >> 4) & 7);
                 _sweepUnit.ShiftCount = (byte)(data & 7);
                 _sweepUnit.Reload = true;
+                _sweepUnit.ChannelPeriod = _sequencer.TimerReload; // I don't know if I should have this...
                 Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [SweepEnabled={_sweepUnit.Enabled}] [DividerPeriod={_sweepUnit.DividerPeriod}] [Negate={_sweepUnit.Negate}] [ShiftCount={_sweepUnit.ShiftCount}]");
             }
             // Pulse channel 1 & 2 timer low bits

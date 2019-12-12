@@ -28,7 +28,7 @@ namespace NESEmulator.APU
 
         public APUVolumeEnvelope()
         {
-            _divider = new APUDivider(APUDivider.DividerType.COUNTDOWN, OnDividerReachedZero);
+            _divider = new APUDivider(OnDividerReachedZero);
             //_divider.DividerReachedZero += OnDividerReachedZero;
         }
 

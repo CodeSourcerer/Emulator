@@ -4,10 +4,6 @@ namespace NESEmulator.APU
 {
     public class APUDivider
     {
-        public enum DividerType { COUNTDOWN, LFSR }
-
-        public DividerType TypeOfDivider { get; set; }
-
         private int _counterReload;
         public int CounterReload
         {
@@ -24,9 +20,8 @@ namespace NESEmulator.APU
         //public event EventHandler DividerReachedZero;
         private EventHandler _dividerReachedZero;
 
-        public APUDivider(DividerType dividerType, EventHandler callback)
+        public APUDivider(EventHandler callback)
         {
-            TypeOfDivider = dividerType;
             _dividerReachedZero = callback;
         }
 

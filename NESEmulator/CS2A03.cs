@@ -17,6 +17,7 @@ namespace NESEmulator
 
         private static ILog Log = LogManager.GetLogger(typeof(CS2A03));
         private const float CLOCK_NTSC_HZ       = 1789773.0f;
+        private const double CLOCK_NTSC_APU     = 894886.5;
         private const int   SAMPLE_FREQUENCY    = 20;
 
         private const ushort ADDR_PULSE1_LO     = 0x4000;
@@ -41,6 +42,7 @@ namespace NESEmulator
         private PulseChannel    _pulseChannel1;
         private PulseChannel    _pulseChannel2;
         private TriangleChannel _triangleChannel;
+        private NoiseChannel    _noiseChannel;
         private DMCChannel      _dmcChannel;
 
         private const int AUDIO_BUFFER_SIZE     = (int)(44100 * (SOUND_BUFFER_SIZE_MS / 1000.0));
@@ -55,8 +57,9 @@ namespace NESEmulator
             _pulseChannel1   = new PulseChannel(1);
             _pulseChannel2   = new PulseChannel(2);
             _triangleChannel = new TriangleChannel();
+            _noiseChannel    = new NoiseChannel();
             _dmcChannel      = new DMCChannel(this);
-            _audioChannels   = new Channel[] { _pulseChannel1, _pulseChannel2, _triangleChannel, _dmcChannel };
+            _audioChannels   = new Channel[] { _pulseChannel1, _pulseChannel2, _triangleChannel, _noiseChannel, _dmcChannel };
 
             _frameCounter    = new APUFrameCounter(_audioChannels, this);
         }
@@ -172,6 +175,7 @@ namespace NESEmulator
             else if (addr >= ADDR_NOISE_LO && addr <= ADDR_NOISE_HI)
             {
                 dataWritten = true;
+                _noiseChannel.Write(addr, data);
                 //Log.Debug($"Noise channel address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr >= ADDR_DMC_LO && addr <= ADDR_DMC_HI)
@@ -238,7 +242,7 @@ namespace NESEmulator
         {
             short pulse = (short)(_pulseChannel1.Output + _pulseChannel2.Output);
             double pulse_out = pulse == 0 ? 0 : 95.88 / (8128.0 / pulse + 100);
-            double tnd = _triangleChannel.Output / 8227.0 + (0 / 12241.0) + 0;
+            double tnd = _triangleChannel.Output / 8227.0 + (_noiseChannel.Output / 12241.0) + 0;
             double tnd_out = tnd == 0 ? 0 : 159.79 / (1 / tnd + 100);
 
             short mixedOutput = (short)((pulse_out + tnd_out) * short.MaxValue);
