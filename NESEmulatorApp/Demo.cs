@@ -19,7 +19,9 @@ namespace NESEmulatorApp
     {
         private const int SCREEN_WIDTH = 360;
         private const int SCREEN_HEIGHT = 240;
-        private const int NUM_AUDIO_BUFFERS = 20;
+        private const int NUM_AUDIO_BUFFERS = 10;
+
+        private static ILog Log = LogManager.GetLogger(typeof(Demo));
 
         private PixelGameEngine pge;
         private GLWindow window;
@@ -57,7 +59,8 @@ namespace NESEmulatorApp
             XmlConfigurator.Configure(logRepository, new FileInfo("log4net.config"));
 
             Demo demo = new Demo("NES Emulator");
-            Cartridge cartridge = demo.LoadCartridge("tests/donkey kong.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests/donkey kong.nes");
+            Cartridge cartridge = demo.LoadCartridge("tests/smb_2.nes");
             demo.Start(cartridge);
         }
 
@@ -214,7 +217,7 @@ namespace NESEmulatorApp
                         _fps = _frameCount;
                         _frameCount = 0;
                     }
-                    //Console.WriteLine("PPU frame time: {0} ms", (DateTime.Now - _frameTime).TotalMilliseconds);
+                    nesController.ControllerState[(int)NESController.Controller.Controller1] = 0;
                 }
             }
 
@@ -269,12 +272,17 @@ namespace NESEmulatorApp
                 if (_availableBuffers.Count > 0)
                 {
                     int buffer = _availableBuffers.Dequeue();
-                    AL.BufferData(buffer, ALFormat.Mono16, soundData, soundData.Length, 44100);
+                    AL.BufferData(buffer, ALFormat.Mono16, soundData, soundData.Length * 2, 44100);
                     AL.SourceQueueBuffer(sources[0], buffer);
+                    if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
+                    {
+                        Log.Warn("Starving audio buffer!");
+                        AL.SourcePlay(sources[0]);
+                    }
                 }
-                if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
+                else
                 {
-                    AL.SourcePlay(sources[0]);
+                    Log.Warn("Full audio buffers!");
                 }
             }
         }
