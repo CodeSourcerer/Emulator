@@ -11,79 +11,30 @@ namespace NESEmulator.Channels
         private const ushort ADDR_SAMPLEADDR    = 0x4012;
         private const ushort ADDR_SAMPLELENGTH  = 0x4013;
 
+        private static readonly ushort[] _rateTableNTSC = 
+            { 428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54 };
+
         public short Output { get; private set; }
         public bool Enabled { get; set; }
 
         public byte FlagsAndRate { get; set; }
 
-        public bool IRQEnable
-        {
-            get
-            {
-                return FlagsAndRate.TestBit(7);
-            }
-            set
-            {
-                FlagsAndRate.SetBit(7, value);
-            }
-        }
+        public bool IRQEnable { get; set; }
 
-        public bool Loop
-        {
-            get
-            {
-                return FlagsAndRate.TestBit(6);
-            }
-            set
-            {
-                FlagsAndRate.SetBit(6, value);
-            }
-        }
+        public bool Loop { get; set; }
 
-        private Dictionary<byte, ushort> _rateTableNTSC;
-        public byte RateIndex
-        {
-            get
-            {
-                return (byte)(FlagsAndRate & 0x0F);
-            }
-            set
-            {
-                FlagsAndRate = (byte)((FlagsAndRate & 0xF0) | value);
-            }
-        }
+        public byte RateIndex { get; set; }
 
         /// <summary>
         /// Output level
         /// </summary>
         public byte DirectLoad { get; set; }
 
-        private byte _sampleAddress;
-        public ushort SampleAddress
-        {
-            get
-            {
-                return (ushort)(0xC000 | (_sampleAddress << 6));
-            }
-            set
-            {
-                _sampleAddress = (byte)value;
-            }
-        }
+        public ushort SampleAddress { get; set; }
 
-        private byte _sampleLength;
-        public ushort SampleLength
-        {
-            get
-            {
-                return (ushort)((_sampleLength << 4) + 1);
-            }
-            set
-            {
-                _sampleLength = (byte)value;
-            }
-        }
+        public ushort SampleLength { get; set; }
 
+        private ushort _addressPtr;
         private CS2A03 _apu;
         private byte _rightShiftReg;
         private byte _bitsRemaining;
@@ -91,8 +42,8 @@ namespace NESEmulator.Channels
 
         public DMCChannel(CS2A03 apu)
         {
-            this._apu = apu;
-            generateRateTableNTSC();
+            _apu = apu;
+            Output = 0;
         }
 
         public void ClockHalfFrame()
@@ -128,53 +79,28 @@ namespace NESEmulator.Channels
             switch (addr)
             {
                 case ADDR_FLAGSANDRATE:
-                    this.FlagsAndRate = data;
+                    IRQEnable    = data.TestBit(7);
+                    Loop         = data.TestBit(6);
+                    RateIndex    = (byte)(data & 0x0F);
+                    FlagsAndRate = data;
                     //Console.WriteLine("DMC Flags and Rate: {0:X2}", data);
                     break;
 
                 case ADDR_DIRECTLOAD:
-                    this.DirectLoad = data;
+                    DirectLoad = (byte)(data & 0x7F);
                     //Console.WriteLine("DMC Direct Load: {0:X2}", data);
                     break;
 
                 case ADDR_SAMPLEADDR:
-                    this.SampleAddress = data;
+                    SampleAddress = (ushort)(0xC000 | (data << 6));
                     //Console.WriteLine("DMC Sample Address set: {0:X2}", data);
                     break;
 
                 case ADDR_SAMPLELENGTH:
-                    this.SampleLength = data;
+                    SampleLength = (ushort)((data << 4) + 1);
                     //Console.WriteLine("DMC Sample Length set: {0:X2}", data);
                     break;
             }
-        }
-
-        private void generateRateTableNTSC()
-        {
-            _rateTableNTSC = new Dictionary<byte, ushort>(16)
-            {
-                { 0x00, 428 },
-                { 0x01, 380 },
-                { 0x02, 340 },
-                { 0x03, 320 },
-                { 0x04, 286 },
-                { 0x05, 254 },
-                { 0x06, 226 },
-                { 0x07, 214 },
-                { 0x08, 190 },
-                { 0x09, 160 },
-                { 0x0A, 142 },
-                { 0x0B, 128 },
-                { 0x0C, 106 },
-                { 0x0D, 84  },
-                { 0x0E, 72  },
-                { 0x0F, 54  }
-            };
-        }
-
-        public short[] EmptyBuffer()
-        {
-            throw new NotImplementedException();
         }
     }
 }

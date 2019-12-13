@@ -72,11 +72,14 @@ namespace NESEmulator
         #endregion // Well-Known Addresses
 
         #region DMA Attributes
-        
+
+        /// <summary>
+        /// Indicates if OAMDMA transfer is in progress
+        /// </summary>
+        public bool DMATransfer { get; private set; }
         private byte _dmaPage;
         private byte _dmaAddr;
         private byte _dmaData;
-        private bool _dmaTransfer;
         private bool _dmaSync = false;
         
         #endregion // DMA Attributes
@@ -133,7 +136,7 @@ namespace NESEmulator
             _dmaData = 0;
             _dmaPage = 0;
             _dmaSync = false;
-            _dmaTransfer = false;
+            DMATransfer = false;
 
             // Set PC
             addr_abs = ADDR_PC;
@@ -247,7 +250,7 @@ namespace NESEmulator
             if (clockCounter % 3 != 0)
                 return;
 
-            if (_dmaTransfer)
+            if (DMATransfer)
             {
                 doDMATransfer(clockCounter);
             }
@@ -480,7 +483,7 @@ namespace NESEmulator
                     // Implement that behavior later.
                     if (_dmaAddr == 0x00)
                     {
-                        _dmaTransfer = false;
+                        DMATransfer = false;
                         _dmaSync = false;
                     }
                 }
@@ -560,7 +563,7 @@ namespace NESEmulator
             {
                 _dmaPage = data;
                 _dmaAddr = 0x00;
-                _dmaTransfer = true;
+                DMATransfer = true;
             }
             else
                 bus.Write(addr, data);

@@ -69,7 +69,6 @@ namespace NESEmulator.Channels
                 {
                     Output = _volumeEnvelope.Volume;
                 }
-
             }
         }
 

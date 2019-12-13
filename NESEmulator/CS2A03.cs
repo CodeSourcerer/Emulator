@@ -236,6 +236,8 @@ namespace NESEmulator
             RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.IRQ));
         }
 
+        public bool DMAInProgress() => ((CS6502)_bus?.GetDevice(BusDeviceType.CPU)).DMATransfer;
+
         [SuppressMessage("Potential Code Quality Issues",
                          "RECS0018:Comparison of floating point numbers with equality operator",
                          Justification = "Condition should only be met when output is exactly 0.0 to avoid divide by 0 errors")]
