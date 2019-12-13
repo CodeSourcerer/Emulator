@@ -141,9 +141,18 @@ namespace NESEmulator
             cartridgeHeader.mapper1         = cartStream.ReadByte();
             cartridgeHeader.mapper2         = cartStream.ReadByte();
             cartridgeHeader.prg_ram_size    = cartStream.ReadByte();
+            cartridgeHeader.chr_ram_size    = cartStream.ReadByte();
             cartridgeHeader.tv_system1      = cartStream.ReadByte();
-            cartridgeHeader.tv_system2      = cartStream.ReadByte();
             cartridgeHeader.unused          = cartStream.ReadChars(5);
+
+            switch (cartridgeHeader.tv_system1)
+            {
+                case 0:
+                case 2:
+                    break;
+                default:
+                    throw new NotSupportedException("Non-NTSC ROM not supported");
+            }
 
             // If a "trainer" exists we need to read past it
             // before we get to the good stuff
