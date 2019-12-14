@@ -117,6 +117,11 @@ namespace NESEmulator
         public FLAGS6502 status { get; set; }
         #endregion // Register Properties
 
+        public void Stall(byte cyclesToStall)
+        {
+            cycles = (byte)(cycles + cyclesToStall);
+        }
+
         /// <summary>
         /// Reset CPU to known state
         /// </summary>
@@ -479,7 +484,7 @@ namespace NESEmulator
                     ((Bus)bus).GetPPU().OAM[_dmaAddr >> 2][_dmaAddr & 0x03] = _dmaData;
                     _dmaAddr++;
 
-                    // Apparently, technically _dmaAddr can start anywhere and it should wrap back to starting point
+                    // TODO: Apparently, technically _dmaAddr can start anywhere and it should wrap back to starting point
                     // Implement that behavior later.
                     if (_dmaAddr == 0x00)
                     {

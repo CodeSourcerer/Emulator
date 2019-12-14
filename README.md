@@ -2,6 +2,8 @@
 I use Visual Studio 2019 Community Edition while developing this project, so if you have it available you can simply open the solution file - otherwise
 you will have to add in the appropriate project files into your own solution.
 
+For now, you will need to also include [csPixelGameEngine](../csPixelGameEngine/tree/master/csPixelGameEngine) in your solution.
+
 ### Windows
 Use the EmulatorApp for the main/default project.
 

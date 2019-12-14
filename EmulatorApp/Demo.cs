@@ -71,8 +71,9 @@ namespace EmulatorApp
             Thread.CurrentThread.Name = "main";
             Log.Info("Demo app started");
             Demo demo = new Demo("NES Emulator");
-            Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes"); 
+            //Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes"); 
             //Cartridge cartridge = demo.LoadCartridge("tests\\donkey kong.nes");
+            Cartridge cartridge = demo.LoadCartridge("tests\\bee_52.nes");
             demo.Start(cartridge);
         }
 
@@ -86,6 +87,7 @@ namespace EmulatorApp
             busDevices = new BusDevice[] { cpu, ram, ppu, nesController, apu };
             nesBus = new Bus(busDevices);
             cpu.ConnectBus(nesBus);
+            apu.ConnectBus(nesBus);
 
             if (!cartridge.ImageValid)
                 throw new ApplicationException("Invalid ROM image");

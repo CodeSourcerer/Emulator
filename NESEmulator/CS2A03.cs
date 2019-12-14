@@ -245,7 +245,7 @@ namespace NESEmulator
         {
             short pulse = (short)(_pulseChannel1.Output + _pulseChannel2.Output);
             double pulse_out = pulse == 0 ? 0 : 95.88 / (8128.0 / pulse + 100);
-            double tnd = _triangleChannel.Output / 8227.0 + (_noiseChannel.Output / 12241.0) + 0;
+            double tnd = _triangleChannel.Output / 8227.0 + (_noiseChannel.Output / 12241.0) + (_dmcChannel.Output / 22638);
             double tnd_out = tnd == 0 ? 0 : 159.79 / (1 / tnd + 100);
 
             short mixedOutput = (short)((pulse_out + tnd_out) * short.MaxValue);
@@ -260,5 +260,10 @@ namespace NESEmulator
         }
 
         public bool IsAudioBufferReadyToPlay() => _audioReadyToPlay;
+
+        public void StallCPU(byte cyclesToStall)
+        {
+            ((CS6502)_bus?.GetDevice(BusDeviceType.CPU)).Stall(cyclesToStall);
+        }
     }
 }

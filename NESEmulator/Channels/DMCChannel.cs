@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using log4net;
+using NESEmulator.APU;
 using NESEmulator.Util;
 
 namespace NESEmulator.Channels
@@ -11,6 +13,7 @@ namespace NESEmulator.Channels
         private const ushort ADDR_SAMPLEADDR    = 0x4012;
         private const ushort ADDR_SAMPLELENGTH  = 0x4013;
 
+        private static readonly ILog Log = LogManager.GetLogger(typeof(DMCChannel));
         private static readonly ushort[] _rateTableNTSC = 
             { 428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54 };
 
@@ -25,25 +28,61 @@ namespace NESEmulator.Channels
 
         public byte RateIndex { get; set; }
 
-        /// <summary>
-        /// Output level
-        /// </summary>
-        public byte DirectLoad { get; set; }
+//        public byte DirectLoad { get; set; }
 
         public ushort SampleAddress { get; set; }
 
         public ushort SampleLength { get; set; }
 
-        private ushort _addressPtr;
+        private APUDivider _dmcTimer;
+        private ushort _samplePtr;
+        private ushort _bytesRemaining;
         private CS2A03 _apu;
-        private byte _rightShiftReg;
+        private byte _sampleBuffer;
+        private byte _shifter;
         private byte _bitsRemaining;
         private bool _silence;  // I keel you!
+        private bool _interruptFlag;
 
         public DMCChannel(CS2A03 apu)
         {
             _apu = apu;
+            _dmcTimer = new APUDivider(timer_Elapsed);
+            _sampleBuffer = 0;
             Output = 0;
+        }
+
+        private void timer_Elapsed(object sender, EventArgs e)
+        {
+            if (_bitsRemaining == 0)
+            {
+                // New output cycle
+                _bitsRemaining = 8;
+
+                if (_sampleBuffer == 0)
+                {
+                    _silence = true;
+                }
+                else
+                {
+                    _silence = false;
+                    _shifter = _sampleBuffer;
+                    _sampleBuffer = 0;
+                    getNextSample();
+                }
+            }
+
+            if (!_silence)
+            {
+                bool add = (_shifter & 0x01) == 1;
+
+                if (add && Output < 126)
+                    Output += 2;
+                else if (!add && Output > 2)
+                    Output -= 2;
+            }
+
+            --_bitsRemaining;
         }
 
         public void ClockHalfFrame()
@@ -62,9 +101,9 @@ namespace NESEmulator.Channels
         /// <param name="clockCycles"></param>
         public void Clock(ulong clockCycles)
         {
-            if (_bitsRemaining == 0)
+            if (clockCycles % 3 == 0)
             {
-                _bitsRemaining = 8;
+                _dmcTimer.Clock();
             }
         }
 
@@ -82,25 +121,50 @@ namespace NESEmulator.Channels
                     IRQEnable    = data.TestBit(7);
                     Loop         = data.TestBit(6);
                     RateIndex    = (byte)(data & 0x0F);
-                    FlagsAndRate = data;
-                    //Console.WriteLine("DMC Flags and Rate: {0:X2}", data);
+                    if (!IRQEnable)
+                        _interruptFlag = false;
+                    Log.Debug($"DMC Channel written: [IRQEnable={IRQEnable}] [Loop={Loop}] [RateIndex={RateIndex:X2}]");
                     break;
 
                 case ADDR_DIRECTLOAD:
-                    DirectLoad = (byte)(data & 0x7F);
-                    //Console.WriteLine("DMC Direct Load: {0:X2}", data);
+                    Output = (byte)(data & 0x7F);
+                    Log.Debug($"DMC Channel written: [DirectLoad={Output}]");
                     break;
 
                 case ADDR_SAMPLEADDR:
                     SampleAddress = (ushort)(0xC000 | (data << 6));
-                    //Console.WriteLine("DMC Sample Address set: {0:X2}", data);
+                    Log.Debug($"DMC Channel written: [SampleAddress={SampleAddress:X2}]");
                     break;
 
                 case ADDR_SAMPLELENGTH:
                     SampleLength = (ushort)((data << 4) + 1);
-                    //Console.WriteLine("DMC Sample Length set: {0:X2}", data);
+                    Log.Debug($"DMC Chennel written: [SampleLength={SampleLength:X2}]");
                     break;
             }
+        }
+
+        private void getNextSample()
+        {
+            if (_bytesRemaining > 0)
+            {
+                _apu.StallCPU(4);
+                _sampleBuffer = _apu.ReadBus(_samplePtr);
+                if (++_samplePtr > 0xFFFF)
+                    _samplePtr = 0x8000;
+                if (--_bytesRemaining == 0)
+                {
+                    if (Loop)
+                        restartSample();
+                    else if (IRQEnable)
+                        _interruptFlag = true;
+                }
+            }
+        }
+
+        private void restartSample()
+        {
+            _samplePtr = SampleAddress;
+            _bytesRemaining = SampleLength;
         }
     }
 }
