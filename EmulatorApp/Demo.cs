@@ -73,7 +73,7 @@ namespace EmulatorApp
             Demo demo = new Demo("NES Emulator");
             //Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes"); 
             //Cartridge cartridge = demo.LoadCartridge("tests\\donkey kong.nes");
-            Cartridge cartridge = demo.LoadCartridge("tests\\bee_52.nes");
+            Cartridge cartridge = demo.LoadCartridge("tests\\megaman2.nes");
             demo.Start(cartridge);
         }
 
