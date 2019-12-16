@@ -11,13 +11,12 @@ namespace NESEmulator.Mappers
         private static readonly ILog Log = LogManager.GetLogger(typeof(Mapper_001));
 
         private byte   _shiftRegister;
-//        private byte   _prgBankRegister;
         private int    _prgROMBankMode;
         private int    _chrROMBankMode;
         private byte[] _chrBank = new byte[2];  // currently selected CHR banks
         private byte   _prgBank;                // currently selected PRG bank
         private bool   _prgRAMEnable;
-        private uint[] _pPRGBank = new uint[2];
+        private uint[] _pPRGBank = new uint[2]; // Offsets into PRG ROM
 
         private int PRGROMBankMode
         {
@@ -63,32 +62,20 @@ namespace NESEmulator.Mappers
 
             if (isPRG32KB() && addr >= 0x8000)
             {
-                //mapped_addr = (uint)((addr % 0x8000) + (_prgBank * 0x8000));
+                // Bank selects full 32KB
                 mapped_addr = _pPRGBank[0] + addr & 0x7FFF;
                 return true;
             }
 
             if (addr >= 0x8000 && addr < 0xC000)
             {
-                //int offset = 0;
-                //if (_prgROMBankMode == 3 && _prgBank < (nPRGBanks - 1))
-                //{
-                //    offset = _prgBank * 0x4000;
-                //}
-
                 mapped_addr = (uint)(_pPRGBank[0] + (addr & 0x3FFF));
 
                 return true;
             }
 
-            if (addr >= 0xC000)
+            if (addr >= 0xC000 && addr <= 0xFFFF)
             {
-                //int offset = _prgBank * 0x4000;
-                //if (_prgROMBankMode == 3)
-                //{
-                //    offset = (nPRGBanks - 1) * 0x4000;
-                //}
-
                 mapped_addr = (uint)(_pPRGBank[1] + (addr & 0x3FFF));
 
                 return true;
@@ -104,7 +91,7 @@ namespace NESEmulator.Mappers
             if (addr >= 0x6000 && addr < 0x8000)
             {
                 // Write to RAM on cartridge
-                Log.Debug($"Writing to cartridge RAM");
+                //Log.Debug($"Writing to cartridge RAM");
                 mapped_addr = 0xFFFFFFFF;
                 return true;
             }
@@ -124,7 +111,7 @@ namespace NESEmulator.Mappers
                     else
                     {
                         _shiftRegister >>= 1;
-                        _shiftRegister |= (byte)((data & 0x01) << 3);
+                        _shiftRegister |= (byte)((data & 0x01) << 4);
                     }
                 }
                 return true;
@@ -157,7 +144,6 @@ namespace NESEmulator.Mappers
             // Treat like RAM
             if (addr < 0x2000)
             {
-                Log.Debug("Writing to CHR ROM");
                 byte chrBank = _chrROMBankMode == 0 ? _chrBank[0] : _chrBank[addr.TestBit(12) ? 1 : 0];
                 ushort bankSize = (ushort)(_chrROMBankMode == 0 ? 0x1FFF : 0x0FFF);
 
@@ -207,20 +193,20 @@ namespace NESEmulator.Mappers
                 //                    3: fix last bank at $C000 and switch 16 KB bank at $8000)
                 // CHR ROM bank mode(0: switch 8 KB at a time; 1: switch two separate 4 KB banks)
                 PRGROMBankMode = (_shiftRegister & 0x0C) >> 2;
-                _chrROMBankMode = (_shiftRegister & 0x10) >> 4;
-                Log.Debug($"Control register written. [Mirroring={mirroring}] [prgROMBankMode={_prgROMBankMode}] [chrROMBankMode={_chrROMBankMode}]");
+                _chrROMBankMode = (_shiftRegister >> 4) & 1;
+                //Log.Debug($"Control register written. [Mirroring={mirroring}] [prgROMBankMode={_prgROMBankMode}] [chrROMBankMode={_chrROMBankMode}]");
             }
             else if (addr >= 0xA000 && addr < 0xC000)
             {
                 // Select CHR bank 0
-                _chrBank[0] = _shiftRegister;
-                Log.Debug($"CHR bank 0 written. [chrBank0={_shiftRegister}]");
+                _chrBank[0] = (byte)(_chrROMBankMode == 0 ? _shiftRegister >> 1 : _shiftRegister);
+                //Log.Debug($"CHR bank 0 written. [chrBank0={_shiftRegister}]");
             }
             else if (addr >= 0xC000 && addr < 0xE000)
             {
                 // Select CHR bank 1
                 _chrBank[1] = _shiftRegister;
-                Log.Debug($"CHR bank 1 written. [chrBank1={_shiftRegister}]");
+                //Log.Debug($"CHR bank 1 written. [chrBank1={_shiftRegister}]");
             }
             else if (addr >= 0xE000)
             {
@@ -233,7 +219,7 @@ namespace NESEmulator.Mappers
                     _pPRGBank[1] = (uint)(_prgBank * 0x4000);
 
                 _prgRAMEnable = _shiftRegister.TestBit(4);
-                Log.Debug($"PRG bank written. [prgBank={_prgBank}]");
+                //Log.Debug($"PRG bank written. [prgBank={_prgBank}]");
             }
         }
 
