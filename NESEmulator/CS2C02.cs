@@ -433,6 +433,17 @@ namespace NESEmulator
                     else if (addr >= 0x0C00 && addr <= 0x0FFF)
                         data = _tblName[1][addr & 0x03FF];
                 }
+                else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_LO)
+                {
+                    if (addr < 0x0800)
+                        data = _tblName[0][addr & 0x03FF];
+                    else if (addr < 0x1000)
+                        data = _tblName[1][addr & 0x03FF];
+                }
+                else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_HI)
+                {
+                    data = _tblName[0][addr & 0x03FF + 0x0400];
+                }
             }
             else if (addr >= 0x3F00 && addr <= 0x3FFF)  // Palette memory range
             {
@@ -490,6 +501,17 @@ namespace NESEmulator
                         _tblName[1][addr & 0x03FF] = data;
                     else if (addr >= 0x0C00 && addr <= 0x0FFF)
                         _tblName[1][addr & 0x03FF] = data;
+                }
+                else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_LO)
+                {
+                    if (addr < 0x0800)
+                        _tblName[0][addr & 0x03FF] = data;
+                    else if (addr < 0x1000)
+                        _tblName[1][addr & 0x03FF] = data;
+                }
+                else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_HI)
+                {
+                    _tblName[0][addr & 0x03FF + 0x0400] = data;
                 }
             }
             else if (addr >= 0x3F00 && addr <= 0x3FFF)  // Palette memory range
