@@ -191,8 +191,8 @@ namespace NESEmulator
                 // Then push status register to the stack
                 setFlag(FLAGS6502.B, false);
                 setFlag(FLAGS6502.U, true);
-                setFlag(FLAGS6502.I, true);
                 push((byte)status);
+                setFlag(FLAGS6502.I, true);
 
                 // Read new PC location from fixed address
                 addr_abs = ADDR_IRQ;
