@@ -11,19 +11,24 @@ namespace NESEmulator.Mappers
         private static readonly ILog Log = LogManager.GetLogger(typeof(Mapper_001));
 
         private byte   _shiftRegister;
-        private int    _prgROMBankMode;
+        private int    _prgROMBankMode = 3;
         private int    _chrROMBankMode;
         private byte[] _chrBank = new byte[2];  // currently selected CHR banks
         private byte   _prgBank;                // currently selected PRG bank
         private bool   _prgRAMEnable;
         private uint[] _pPRGBank = new uint[2]; // Offsets into PRG ROM
+        private uint[] _pCHRBank = new uint[2]; // Offsets into CHR ROM/RAM
 
         private int PRGROMBankMode
         {
             get => _prgROMBankMode;
             set
             {
-                _prgROMBankMode = value;
+                if (nPRGBanks == 2)
+                    _prgROMBankMode = 0;
+                else 
+                    _prgROMBankMode = value;
+
                 switch (_prgROMBankMode)
                 {
                     case 0:
@@ -41,11 +46,23 @@ namespace NESEmulator.Mappers
                 }
             }
         }
+
+        private int CHRROMBankMode
+        {
+            get => _chrROMBankMode;
+            set
+            {
+                _chrROMBankMode = value;
+                updateCHRBankOffsets();
+            }
+        }
+
         public Mapper_001(Cartridge cartridge, byte prgBanks, byte chrBanks)
             : base(cartridge, prgBanks, chrBanks)
         {
             _shiftRegister = 0x10;
             PRGROMBankMode = 3;
+            CHRROMBankMode = 0;
             _prgBank = 0;
         }
 
@@ -126,11 +143,20 @@ namespace NESEmulator.Mappers
 
             if (addr < 0x2000)
             {
-                byte chrBank = _chrROMBankMode == 0 ? _chrBank[0] : _chrBank[addr.TestBit(12) ? 1 : 0];
+                //byte chrBank = _chrROMBankMode == 0 ? _chrBank[0] : _chrBank[addr.TestBit(15) ? 1 : 0];
                 ushort bankSize = (ushort)(_chrROMBankMode == 0 ? 0x1FFF : 0x0FFF);
 
-                mapped_addr = (uint)((addr & bankSize) + (chrBank * bankSize));
+                //mapped_addr = (uint)((addr & bankSize) + (chrBank * bankSize));
+                if (_chrROMBankMode == 0)
+                {
+                    // Use full 8KB window
+                    mapped_addr = (uint)(_pCHRBank[0] + (addr & bankSize));
+                    return true;
+                }
+                int bankNum = addr.TestBit(15) ? 1 : 0;
+                mapped_addr = (uint)(_pCHRBank[bankNum] + (addr & bankSize));
 
+                //Log.Debug($"CHR ROM read [bankNum={bankNum}] [addr={addr}]");
                 return true;
             }
 
@@ -144,11 +170,21 @@ namespace NESEmulator.Mappers
             // Treat like RAM
             if (addr < 0x2000)
             {
-                byte chrBank = _chrROMBankMode == 0 ? _chrBank[0] : _chrBank[addr.TestBit(12) ? 1 : 0];
+                //byte chrBank = _chrROMBankMode == 0 ? _chrBank[0] : _chrBank[addr.TestBit(15) ? 1 : 0];
                 ushort bankSize = (ushort)(_chrROMBankMode == 0 ? 0x1FFF : 0x0FFF);
 
-                mapped_addr = (uint)((addr & bankSize) + (chrBank * bankSize));
+                //mapped_addr = (uint)((addr & bankSize) + (chrBank * bankSize));
+                if (_chrROMBankMode == 0)
+                {
+                    // Use full 8KB window
+                    mapped_addr = (uint)(_pCHRBank[0] + (addr & bankSize));
+                    return true;
+                }
 
+                int bankNum = addr.TestBit(15) ? 1 : 0;
+                mapped_addr = (uint)(_pCHRBank[bankNum] + (addr & bankSize));
+
+                Log.Debug($"CHR ROM write [bankNum={bankNum}] [addr={addr}]");
                 return true;
             }
 
@@ -159,6 +195,7 @@ namespace NESEmulator.Mappers
         {
             _shiftRegister = 0x10;
             PRGROMBankMode = 3;
+            CHRROMBankMode = 0;
         }
 
         /// <summary>
@@ -193,20 +230,22 @@ namespace NESEmulator.Mappers
                 //                    3: fix last bank at $C000 and switch 16 KB bank at $8000)
                 // CHR ROM bank mode(0: switch 8 KB at a time; 1: switch two separate 4 KB banks)
                 PRGROMBankMode = (_shiftRegister & 0x0C) >> 2;
-                _chrROMBankMode = (_shiftRegister >> 4) & 1;
-                //Log.Debug($"Control register written. [Mirroring={mirroring}] [prgROMBankMode={_prgROMBankMode}] [chrROMBankMode={_chrROMBankMode}]");
+                CHRROMBankMode = (_shiftRegister >> 4) & 1;
+                Log.Debug($"Control register written. [Mirroring={mirroring}] [prgROMBankMode={_prgROMBankMode}] [chrROMBankMode={_chrROMBankMode}]");
             }
             else if (addr >= 0xA000 && addr < 0xC000)
             {
                 // Select CHR bank 0
                 _chrBank[0] = (byte)(_chrROMBankMode == 0 ? _shiftRegister >> 1 : _shiftRegister);
-                //Log.Debug($"CHR bank 0 written. [chrBank0={_shiftRegister}]");
+                updateCHRBankOffsets();
+                Log.Debug($"CHR bank 0 written. [chrBank0={_shiftRegister}]");
             }
             else if (addr >= 0xC000 && addr < 0xE000)
             {
                 // Select CHR bank 1
                 _chrBank[1] = _shiftRegister;
-                //Log.Debug($"CHR bank 1 written. [chrBank1={_shiftRegister}]");
+                updateCHRBankOffsets();
+                Log.Debug($"CHR bank 1 written. [chrBank1={_shiftRegister}]");
             }
             else if (addr >= 0xE000)
             {
@@ -219,10 +258,24 @@ namespace NESEmulator.Mappers
                     _pPRGBank[1] = (uint)(_prgBank * 0x4000);
 
                 _prgRAMEnable = _shiftRegister.TestBit(4);
-                //Log.Debug($"PRG bank written. [prgBank={_prgBank}]");
+                Log.Debug($"PRG bank written. [prgBank={_prgBank}]");
             }
         }
 
         private bool isPRG32KB() => _prgROMBankMode == 0 || _prgROMBankMode == 1;
+
+        private void updateCHRBankOffsets()
+        {
+            switch (_chrROMBankMode)
+            {
+                case 0:
+                    _pCHRBank[0] = (uint)(_chrBank[0] * 0x1FFF);
+                    break;
+                case 1:
+                    _pCHRBank[0] = (uint)(_chrBank[0] * 0x0FFF);
+                    _pCHRBank[1] = (uint)(_chrBank[1] * 0x0FFF + 0x1000);
+                    break;
+            }
+        }
     }
 }

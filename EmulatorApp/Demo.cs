@@ -22,7 +22,7 @@ namespace EmulatorApp
 {
     class Demo
     {
-        private const int SCREEN_WIDTH = 360;
+        private const int SCREEN_WIDTH = 560;
         private const int SCREEN_HEIGHT = 240;
         private const int NUM_AUDIO_BUFFERS = 20;
 
@@ -73,7 +73,8 @@ namespace EmulatorApp
             Demo demo = new Demo("NES Emulator");
             //Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes"); 
             //Cartridge cartridge = demo.LoadCartridge("tests\\donkey kong.nes");
-            Cartridge cartridge = demo.LoadCartridge("tests\\megaman2.nes");
+            Cartridge cartridge = demo.LoadCartridge("tests\\tetris.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\megaman2.nes");
             demo.Start(cartridge);
         }
 
@@ -289,8 +290,8 @@ namespace EmulatorApp
             //pge.DrawRect(516 + selectedPalette * (swatchSize * 5) - 1, 339, (swatchSize * 4), swatchSize, Pixel.WHITE);
 
             // Generate Pattern Tables
-            //pge.DrawSprite(516, 348, ppu.GetPatternTable(0, (byte)selectedPalette));
-            //pge.DrawSprite(648, 348, ppu.GetPatternTable(1, (byte)selectedPalette));
+            pge.DrawSprite(290, 48, ppu.GetPatternTable(0, (byte)selectedPalette));
+            pge.DrawSprite(422, 48, ppu.GetPatternTable(1, (byte)selectedPalette));
 
             //for (int y = 0; y < 30; y++)
             //{
