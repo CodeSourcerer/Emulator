@@ -143,20 +143,19 @@ namespace NESEmulator.Mappers
 
             if (addr < 0x2000)
             {
-                //byte chrBank = _chrROMBankMode == 0 ? _chrBank[0] : _chrBank[addr.TestBit(15) ? 1 : 0];
                 ushort bankSize = (ushort)(_chrROMBankMode == 0 ? 0x1FFF : 0x0FFF);
 
-                //mapped_addr = (uint)((addr & bankSize) + (chrBank * bankSize));
                 if (_chrROMBankMode == 0)
                 {
                     // Use full 8KB window
                     mapped_addr = (uint)(_pCHRBank[0] + (addr & bankSize));
                     return true;
                 }
-                int bankNum = addr.TestBit(15) ? 1 : 0;
+                // 2 4KB banks
+                int bankNum = addr < 0x1000 ? 0 : 1;
                 mapped_addr = (uint)(_pCHRBank[bankNum] + (addr & bankSize));
 
-                //Log.Debug($"CHR ROM read [bankNum={bankNum}] [addr={addr}]");
+                //Log.Debug($"CHR ROM read [bankNum={bankNum}] [addr={addr:X4}]");
                 return true;
             }
 
@@ -181,10 +180,10 @@ namespace NESEmulator.Mappers
                     return true;
                 }
 
-                int bankNum = addr.TestBit(15) ? 1 : 0;
+                int bankNum = addr < 0x1000 ? 0 : 1;
                 mapped_addr = (uint)(_pCHRBank[bankNum] + (addr & bankSize));
 
-                Log.Debug($"CHR ROM write [bankNum={bankNum}] [addr={addr}]");
+                Log.Debug($"CHR ROM write [bankNum={bankNum}] [addr={addr:X4}]");
                 return true;
             }
 
@@ -273,7 +272,7 @@ namespace NESEmulator.Mappers
                     break;
                 case 1:
                     _pCHRBank[0] = (uint)(_chrBank[0] * 0x0FFF);
-                    _pCHRBank[1] = (uint)(_chrBank[1] * 0x0FFF + 0x1000);
+                    _pCHRBank[1] = (uint)(_chrBank[1] * 0x0FFF);
                     break;
             }
         }

@@ -20,7 +20,16 @@ namespace NESEmulator
         };
 
         public BusDeviceType DeviceType { get { return BusDeviceType.CART; } }
-        public Mirror mirror { get; set; }
+        private Mirror _mirror;
+        public Mirror mirror
+        {
+            get => _mirror;
+            set 
+            {
+                _mirror = value;
+                Log.Debug($"Mirroring mode set to {_mirror}");
+            }
+        }
 
         public bool ImageValid { get; private set; }
 
@@ -126,6 +135,7 @@ namespace NESEmulator
                 }
                 else
                 {
+                    throw new NotImplementedException("This shouldn't happen");
                 }
                 return true;
             }
@@ -150,7 +160,7 @@ namespace NESEmulator
                 }
                 else
                 {
-
+                    throw new NotImplementedException("This shouldn't happen");
                 }
                 return true;
             }
@@ -227,10 +237,7 @@ namespace NESEmulator
                     cartridgeHeader.chr_rom_chunks = 1;
                 Log.Debug($"Reading {(cartridgeHeader.chr_rom_chunks * 8192) / 1024} KB of CHR data from ROM");
                 nCHRBanks = cartridgeHeader.chr_rom_chunks;
-                //if (nCHRBanks == 0)
-                //    CHRMemory = new byte[8192];
-                //else
-                    CHRMemory = new byte[nCHRBanks * 8192];
+                CHRMemory = new byte[nCHRBanks * 8192];
                 cartStream.Read(CHRMemory, 0, CHRMemory.Length);
             }
             else if (fileType == 2)
