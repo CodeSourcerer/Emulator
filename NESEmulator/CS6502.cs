@@ -935,7 +935,10 @@ namespace NESEmulator
             if (opcode_lookup[opcode].addr_mode == IMP)
                 a = (byte)(temp & 0x00FF);
             else
+            {
+                write(addr_abs, fetched);   // write original value first
                 write(addr_abs, (byte)(temp & 0x00FF));
+            }
             return 0;
         }
 
@@ -970,7 +973,10 @@ namespace NESEmulator
             if (opcode_lookup[opcode].addr_mode == IMP)
                 a = (byte)(temp & 0x00FF);
             else
+            {
+                write(addr_abs, fetched);   // write original value first
                 write(addr_abs, (byte)(temp & 0x00FF));
+            }
             return 0;
         }
 
@@ -1279,6 +1285,7 @@ namespace NESEmulator
         private byte DEC()
         {
             fetch();
+            write(addr_abs, fetched);   // write original value first
             temp = (ushort)(fetched - 1);
             write(addr_abs, (byte)(temp & 0x00FF));
             testAndSet(FLAGS6502.Z, temp);
@@ -1323,6 +1330,7 @@ namespace NESEmulator
         private byte INC()
         {
             fetch();
+            write(addr_abs, fetched);   // write original value first
             temp = (ushort)(fetched + 1);
             write(addr_abs, (byte)(temp & 0x00FF));
             testAndSet(FLAGS6502.Z, temp);
@@ -1540,7 +1548,10 @@ namespace NESEmulator
             if (opcode_lookup[opcode].addr_mode == IMP)
                 a = (byte)(temp & 0x00FF);
             else
+            {
+                write(addr_abs, fetched);   // write original value first
                 write(addr_abs, (byte)(temp & 0x00FF));
+            }
             return 0;
         }
 
@@ -1560,7 +1571,10 @@ namespace NESEmulator
             if (opcode_lookup[opcode].addr_mode == IMP)
                 a = (byte)(temp & 0x00FF);
             else
+            {
+                write(addr_abs, fetched);   // write original value first
                 write(addr_abs, (byte)(temp & 0x00FF));
+            }
             return 0;
         }
 

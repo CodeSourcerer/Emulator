@@ -17,6 +17,7 @@ namespace NESEmulator.Mappers
         private bool   _prgRAMEnable;
         private uint[] _pPRGBank = new uint[2]; // Offsets into PRG ROM
         private uint[] _pCHRBank = new uint[2]; // Offsets into CHR ROM/RAM
+        private ulong  _lastClockCycleWrite;
 
         private int PRGROMBankMode
         {
@@ -71,11 +72,15 @@ namespace NESEmulator.Mappers
         {
             mapped_addr = 0;
 
+            if (_lastClockCycleWrite == cartridge.ThisClockCycle)
+                return false;
+
             if (addr >= 0x6000 && addr < 0x8000)
             {
                 // Write to RAM on cartridge
                 //Log.Debug($"Writing to cartridge RAM");
                 mapped_addr = 0xFFFFFFFF;
+                _lastClockCycleWrite = cartridge.ThisClockCycle;
                 return true;
             }
             else if (addr >= 0x8000)
@@ -101,6 +106,7 @@ namespace NESEmulator.Mappers
                         _shiftRegister |= (byte)((data & 0x01) << 4);
                     }
                 }
+                _lastClockCycleWrite = cartridge.ThisClockCycle;
                 return true;
             }
 

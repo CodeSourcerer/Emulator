@@ -42,6 +42,8 @@ namespace NESEmulator
 
         private Mapper mapper;
 
+        public ulong ThisClockCycle { get; private set; }
+
         public Cartridge()
         {
             mirror = Mirror.HORIZONTAL;
@@ -165,7 +167,9 @@ namespace NESEmulator
         }
 
         public void Clock(ulong clockCounter)
-        { }
+        {
+            ThisClockCycle = clockCounter;
+        }
         #endregion // Bus Interface
 
         /// <summary>
