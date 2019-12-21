@@ -119,14 +119,6 @@ namespace NESEmulator.Mappers
 
             if (addr < 0x2000)
             {
-                //ushort bankSize = (ushort)(_chrROMBankMode == 0 ? 0x1FFF : 0x0FFF);
-
-                //if (_chrROMBankMode == 0)
-                //{
-                //    // Use full 8KB window
-                //    mapped_addr = (uint)(_pCHRBank[0] + (addr & bankSize));
-                //    return true;
-                //}
                 int bankNum = addr < 0x1000 ? 0 : 1;
                 mapped_addr = (uint)(_pCHRBank[bankNum] + (addr & 0x0FFF));
 
@@ -223,13 +215,7 @@ namespace NESEmulator.Mappers
             else
             {
                 _prgBank = (byte)(_shiftRegister & 0x0F);
-                //if (isPRG32KB())
-                //    _prgBank >>= 1; // ignore low bit in 32 KB mode
                 updatePRGBankOffsets();
-                //if (_prgROMBankMode != 2)
-                //    _pPRGBank[0] = (uint)(_prgBank * (isPRG32KB() ? 0x8000 : 0x4000));
-                //if (_prgROMBankMode == 2)
-                //    _pPRGBank[1] = (uint)(_prgBank * 0x4000);
 
                 _prgRAMEnable = _shiftRegister.TestBit(4);
                 Log.Debug($"PRG bank written. [prgBank={_prgBank}]");
