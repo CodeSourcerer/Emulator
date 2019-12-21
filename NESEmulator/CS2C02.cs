@@ -435,10 +435,10 @@ namespace NESEmulator
                 }
                 else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_LO)
                 {
-                    if (addr < 0x0800)
+                    //if (addr < 0x0800)
                         data = _tblName[0][addr & 0x03FF];
-                    else if (addr < 0x1000)
-                        data = _tblName[1][addr & 0x03FF];
+                    //else if (addr < 0x1000)
+                        //data = _tblName[1][addr & 0x03FF];
                 }
                 else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_HI)
                 {
@@ -504,10 +504,10 @@ namespace NESEmulator
                 }
                 else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_LO)
                 {
-                    if (addr < 0x0800)
+                    //if (addr < 0x0800)
                         _tblName[0][addr & 0x03FF] = data;
-                    else if (addr < 0x1000)
-                        _tblName[1][addr & 0x03FF] = data;
+                    //else if (addr < 0x1000)
+                        //_tblName[1][addr & 0x03FF] = data;
                 }
                 else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_HI)
                 {

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using log4net;
 
 namespace NESEmulator
 {
@@ -42,6 +43,8 @@ namespace NESEmulator
 
     public class CS6502 : InterruptableBusDevice
     {
+        private static readonly ILog Log = LogManager.GetLogger(typeof(CS6502));
+
         public override BusDeviceType DeviceType { get { return BusDeviceType.CPU; } }
 
         private List<Instruction> opcode_lookup;
@@ -148,6 +151,7 @@ namespace NESEmulator
             ushort lo = read(addr_abs);
             ushort hi = read((ushort)(addr_abs + 1));
             pc = (ushort)((hi << 8) | lo);
+            Log.Info($"Cartridge starts at {pc:X4}");
 
             // Reset internal registers
             a = x = y = 0;
@@ -263,6 +267,9 @@ namespace NESEmulator
             {
                 if (cycles == 0)
                 {
+                    //var (addr, sInst) = Disassemble(pc);
+                    //Log.Debug($"[{clock_count}] {sInst}");
+
                     // Read the next instruction byte. This 8-bit value is used to index the translation
                     // table to get the relevat information about how to implement the instruction
                     opcode = read(pc);
@@ -331,105 +338,10 @@ namespace NESEmulator
             {
                 line_addr = (ushort)addr;
 
-                string hexAddr = addr.ToString("X4");
+                string sInst;
+                (addr, sInst) = Disassemble((ushort)addr);
 
-                // Read instruction, and get its readable name
-                byte opcode = bus.Read((ushort)addr, true);
-                addr++;
-
-                // Get oprands from desired locations, and form the
-                // instruction based upon its addressing mode. These
-                // routines mimmick the actual fetch routine of the
-                // 6502 in order to get accurate data as part of the
-                // instruction
-                string addressMode = string.Empty;
-                if (opcode_lookup[opcode].addr_mode == IMP)
-                {
-                    addressMode = "{IMP}";
-                }
-                else if (opcode_lookup[opcode].addr_mode == IMM)
-                {
-                    value = bus.Read((ushort)addr, true);
-                    addr++;
-                    addressMode = string.Format("#${0} {{IMM}}", value.ToString("X2"));
-                }
-                else if (opcode_lookup[opcode].addr_mode == ZP0)
-                {
-                    lo = bus.Read((ushort)addr, true);
-                    hi = 0x00;
-                    addr++;
-                    addressMode = string.Format("${0} {{ZP0}}", lo.ToString("X2"));
-                }
-                else if (opcode_lookup[opcode].addr_mode == ZPX)
-                {
-                    lo = bus.Read((ushort)addr, true);
-                    hi = 0x00;
-                    addr++;
-                    addressMode = string.Format("${0}, X {{ZPX}}", lo.ToString("X2"));
-                }
-                else if (opcode_lookup[opcode].addr_mode == ZPY)
-                {
-                    lo = bus.Read((ushort)addr, true);
-                    hi = 0x00;
-                    addr++;
-                    addressMode = string.Format("${0}, Y {{ZPY}}", lo.ToString("X2"));
-                }
-                else if (opcode_lookup[opcode].addr_mode == IZX)
-                {
-                    lo = bus.Read((ushort)addr, true);
-                    hi = 0x00;
-                    addr++;
-                    addressMode = string.Format("(${0}, X) {{IZX}}", lo.ToString("X2"));
-                }
-                else if (opcode_lookup[opcode].addr_mode == IZY)
-                {
-                    lo = bus.Read((ushort)addr, true);
-                    hi = 0x00;
-                    addr++;
-                    addressMode = string.Format("(${0}), Y {{IZY}}", lo.ToString("X2"));
-                }
-                else if (opcode_lookup[opcode].addr_mode == ABS)
-                {
-                    lo = bus.Read((ushort)addr, true);
-                    addr++;
-                    hi = bus.Read((ushort)addr, true);
-                    addr++;
-                    addressMode = string.Format("${0} {{ABS}}", ((hi << 8) | lo).ToString("X4"));
-                }
-                else if (opcode_lookup[opcode].addr_mode == ABX)
-                {
-                    lo = bus.Read((ushort)addr, true);
-                    addr++;
-                    hi = bus.Read((ushort)addr, true);
-                    addr++;
-                    addressMode = string.Format("${0}, X {{ABX}}", ((hi << 8) | lo).ToString("X4"));
-                }
-                else if (opcode_lookup[opcode].addr_mode == ABY)
-                {
-                    lo = bus.Read((ushort)addr, true);
-                    addr++;
-                    hi = bus.Read((ushort)addr, true);
-                    addr++;
-                    addressMode = string.Format("${0}, Y {{ABY}}", ((hi << 8) | lo).ToString("X4"));
-                }
-                else if (opcode_lookup[opcode].addr_mode == IND)
-                {
-                    lo = bus.Read((ushort)addr, true);
-                    addr++;
-                    hi = bus.Read((ushort)addr, true);
-                    addr++;
-                    addressMode = string.Format("(${0}) {{IND}}", ((hi << 8) | lo).ToString("X4"));
-                }
-                else if (opcode_lookup[opcode].addr_mode == REL)
-                {
-                    value = bus.Read((ushort)addr, true);
-                    addr++;
-                    addressMode = string.Format("${0} [${1}] {{REL}}", value.ToString("X2"), (addr + (sbyte)value).ToString("X4"));
-                }
-
-                string sInst = string.Format("$ {0}: {1} {2}", hexAddr, opcode_lookup[opcode].name, addressMode);
-                
-                // Add the formed string to a std::map, using the instruction's
+                // Add the formed string to a Dictionary, using the instruction's
                 // address as the key. This makes it convenient to look for later
                 // as the instructions are variable in length, so a straight up
                 // incremental index is not sufficient.
@@ -437,6 +349,111 @@ namespace NESEmulator
             }
 
             return mapLines;
+        }
+
+        public (ushort, string) Disassemble(ushort addr)
+        {
+            byte value = 0x00, lo = 0x00, hi = 0x00;
+
+            string hexAddr = addr.ToString("X4");
+
+            // Read instruction, and get its readable name
+            byte opcode = bus.Read((ushort)addr, true);
+            addr++;
+
+            // Get oprands from desired locations, and form the
+            // instruction based upon its addressing mode. These
+            // routines mimmick the actual fetch routine of the
+            // 6502 in order to get accurate data as part of the
+            // instruction
+            string addressMode = string.Empty;
+            if (opcode_lookup[opcode].addr_mode == IMP)
+            {
+                addressMode = "{IMP}";
+            }
+            else if (opcode_lookup[opcode].addr_mode == IMM)
+            {
+                value = bus.Read((ushort)addr, true);
+                addr++;
+                addressMode = string.Format("#${0} {{IMM}}", value.ToString("X2"));
+            }
+            else if (opcode_lookup[opcode].addr_mode == ZP0)
+            {
+                lo = bus.Read((ushort)addr, true);
+                hi = 0x00;
+                addr++;
+                addressMode = string.Format("${0} {{ZP0}}", lo.ToString("X2"));
+            }
+            else if (opcode_lookup[opcode].addr_mode == ZPX)
+            {
+                lo = bus.Read((ushort)addr, true);
+                hi = 0x00;
+                addr++;
+                addressMode = string.Format("${0}, X {{ZPX}}", lo.ToString("X2"));
+            }
+            else if (opcode_lookup[opcode].addr_mode == ZPY)
+            {
+                lo = bus.Read((ushort)addr, true);
+                hi = 0x00;
+                addr++;
+                addressMode = string.Format("${0}, Y {{ZPY}}", lo.ToString("X2"));
+            }
+            else if (opcode_lookup[opcode].addr_mode == IZX)
+            {
+                lo = bus.Read((ushort)addr, true);
+                hi = 0x00;
+                addr++;
+                addressMode = string.Format("(${0}, X) {{IZX}}", lo.ToString("X2"));
+            }
+            else if (opcode_lookup[opcode].addr_mode == IZY)
+            {
+                lo = bus.Read((ushort)addr, true);
+                hi = 0x00;
+                addr++;
+                addressMode = string.Format("(${0}), Y {{IZY}}", lo.ToString("X2"));
+            }
+            else if (opcode_lookup[opcode].addr_mode == ABS)
+            {
+                lo = bus.Read((ushort)addr, true);
+                addr++;
+                hi = bus.Read((ushort)addr, true);
+                addr++;
+                addressMode = string.Format("${0} {{ABS}}", ((hi << 8) | lo).ToString("X4"));
+            }
+            else if (opcode_lookup[opcode].addr_mode == ABX)
+            {
+                lo = bus.Read((ushort)addr, true);
+                addr++;
+                hi = bus.Read((ushort)addr, true);
+                addr++;
+                addressMode = string.Format("${0}, X {{ABX}}", ((hi << 8) | lo).ToString("X4"));
+            }
+            else if (opcode_lookup[opcode].addr_mode == ABY)
+            {
+                lo = bus.Read((ushort)addr, true);
+                addr++;
+                hi = bus.Read((ushort)addr, true);
+                addr++;
+                addressMode = string.Format("${0}, Y {{ABY}}", ((hi << 8) | lo).ToString("X4"));
+            }
+            else if (opcode_lookup[opcode].addr_mode == IND)
+            {
+                lo = bus.Read((ushort)addr, true);
+                addr++;
+                hi = bus.Read((ushort)addr, true);
+                addr++;
+                addressMode = string.Format("(${0}) {{IND}}", ((hi << 8) | lo).ToString("X4"));
+            }
+            else if (opcode_lookup[opcode].addr_mode == REL)
+            {
+                value = bus.Read((ushort)addr, true);
+                addr++;
+                addressMode = string.Format("${0} [${1}] {{REL}}", value.ToString("X2"), (addr + (sbyte)value).ToString("X4"));
+            }
+
+            string sInst = string.Format("$ {0}: {1} {2}", hexAddr, opcode_lookup[opcode].name, addressMode);
+
+            return (addr, sInst);
         }
 
         #region Emulator vars
@@ -545,14 +562,7 @@ namespace NESEmulator
             // want to read the data at an address without changing the state of the
             // devices on the bus
 
-            if (addr >= 0xC000 && addr <= 0xFFFF)
-            {
-                dataRead = bus.Read(addr, false);
-            }
-            else
-            {
-                dataRead = bus.Read(addr, false);
-            }
+            dataRead = bus.Read(addr, false);
 
             return dataRead;
         }

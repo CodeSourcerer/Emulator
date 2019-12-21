@@ -92,11 +92,7 @@ namespace NESEmulator
             uint mapped_addr;
             if (mapper.cpuMapWrite(addr, out mapped_addr, ref data))
             {
-                if (mapped_addr != 0xFFFFFFFF)
-                {
-                    PRGROM[mapped_addr] = data;
-                }
-                else
+                if (mapped_addr == 0xFFFFFFFF)
                 {
                     // Write data to cartridge RAM
                     PRGRAM[addr & 0x1FFF] = data;
