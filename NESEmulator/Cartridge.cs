@@ -32,10 +32,10 @@ namespace NESEmulator
         }
 
         public bool ImageValid { get; private set; }
+        public byte MapperID  { get; private set; }
+        public byte nPRGBanks { get; private set; }
+        public byte nCHRBanks { get; private set; }
 
-        private byte     mapperId;
-        private byte     nPRGBanks;
-        private byte     nCHRBanks;
         protected byte[] PRGRAM;
         protected byte[] PRGROM;
         protected byte[] CHRMemory;
@@ -212,15 +212,18 @@ namespace NESEmulator
             }
 
             // Determine mapper ID
-            mapperId = (byte)(((cartridgeHeader.mapper2 >> 4) << 4) | (cartridgeHeader.mapper1 >> 4));
+            MapperID = (byte)(((cartridgeHeader.mapper2 >> 4) << 4) | (cartridgeHeader.mapper1 >> 4));
             mirror = cartridgeHeader.mapper1.TestBit(0) ? Mirror.VERTICAL : Mirror.HORIZONTAL;
-
-            bool is_iNesV2 = (cartridgeHeader.mapper2 & 0x0C) == 8;
-            if (is_iNesV2)
-                Log.Debug("iNES 2.0 ROM detected");
 
             // "Discover" file format
             byte fileType = 1;
+
+            bool is_iNesV2 = (cartridgeHeader.mapper2 & 0x0C) == 8;
+            if (is_iNesV2)
+            {
+                Log.Debug("iNES 2.0 ROM detected");
+                fileType = 2;
+            }
 
             if (fileType == 0)
             {
@@ -246,16 +249,14 @@ namespace NESEmulator
             }
 
             // Load appropriate mapper
-            switch (mapperId)
+            try
             {
-                case 0:
-                    mapper = new Mapper_000(this, nPRGBanks, nCHRBanks);
-                    break;
-                case 1:
-                    mapper = new Mapper_001(this, nPRGBanks, nCHRBanks);
-                    break;
+                mapper = MapperFactory.Create(this);
             }
-
+            catch (NotSupportedException)
+            {
+                ImageValid = false;
+            }
             if (mapper != null)
                 ImageValid = true;
         }

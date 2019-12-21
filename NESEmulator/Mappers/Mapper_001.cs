@@ -136,15 +136,6 @@ namespace NESEmulator.Mappers
             // Treat like RAM
             if (addr < 0x2000)
             {
-                //ushort bankSize = (ushort)(_chrROMBankMode == 0 ? 0x1FFF : 0x0FFF);
-
-                //if (_chrROMBankMode == 0)
-                //{
-                //    // Use full 8KB window
-                //    mapped_addr = (uint)(_pCHRBank[0] + (addr & bankSize));
-                //    return true;
-                //}
-
                 int bankNum = addr < 0x1000 ? 0 : 1;
                 mapped_addr = (uint)(_pCHRBank[bankNum] + (addr & 0x0FFF));
 

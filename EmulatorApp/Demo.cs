@@ -22,7 +22,7 @@ namespace EmulatorApp
 {
     class Demo
     {
-        private const int SCREEN_WIDTH = 560;
+        private const int SCREEN_WIDTH = 350;
         private const int SCREEN_HEIGHT = 240;
         private const int NUM_AUDIO_BUFFERS = 20;
 
@@ -55,7 +55,6 @@ namespace EmulatorApp
             pge.Construct(SCREEN_WIDTH, SCREEN_HEIGHT, window);
             pge.OnCreate += pge_OnCreate;
             pge.OnFrameUpdate += pge_OnUpdate;
-            //pge.OnFrameUpdate += pge_OnSoundUpdate;
             pge.OnDestroy += pge_OnDestroy;
         }
 
@@ -75,7 +74,8 @@ namespace EmulatorApp
             //Cartridge cartridge = demo.LoadCartridge("tests\\donkey kong.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\tetris.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\megaman2.nes");
-            Cartridge cartridge = demo.LoadCartridge("tests\\bill_and_ted.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\bill_and_ted.nes");
+            Cartridge cartridge = demo.LoadCartridge("tests\\ducktales.nes");
             demo.Start(cartridge);
         }
 
@@ -96,10 +96,6 @@ namespace EmulatorApp
             nesBus.InsertCartridge(cartridge);
             nesBus.Reset();
 
-            //nesClock = new NESClock();
-            //dtLastTick = DateTime.Now;
-            //nesClock.OnClockTick += NesClock_OnClockTick;
-
             pge.Start();
         }
 
@@ -111,25 +107,6 @@ namespace EmulatorApp
             foreach (int buf in buffers)
                 _availableBuffers.Push(buf);
         }
-
-        DateTime dtLastTick;
-
-        //private void NesClock_OnClockTick(object sender, ElapsedEventArgs e)
-        //{
-        //    if (runEmulation)
-        //    {
-        //        if ((DateTime.Now - dtLastTick) > TimeSpan.FromMilliseconds(18))
-        //            Console.WriteLine("Taking too long! Frame took {0} ms", (DateTime.Now - dtLastTick).TotalMilliseconds);
-        //        dtLastTick = DateTime.Now;
-
-        //        CS2C02 ppu = (CS2C02)nesBus.GetPPU();
-        //        do
-        //        {
-        //            nesBus.clock();
-        //        } while (!ppu.FrameComplete);
-        //        ppu.FrameComplete = false;
-        //    }
-        //}
 
         public Cartridge LoadCartridge(string fileName)
         {
@@ -237,9 +214,6 @@ namespace EmulatorApp
 
             if (runEmulation)
             {
-                //if ((DateTime.Now - dtLastTick) > TimeSpan.FromMilliseconds(18))
-                //    Console.WriteLine("Taking too long! Frame took {0} ms", (DateTime.Now - dtLastTick).TotalMilliseconds);
-                //dtLastTick = DateTime.Now;
                 if (residualTime > 0.0f)
                     residualTime -= (float)frameUpdateArgs.ElapsedTime;
                 else
