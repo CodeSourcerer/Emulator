@@ -86,6 +86,8 @@ namespace NESEmulator.Mappers
         public override void reset()
         {
             Log.Debug($"Mapper 002 cartridge reset");
+            _prgBank = 0;
+            updatePRGBankOffsets();
         }
 
         private void updatePRGBankOffsets()
