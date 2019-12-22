@@ -49,7 +49,8 @@ namespace NESEmulator
             if (addr == 0x4016 || addr == 0x4017)
             {
                 int controllerNum = addr & 0x0001;
-                data = (byte)((_controller_state[controllerNum] & 0x80) > 0 ? 1 : 0);
+                // We OR with 0x40 to support the "open bus behavior" with the controller, required for Paper Boy
+                data = (byte)(0x40 | ((_controller_state[controllerNum] & 0x80) > 0 ? 1 : 0));
                 _controller_state[controllerNum] <<= 1;
                 // _controller_state[controllerNum] |= 0x01;
                 dataRead = true;
