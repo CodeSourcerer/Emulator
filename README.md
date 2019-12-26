@@ -41,10 +41,10 @@ Player 2 controls not yet supported.
 * 6502 CPU - Complete (undocumented opcodes not supported)
 * 2C02 PPU - Complete
 * 2A03 APU - In Progress
-	* Pulse channels 1 & 2
-	* Triangle channel
-	* Noise channel
-	* DMC channel (in progress, still buggy)
+	* Pulse channels 1 & 2 - Complete
+	* Triangle channel - Complete
+	* Noise channel - Complete
+	* DMC channel - In Progress, still buggy
 * Mappers - In Progress
 	* Mapper 000 - Complete
 	* Mapper 001 - Complete
