@@ -71,11 +71,14 @@ namespace EmulatorApp
             Log.Info("Demo app started");
             Demo demo = new Demo("NES Emulator");
             //Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes"); 
+            Cartridge cartridge = demo.LoadCartridge("tests\\smb2.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\donkey kong.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\tetris.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\megaman2.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\bill_and_ted.nes");
-            Cartridge cartridge = demo.LoadCartridge("tests\\ducktales.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\ducktales.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\joust.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\paperboy.nes");
             demo.Start(cartridge);
         }
 
@@ -110,7 +113,7 @@ namespace EmulatorApp
 
         public Cartridge LoadCartridge(string fileName)
         {
-            Cartridge cartridge = new Cartridge();
+            Cartridge cartridge = new Cartridge(nesBus);
 
             using (FileStream fs = new FileStream(fileName, FileMode.Open, FileAccess.Read))
             {

@@ -23,9 +23,11 @@ namespace NESEmulator
         private const ushort CYCLES     = 341;
         private const ushort SCANLINES  = 262;
 
-        public override BusDeviceType DeviceType { get { return BusDeviceType.PPU; } }
+        public BusDeviceType DeviceType => BusDeviceType.PPU;
 
-        public override event InterruptingDeviceHandler RaiseInterrupt;
+        public event InterruptingDeviceHandler RaiseInterrupt;
+
+        public event EventHandler DrawSprites;
 
         // PPU has it's own bus
         private Bus _ppuBus;
@@ -223,7 +225,7 @@ namespace NESEmulator
 
         #region Bus Communications
 
-        public override void Reset()
+        public void Reset()
         {
             _fineX                  = 0;
             _addressLatch           = 0;
@@ -248,7 +250,7 @@ namespace NESEmulator
             _cycleOpItr.MoveNext();
         }
 
-        public override bool Read(ushort addr, out byte data)
+        public bool Read(ushort addr, out byte data)
         {
             bool dataRead = false;
             data = 0;
@@ -312,7 +314,7 @@ namespace NESEmulator
             return dataRead;
         }
 
-        public override bool Write(ushort addr, byte data)
+        public bool Write(ushort addr, byte data)
         {
             bool dataWritten = false;
 
@@ -435,10 +437,7 @@ namespace NESEmulator
                 }
                 else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_LO)
                 {
-                    //if (addr < 0x0800)
-                        data = _tblName[0][addr & 0x03FF];
-                    //else if (addr < 0x1000)
-                        //data = _tblName[1][addr & 0x03FF];
+                    data = _tblName[0][addr & 0x03FF];
                 }
                 else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_HI)
                 {
@@ -504,10 +503,7 @@ namespace NESEmulator
                 }
                 else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_LO)
                 {
-                    //if (addr < 0x0800)
-                        _tblName[0][addr & 0x03FF] = data;
-                    //else if (addr < 0x1000)
-                        //_tblName[1][addr & 0x03FF] = data;
+                    _tblName[0][addr & 0x03FF] = data;
                 }
                 else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_HI)
                 {
@@ -537,7 +533,7 @@ namespace NESEmulator
 
         private List<PPUCycleNode>.Enumerator _cycleOpItr;
 
-        public override void Clock(ulong clockCounter)
+        public void Clock(ulong clockCounter)
         {
             // As we progress through scanlines and cycles, the PPU is effectively
             // a state machine going through the motions of fetching background 
@@ -568,6 +564,11 @@ namespace NESEmulator
                     resetSpriteDataForScanline();
 
                     evaluateVisibleSpritesForScanline();
+                }
+
+                if (_cycle == 260)
+                {
+                    this.DrawSprites?.Invoke(this, EventArgs.Empty);
                 }
 
                 if (_cycle == 340)
@@ -1260,9 +1261,12 @@ namespace NESEmulator
             ushort sprite_pattern_addr_lo;
 
             // 8x16 sprite mode - the sprite attribute determines the pattern table
+            bool inverted = (_spriteScanline[i].attribute & 0x80) != 0;
             ushort cellRow  = (ushort)((_scanline - _spriteScanline[i].y) & 0x07);
-            cellRow         = (ushort)((_spriteScanline[i].attribute & 0x80) == 0 ? cellRow : 7 - cellRow);
+            cellRow         = (ushort)(!inverted ? cellRow : 7 - cellRow);
             int topHalf     = (byte)((_scanline - _spriteScanline[i].y) < 8 ? 0 : 1);
+            topHalf += inverted ? 1 : 0;
+            if (topHalf > 1) topHalf = 0;
 
             sprite_pattern_addr_lo = (ushort)(
                   ((_spriteScanline[i].id & 0x01) << 12)                // Which pattern table? 0KB or 4KB offset

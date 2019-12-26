@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using System.Collections.Generic;
+using log4net;
 
 namespace NESEmulator
 {
@@ -9,8 +10,11 @@ namespace NESEmulator
     /// </summary>
     public class Bus : IBus
     {
+        private static readonly ILog Log = LogManager.GetLogger(typeof(Bus));
+
         private List<BusDevice> _busDeviceList;
         private ulong _systemClockCounter;
+        private bool _cartConflicts;
 
         public Bus(BusDevice[] busDevices)
         {
@@ -18,21 +22,35 @@ namespace NESEmulator
 
             List<InterruptingBusDevice> interruptingDevices = _busDeviceList.FindAll((bd) => bd is InterruptingBusDevice)
                                                                             .ConvertAll((bd) => (InterruptingBusDevice)bd);
-            var interruptableBusDevices = from device in _busDeviceList
-                                          where device is InterruptableBusDevice
-                                          select device;
+            var interruptableBusDevices = getInterruptableDevices();
+
             foreach (var device in interruptableBusDevices)
             {
                 foreach (var intDevice in interruptingDevices)
-                    intDevice.RaiseInterrupt += ((InterruptableBusDevice)device).HandleInterrupt;
+                {
+                    intDevice.RaiseInterrupt += device.HandleInterrupt;
+                    Log.Debug($"Added device {intDevice.DeviceType} as interrupting device");
+                }
             }
+
+            _cartConflicts = ((Cartridge)GetDevice(BusDeviceType.CART))?.HasBusConflicts ?? false;
+            Log.Debug($"Cartridge bus conflicts: {_cartConflicts}");
+        }
+
+        private IEnumerable<InterruptableBusDevice> getInterruptableDevices()
+        {
+            var interruptableBusDevices = from device in _busDeviceList
+                                          where device is InterruptableBusDevice
+                                          select (InterruptableBusDevice)device;
+
+            return interruptableBusDevices;
         }
 
         public byte Read(ushort addr, bool readOnly = false)
         {
             byte data = 0;
 
-            foreach(BusDevice device in _busDeviceList)
+            foreach (BusDevice device in _busDeviceList)
             {
                 if (device.Read(addr, out data))
                     break;
@@ -41,12 +59,27 @@ namespace NESEmulator
             return data;
         }
 
+        private bool _cartWrite;
         public void Write(ushort addr, byte data)
         {
             foreach (BusDevice device in _busDeviceList)
             {
                 if (device.Write(addr, data))
+                {
+                    // For mappers that have bus conflicts (two values written to the bus at once), this
+                    // allows the CPU to "win" on a write over the cartridge.
+                    if (_cartConflicts && device.DeviceType == BusDeviceType.CART)
+                    {
+                        _cartWrite = true;
+                        continue;
+                    }
+
+                    if (_cartConflicts && device.DeviceType == BusDeviceType.CPU && _cartWrite)
+                    {
+                        Log.Debug($"CPU write used in BUS conflict");
+                    }
                     break;
+                }
             }
         }
 
@@ -62,6 +95,23 @@ namespace NESEmulator
             _busDeviceList.Insert(0, cartridge);
             CS2C02 ppu = GetPPU();
             ppu?.ConnectCartridge(cartridge);
+
+            var interruptableBusDevices = getInterruptableDevices();
+
+            foreach (var device in interruptableBusDevices)
+            {
+                cartridge.RaiseInterrupt += device.HandleInterrupt;
+                Log.Debug($"Added device {cartridge.DeviceType} as interrupting device");
+            }
+
+            _cartConflicts = cartridge.HasBusConflicts;
+
+            if (cartridge.UsesScanlineCounter)
+            {
+                ppu.DrawSprites += ((IScanlineCounterMapper)cartridge.mapper).OnSpriteFetch;
+            }
+
+            Log.Debug($"Cartridge bus conflicts: {_cartConflicts}");
         }
 
         public void clock()

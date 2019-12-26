@@ -7,6 +7,10 @@ namespace NESEmulator
         protected byte nCHRBanks;
         protected readonly Cartridge cartridge;
 
+        public abstract bool HasBusConflicts { get; }
+        public abstract bool PRGRAMEnable { get; protected set; }
+        public virtual bool HasScanlineCounter { get => false; }
+
         public Mapper(Cartridge cart, byte prgBanks, byte chrBanks)
         {
             cartridge = cart;

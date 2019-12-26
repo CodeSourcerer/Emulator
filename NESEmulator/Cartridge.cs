@@ -7,7 +7,7 @@ using log4net;
 
 namespace NESEmulator
 {
-    public class Cartridge : BusDevice
+    public class Cartridge : InterruptingBusDevice
     {
         private static readonly ILog Log = LogManager.GetLogger(typeof(Cartridge));
 
@@ -31,6 +31,7 @@ namespace NESEmulator
             }
         }
 
+        public bool UseFourScreen { get; private set; }
         public bool ImageValid { get; private set; }
         public byte MapperID  { get; private set; }
         public byte nPRGBanks { get; private set; }
@@ -40,17 +41,24 @@ namespace NESEmulator
         protected byte[] PRGROM;
         protected byte[] CHRMemory;
 
-        private Mapper mapper;
+        public Mapper mapper { get; private set; }
 
         public ulong ThisClockCycle { get; private set; }
+        public bool HasBusConflicts { get => mapper.HasBusConflicts; }
+        public bool UsesScanlineCounter { get => mapper.HasScanlineCounter; }
 
-        public Cartridge()
+        private Bus _bus;
+
+        public Cartridge(Bus parentBus)
         {
+            _bus = parentBus;
             mirror = Mirror.HORIZONTAL;
 
             PRGROM = new byte[32 * 1024];
             PRGRAM = new byte[32 * 1024];
         }
+
+        public event InterruptingDeviceHandler RaiseInterrupt;
 
         #region Bus Interface
         /// <summary>
@@ -97,7 +105,11 @@ namespace NESEmulator
                 if (mapped_addr == 0xFFFFFFFF)
                 {
                     // Write data to cartridge RAM
-                    PRGRAM[addr & 0x1FFF] = data;
+                    if (mapper.PRGRAMEnable)
+                    {
+                        PRGRAM[addr & 0x1FFF] = data;
+                        //Log.Debug($"Write to PRG RAM [addr={addr:X4}]");
+                    }
                 }
                 return true;
             }
@@ -130,6 +142,7 @@ namespace NESEmulator
                 if (mapped_addr != 0xFFFFFFFF)
                 {
                     data = CHRMemory[mapped_addr];
+                    //Log.Debug($"PPU Read [mapped_addr={mapped_addr:X4}] [data={data:X2}]");
                 }
                 else
                 {
@@ -211,6 +224,8 @@ namespace NESEmulator
                 cartStream.Read(stuff, 0, 512);
             }
 
+            UseFourScreen = cartridgeHeader.mapper1.TestBit(3);
+
             // Determine mapper ID
             MapperID = (byte)(((cartridgeHeader.mapper2 >> 4) << 4) | (cartridgeHeader.mapper1 >> 4));
             mirror = cartridgeHeader.mapper1.TestBit(0) ? Mirror.VERTICAL : Mirror.HORIZONTAL;
@@ -231,14 +246,14 @@ namespace NESEmulator
             }
             else if (fileType == 1)
             {
-                Log.Debug($"Reading {(cartridgeHeader.prg_rom_chunks * 16384) / 1024} KB of PRG data from ROM");
+                Log.Debug($"Reading {cartridgeHeader.prg_rom_chunks}-16 KB blocks [{(cartridgeHeader.prg_rom_chunks * 16384) / 1024} KB total] of PRG data from ROM");
                 nPRGBanks = cartridgeHeader.prg_rom_chunks;
                 PRGROM = new byte[nPRGBanks * 16384];
                 cartStream.Read(PRGROM, 0, PRGROM.Length);
 
                 if (cartridgeHeader.chr_rom_chunks == 0)
                     cartridgeHeader.chr_rom_chunks = 1;
-                Log.Debug($"Reading {(cartridgeHeader.chr_rom_chunks * 8192) / 1024} KB of CHR data from ROM");
+                Log.Debug($"Reading {cartridgeHeader.chr_rom_chunks}-8 KB blocks [{(cartridgeHeader.chr_rom_chunks * 8192) / 1024} KB total] of CHR data from ROM");
                 nCHRBanks = cartridgeHeader.chr_rom_chunks;
                 CHRMemory = new byte[nCHRBanks * 8192];
                 cartStream.Read(CHRMemory, 0, CHRMemory.Length);
@@ -246,6 +261,7 @@ namespace NESEmulator
             else if (fileType == 2)
             {
                 // TODO: implement later
+                throw new NotSupportedException("iNES 2.0 is not supported");
             }
 
             // Load appropriate mapper
@@ -257,8 +273,15 @@ namespace NESEmulator
             {
                 ImageValid = false;
             }
+
             if (mapper != null)
                 ImageValid = true;
+        }
+
+        public void Mapper_InvokeInterrupt(object sender, InterruptEventArgs e)
+        {
+            //Log.Debug("Interrupt invoked from mapper");
+            RaiseInterrupt.Invoke(sender, e);
         }
     }
 }

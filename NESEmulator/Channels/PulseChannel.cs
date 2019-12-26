@@ -121,7 +121,7 @@ namespace NESEmulator.Channels
                 _dutyCycle = DUTY_CYCLE[data >> 6];
                 _volumeEnvelope.ConstantVolume = data.TestBit(4);
                 _volumeEnvelope.Volume = (byte)(data & 0x0F);
-                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Duty={data >> 6}] [Halt={_lengthCounter.Halt}] [ConstantVolume={_volumeEnvelope.ConstantVolume}] [Volume/Period={_volumeEnvelope.Volume}]");
+                //Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Duty={data >> 6}] [Halt={_lengthCounter.Halt}] [ConstantVolume={_volumeEnvelope.ConstantVolume}] [Volume/Period={_volumeEnvelope.Volume}]");
             }
             else if (addr == 0x4001 || addr == 0x4005)
             {
@@ -130,7 +130,7 @@ namespace NESEmulator.Channels
                 _sweepUnit.DividerPeriod = ((data >> 4) & 7);
                 _sweepUnit.ShiftCount    = (byte)(data & 7);
                 _sweepUnit.Reload        = true;
-                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [SweepEnabled={_sweepUnit.Enabled}] [DividerPeriod={_sweepUnit.DividerPeriod}] [Negate={_sweepUnit.Negate}] [ShiftCount={_sweepUnit.ShiftCount}]");
+                //Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [SweepEnabled={_sweepUnit.Enabled}] [DividerPeriod={_sweepUnit.DividerPeriod}] [Negate={_sweepUnit.Negate}] [ShiftCount={_sweepUnit.ShiftCount}]");
             }
             // Pulse channel 1 & 2 timer low bits
             else if (addr == 0x4002 || addr == 0x4006)

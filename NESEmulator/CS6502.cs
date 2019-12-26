@@ -94,6 +94,7 @@ namespace NESEmulator
 
         public override void HandleInterrupt(object sender, InterruptEventArgs e)
         {
+            //Log.Debug($"Handling {e.Interrupt} from {sender}");
             switch (e.Interrupt)
             {
                 case InterruptType.NMI:

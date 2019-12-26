@@ -5,6 +5,10 @@ namespace NESEmulator.Mappers
 {
     public class Mapper_000 : Mapper
     {
+        public override bool HasBusConflicts { get => false; }
+
+        public override bool PRGRAMEnable { get => true; protected set => _ = value; }
+
         public Mapper_000(Cartridge cartridge, byte prgBanks, byte chrBanks)
             : base(cartridge, prgBanks, chrBanks)
         {

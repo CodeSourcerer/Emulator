@@ -12,6 +12,10 @@ namespace NESEmulator.Mappers
         private byte _prgBank;                // currently selected PRG bank
         private uint[] _pPRGBank = new uint[2]; // Offsets into PRG ROM
 
+        public override bool HasBusConflicts { get => false; }
+
+        public override bool PRGRAMEnable { get => true; protected set => _ = value; }
+
         public Mapper_002(Cartridge cartridge, byte prgBanks, byte chrBanks)
             : base(cartridge, prgBanks, chrBanks)
         {

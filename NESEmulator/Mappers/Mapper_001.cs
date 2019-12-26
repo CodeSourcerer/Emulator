@@ -29,6 +29,10 @@ namespace NESEmulator.Mappers
             get => (_controlRegister & 0x10) >> 4;
         }
 
+        public override bool HasBusConflicts { get => false; }
+
+        public override bool PRGRAMEnable { get => true; protected set => _ = value; }
+
         public Mapper_001(Cartridge cartridge, byte prgBanks, byte chrBanks)
             : base(cartridge, prgBanks, chrBanks)
         {

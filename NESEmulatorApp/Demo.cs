@@ -98,7 +98,7 @@ namespace NESEmulatorApp
 
         public Cartridge LoadCartridge(string fileName)
         {
-            Cartridge cartridge = new Cartridge();
+            Cartridge cartridge = new Cartridge(nesBus);
 
             using (FileStream fs = new FileStream(fileName, FileMode.Open, FileAccess.Read))
             {

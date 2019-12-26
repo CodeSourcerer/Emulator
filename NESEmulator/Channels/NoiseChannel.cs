@@ -100,19 +100,19 @@ namespace NESEmulator.Channels
                 _lengthCounter.Halt = data.TestBit(5);
                 _volumeEnvelope.ConstantVolume = data.TestBit(4);
                 _volumeEnvelope.Volume = (byte)(data & 0x0F);
-                Log.Debug($"Noise channel written. [Halt={_lengthCounter.Halt}] [ConstantVolume={_volumeEnvelope.ConstantVolume}] [Volume/Period={_volumeEnvelope.Volume}]");
+                //Log.Debug($"Noise channel written. [Halt={_lengthCounter.Halt}] [ConstantVolume={_volumeEnvelope.ConstantVolume}] [Volume/Period={_volumeEnvelope.Volume}]");
             }
             else if (addr == 0x400E)
             {
                 ShiftMode = data.TestBit(7);
                 _sequencer.TimerReload = noise_period[data & 0x0F];
-                Log.Debug($"Noise channel written. [ShiftMode={ShiftMode}] [Timer={_sequencer.TimerReload}]");
+                //Log.Debug($"Noise channel written. [ShiftMode={ShiftMode}] [Timer={_sequencer.TimerReload}]");
             }
             else if (addr == 0x400F)
             {
                 _lengthCounter.LoadLength((byte)(data >> 3));
                 _volumeEnvelope.Start = true;
-                Log.Debug($"Noise channel written. [Length={_lengthCounter.Length}]");
+                //Log.Debug($"Noise channel written. [Length={_lengthCounter.Length}]");
             }
         }
     }

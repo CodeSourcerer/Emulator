@@ -12,8 +12,8 @@ namespace NESEmulator
 {
     public class CS2A03 : InterruptingBusDevice
     {
-        public override BusDeviceType DeviceType => BusDeviceType.APU;
-        public override event InterruptingDeviceHandler RaiseInterrupt;
+        public BusDeviceType DeviceType => BusDeviceType.APU;
+        public event InterruptingDeviceHandler RaiseInterrupt;
         public const int SOUND_BUFFER_SIZE_MS   = 20;
 
         private static ILog Log = LogManager.GetLogger(typeof(CS2A03));
@@ -69,7 +69,7 @@ namespace NESEmulator
             _bus = bus;
         }
 
-        public override void Clock(ulong clockCounter)
+        public void Clock(ulong clockCounter)
         {
             // Clock all audio channels, letting them determine whether or not to actually do something or not
             foreach (var audioChannel in _audioChannels)
@@ -102,7 +102,7 @@ namespace NESEmulator
             }
         }
 
-        public override bool Read(ushort addr, out byte data)
+        public bool Read(ushort addr, out byte data)
         {
             bool dataRead = false;
             data = 0x00;
@@ -143,12 +143,12 @@ namespace NESEmulator
             return dataRead;
         }
 
-        public override void Reset()
+        public void Reset()
         {
             _apuClockCounter = 0;
         }
 
-        public override bool Write(ushort addr, byte data)
+        public bool Write(ushort addr, byte data)
         {
             bool dataWritten = false;
 
@@ -243,12 +243,13 @@ namespace NESEmulator
                          Justification = "Condition should only be met when output is exactly 0.0 to avoid divide by 0 errors")]
         public short GetMixedAudioSample()
         {
-            short pulse = (short)(_pulseChannel1.Output + _pulseChannel2.Output);
+            short pulse = (short)0;// (_pulseChannel1.Output + _pulseChannel2.Output);
             double pulse_out = pulse == 0 ? 0 : 95.88 / (8128.0 / pulse + 100);
-            double tnd = _triangleChannel.Output / 8227.0 + (_noiseChannel.Output / 12241.0) + (_dmcChannel.Output / 22638);
+            double tnd = (_dmcChannel.Output / 22638);//_triangleChannel.Output / 8227.0 + (_noiseChannel.Output / 12241.0) + (_dmcChannel.Output / 22638);
             double tnd_out = tnd == 0 ? 0 : 159.79 / (1 / tnd + 100);
 
-            short mixedOutput = (short)((pulse_out + tnd_out) * short.MaxValue);
+            //short mixedOutput = (short)((pulse_out + tnd_out) * short.MaxValue);
+            short mixedOutput = (short)((_dmcChannel.Output / 128.0) * short.MaxValue);
             return mixedOutput;
         }
 

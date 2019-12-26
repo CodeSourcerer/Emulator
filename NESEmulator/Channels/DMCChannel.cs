@@ -59,6 +59,8 @@ namespace NESEmulator.Channels
                 // New output cycle
                 _bitsRemaining = 8;
 
+                getNextSample();
+
                 if (_sampleBuffer == 0)
                 {
                     _silence = true;
@@ -68,7 +70,6 @@ namespace NESEmulator.Channels
                     _silence = false;
                     _shifter = _sampleBuffer;
                     _sampleBuffer = 0;
-                    getNextSample();
                 }
             }
 
@@ -101,6 +102,11 @@ namespace NESEmulator.Channels
         /// <param name="clockCycles"></param>
         public void Clock(ulong clockCycles)
         {
+            if (_interruptFlag == true)
+            {
+                _apu.IRQ();
+            }
+
             if (clockCycles % 3 == 0)
             {
                 _dmcTimer.Clock();
@@ -121,6 +127,7 @@ namespace NESEmulator.Channels
                     IRQEnable    = data.TestBit(7);
                     Loop         = data.TestBit(6);
                     RateIndex    = (byte)(data & 0x0F);
+                    _dmcTimer.CounterReload = _rateTableNTSC[RateIndex];
                     if (!IRQEnable)
                         _interruptFlag = false;
                     Log.Debug($"DMC Channel written: [IRQEnable={IRQEnable}] [Loop={Loop}] [RateIndex={RateIndex:X2}]");
@@ -138,6 +145,7 @@ namespace NESEmulator.Channels
 
                 case ADDR_SAMPLELENGTH:
                     SampleLength = (ushort)((data << 4) + 1);
+                    _bytesRemaining = SampleLength;
                     Log.Debug($"DMC Chennel written: [SampleLength={SampleLength:X2}]");
                     break;
             }
@@ -149,8 +157,11 @@ namespace NESEmulator.Channels
             {
                 _apu.StallCPU(4);
                 _sampleBuffer = _apu.ReadBus(_samplePtr);
-                if (++_samplePtr > 0xFFFF)
+                if (++_samplePtr == 0x0000)
+                {
                     _samplePtr = 0x8000;
+                    Log.Debug("DMC Sample ptr wrapped!");
+                }
                 if (--_bytesRemaining == 0)
                 {
                     if (Loop)

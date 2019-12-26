@@ -22,6 +22,12 @@ namespace NESEmulator
                 case 2:
                     mapper = new Mapper_002(cart, cart.nPRGBanks, cart.nCHRBanks);
                     break;
+                case 3:
+                    mapper = new Mapper_003(cart, cart.nPRGBanks, cart.nCHRBanks);
+                    break;
+                case 4:
+                    mapper = new Mapper_004(cart, cart.nPRGBanks, cart.nCHRBanks);
+                    break;
                 default:
                     throw new NotSupportedException($"MapperID '{cart.MapperID}' is not supported");
             }
