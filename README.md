@@ -37,7 +37,7 @@ Arrows control D-pad
 
 Player 2 controls not yet supported.
 
-### Current Supported Features
+## Current Supported Features
 * 6502 CPU - Complete (undocumented opcodes not supported)
 * 2C02 PPU - Complete
 * 2A03 APU - In Progress
