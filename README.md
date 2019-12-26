@@ -36,3 +36,18 @@ X - A
 Arrows control D-pad
 
 Player 2 controls not yet supported.
+
+### Current Supported Features
+* 6502 CPU - Complete (undocumented opcodes not supported)
+* 2C02 PPU - Complete
+* 2A03 APU - In Progress
+	* Pulse channels 1 & 2
+	* Triangle channel
+	* Noise channel
+	* DMC channel (in progress, still buggy)
+* Mappers - In Progress
+	* Mapper 000 - Complete
+	* Mapper 001 - Complete
+	* Mapper 002 - Complete
+	* Mapper 003 - Complete
+	* Mapper 004 - In progress (need to test IRQ handling)
