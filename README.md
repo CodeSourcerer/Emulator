@@ -46,6 +46,7 @@ Player 2 controls not yet supported.
 	* Noise channel - Complete
 	* DMC channel - In Progress, still buggy
 * Mappers - In Progress
+	* Battery saves - Not yet implemented
 	* Mapper 000 - Complete
 	* Mapper 001 - Complete
 	* Mapper 002 - Complete
