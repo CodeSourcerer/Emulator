@@ -13,6 +13,8 @@ namespace NESEmulator.APU
     {
         public bool InterruptInhibit { get; set; }
 
+        public bool FrameInterrupt;
+
         private SequenceMode _mode;
         public SequenceMode Mode
         {
@@ -58,15 +60,6 @@ namespace NESEmulator.APU
         {
             _clockCounter++;
 
-            //foreach (var audioChannel in _audioChannels)
-            //{
-            //    // Triange channel clocked every CPU cycle
-            //    if (audioChannel is TriangleChannel)
-            //        ((TriangleChannel)audioChannel).Clock(_clockCounter);
-            //    else if (_clockCounter % 2 == 0) // all other channels clocked every other CPU cycle
-            //        audioChannel.Clock(_clockCounter);
-            //}
-
             SequenceAction[] sequenceActions = null;
             if (this.Mode == SequenceMode.FourStep)
             {
@@ -105,7 +98,8 @@ namespace NESEmulator.APU
                                 channel.ClockHalfFrame();
                                 break;
                             case SequenceAction.Interrupt:
-                                this._apu.IRQ();
+                                if (!InterruptInhibit)
+                                    FrameInterrupt = true;
                                 break;
                         }
                     }

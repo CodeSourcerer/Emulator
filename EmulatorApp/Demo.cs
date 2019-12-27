@@ -70,8 +70,8 @@ namespace EmulatorApp
             Thread.CurrentThread.Name = "main";
             Log.Info("Demo app started");
             Demo demo = new Demo("NES Emulator");
-            //Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes"); 
-            Cartridge cartridge = demo.LoadCartridge("tests\\smb2.nes");
+            Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes"); 
+            //Cartridge cartridge = demo.LoadCartridge("tests\\smb2.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\donkey kong.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\tetris.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\megaman2.nes");

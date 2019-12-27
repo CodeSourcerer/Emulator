@@ -18,7 +18,20 @@ namespace NESEmulator.Channels
             { 428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54 };
 
         public short Output { get; private set; }
-        public bool Enabled { get; set; }
+        public bool Enabled
+        {
+            get => _bytesRemaining == 0;
+            set
+            {
+                if (!value)
+                    _bytesRemaining = 0;
+                else
+                {
+                    if (_bytesRemaining == 0)
+                        restartSample();
+                }
+            }
+        }
 
         public byte FlagsAndRate { get; set; }
 
@@ -42,7 +55,7 @@ namespace NESEmulator.Channels
         private byte _shifter;
         private byte _bitsRemaining;
         private bool _silence;  // I keel you!
-        private bool _interruptFlag;
+        public bool InterruptFlag { get; set; }
 
         public DMCChannel(CS2A03 apu)
         {
@@ -50,6 +63,7 @@ namespace NESEmulator.Channels
             _dmcTimer = new APUDivider(timer_Elapsed);
             _sampleBuffer = 0;
             Output = 0;
+            Loop = false;
         }
 
         private void timer_Elapsed(object sender, EventArgs e)
@@ -61,9 +75,10 @@ namespace NESEmulator.Channels
 
                 getNextSample();
 
-                if (_sampleBuffer == 0)
+                if (_bytesRemaining == 0)
                 {
                     _silence = true;
+                    Output = 0;
                 }
                 else
                 {
@@ -77,6 +92,7 @@ namespace NESEmulator.Channels
             {
                 bool add = (_shifter & 0x01) == 1;
 
+                _shifter >>= 1;
                 if (add && Output < 126)
                     Output += 2;
                 else if (!add && Output > 2)
@@ -102,12 +118,17 @@ namespace NESEmulator.Channels
         /// <param name="clockCycles"></param>
         public void Clock(ulong clockCycles)
         {
-            if (_interruptFlag == true)
+            MemoryReader memReader = _apu.GetMemoryReader();
+            if (memReader.BufferReady)
+                _sampleBuffer = memReader.Buffer;
+
+            if (InterruptFlag == true)
             {
                 _apu.IRQ();
+                Log.Debug("DMC IRQ");
             }
 
-            if (clockCycles % 3 == 0)
+            if (clockCycles % 6 == 0)
             {
                 _dmcTimer.Clock();
             }
@@ -129,7 +150,7 @@ namespace NESEmulator.Channels
                     RateIndex    = (byte)(data & 0x0F);
                     _dmcTimer.CounterReload = _rateTableNTSC[RateIndex];
                     if (!IRQEnable)
-                        _interruptFlag = false;
+                        InterruptFlag = false;
                     Log.Debug($"DMC Channel written: [IRQEnable={IRQEnable}] [Loop={Loop}] [RateIndex={RateIndex:X2}]");
                     break;
 
@@ -155,8 +176,7 @@ namespace NESEmulator.Channels
         {
             if (_bytesRemaining > 0)
             {
-                _apu.StallCPU(4);
-                _sampleBuffer = _apu.ReadBus(_samplePtr);
+                _apu.InitiateDMCSampleFetch(4, _samplePtr);
                 if (++_samplePtr == 0x0000)
                 {
                     _samplePtr = 0x8000;
@@ -167,13 +187,16 @@ namespace NESEmulator.Channels
                     if (Loop)
                         restartSample();
                     else if (IRQEnable)
-                        _interruptFlag = true;
+                        InterruptFlag = true;
                 }
             }
+            else
+                _sampleBuffer = 0;
         }
 
         private void restartSample()
         {
+            Log.Debug("Restarting DMC sample");
             _samplePtr = SampleAddress;
             _bytesRemaining = SampleLength;
         }

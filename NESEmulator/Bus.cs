@@ -16,6 +16,8 @@ namespace NESEmulator
         private ulong _systemClockCounter;
         private bool _cartConflicts;
 
+        private CS6502 _cpu;
+
         public Bus(BusDevice[] busDevices)
         {
             _busDeviceList = new List<BusDevice>(busDevices);
@@ -133,6 +135,12 @@ namespace NESEmulator
         public CS2C02 GetPPU()
         {
             return (CS2C02)GetDevice(BusDeviceType.PPU);
+        }
+
+        public CS6502 GetCPU()
+        {
+            _cpu = _cpu ?? (CS6502)GetDevice(BusDeviceType.CPU);
+            return _cpu;
         }
     }
 }

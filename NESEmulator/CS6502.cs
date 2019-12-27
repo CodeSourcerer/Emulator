@@ -84,12 +84,27 @@ namespace NESEmulator
         private byte _dmaAddr;
         private byte _dmaData;
         private bool _dmaSync = false;
-        
+
         #endregion // DMA Attributes
+
+        #region Memory Reader Attributes
+
+        public MemoryReader ExternalMemoryReader;
+        private bool _readerFetch = false;
+
+        #endregion // DMC Attributes
 
         public CS6502()
         {
             build_lookup();
+            ExternalMemoryReader = new MemoryReader();
+            ExternalMemoryReader.MemoryReadRequest += ExternalMemoryReader_MemoryReadRequest;
+        }
+
+        private void ExternalMemoryReader_MemoryReadRequest(object sender, EventArgs e)
+        {
+            _readerFetch = true;
+            ExternalMemoryReader.CyclesToComplete = 4;
         }
 
         public override void HandleInterrupt(object sender, InterruptEventArgs e)
@@ -121,10 +136,6 @@ namespace NESEmulator
         public FLAGS6502 status { get; set; }
         #endregion // Register Properties
 
-        public void Stall(byte cyclesToStall)
-        {
-            cycles = (byte)(cycles + cyclesToStall);
-        }
 
         /// <summary>
         /// Reset CPU to known state
@@ -263,6 +274,10 @@ namespace NESEmulator
             if (DMATransfer)
             {
                 doDMATransfer(clockCounter);
+            }
+            else if (_readerFetch)
+            {
+                readerFetch(clockCounter);
             }
             else
             {
@@ -510,6 +525,17 @@ namespace NESEmulator
                         _dmaSync = false;
                     }
                 }
+            }
+        }
+
+        private void readerFetch(ulong clockCounter)
+        {
+            if (clockCounter % 6 == 0)
+            {
+                ExternalMemoryReader.Buffer = read(ExternalMemoryReader.MemoryPtr);
+                ExternalMemoryReader.BufferReady = true;
+                this.cycles = ExternalMemoryReader.CyclesToComplete;
+                _readerFetch = false;
             }
         }
 

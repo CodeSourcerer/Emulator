@@ -77,6 +77,9 @@ namespace NESEmulator
                 audioChannel.Clock(clockCounter);
             }
 
+            if (_frameCounter.FrameInterrupt)
+                IRQ();
+
             // APU clocks every other CPU cycle
             if (clockCounter % 6 == 0)
             {
@@ -132,6 +135,9 @@ namespace NESEmulator
             else if (addr == ADDR_STATUS)
             {
                 dataRead = true;
+                data = (byte)((_dmcChannel.InterruptFlag ? 0 : 1) << 7 |
+                              (_frameCounter.FrameInterrupt ? 0 : 1) << 6);
+                _frameCounter.FrameInterrupt = false;
                 Log.Debug("Status register read");
             }
             else if (addr == ADDR_FRAME_COUNTER)
@@ -188,12 +194,18 @@ namespace NESEmulator
                 _pulseChannel1.Enabled = data.TestBit(0);
                 _pulseChannel2.Enabled = data.TestBit(1);
                 _triangleChannel.Enabled = data.TestBit(2);
-                _dmcChannel.Enabled = data.TestBit(3);
+                _noiseChannel.Enabled = data.TestBit(3);
+                _dmcChannel.Enabled = data.TestBit(4);
+                _dmcChannel.InterruptFlag = false;
             }
             else if (addr == ADDR_FRAME_COUNTER)
             {
                 dataWritten = true;
                 _frameCounter.Reset();
+                _frameCounter.InterruptInhibit = data.TestBit(6);
+                if (_frameCounter.InterruptInhibit)
+                    _frameCounter.FrameInterrupt = false;
+
                 if (data.TestBit(7) == false)
                 {
                     _frameCounter.Mode = SequenceMode.FourStep;
@@ -243,13 +255,13 @@ namespace NESEmulator
                          Justification = "Condition should only be met when output is exactly 0.0 to avoid divide by 0 errors")]
         public short GetMixedAudioSample()
         {
-            short pulse = (short)0;// (_pulseChannel1.Output + _pulseChannel2.Output);
+            short pulse = (short)(_pulseChannel1.Output + _pulseChannel2.Output);
             double pulse_out = pulse == 0 ? 0 : 95.88 / (8128.0 / pulse + 100);
-            double tnd = (_dmcChannel.Output / 22638);//_triangleChannel.Output / 8227.0 + (_noiseChannel.Output / 12241.0) + (_dmcChannel.Output / 22638);
+            double tnd = _triangleChannel.Output / 8227.0 + (_noiseChannel.Output / 12241.0) + (_dmcChannel.Output / 22638.0);
             double tnd_out = tnd == 0 ? 0 : 159.79 / (1 / tnd + 100);
 
-            //short mixedOutput = (short)((pulse_out + tnd_out) * short.MaxValue);
-            short mixedOutput = (short)((_dmcChannel.Output / 128.0) * short.MaxValue);
+            short mixedOutput = (short)((pulse_out + tnd_out) * short.MaxValue);
+            //short mixedOutput = (short)((_dmcChannel.Output / 128.0) * short.MaxValue);
             return mixedOutput;
         }
 
@@ -262,9 +274,16 @@ namespace NESEmulator
 
         public bool IsAudioBufferReadyToPlay() => _audioReadyToPlay;
 
-        public void StallCPU(byte cyclesToStall)
+        public void InitiateDMCSampleFetch(byte cyclesToStall, ushort sampleAddr)
         {
-            ((CS6502)_bus?.GetDevice(BusDeviceType.CPU)).Stall(cyclesToStall);
+            CS6502 cpu = (CS6502)_bus?.GetDevice(BusDeviceType.CPU);
+            cpu.ExternalMemoryReader.MemoryPtr = sampleAddr;
+            cpu.ExternalMemoryReader.BeginRead(this);
+        }
+
+        public MemoryReader GetMemoryReader()
+        {
+            return _bus?.GetCPU().ExternalMemoryReader;
         }
     }
 }

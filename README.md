@@ -1,4 +1,7 @@
-﻿## Building
+﻿# C# NES Emulator
+This is my NES emulator written in C#. A great deal of this is based on an emulator that can be found [here](https://github.com/OneLoneCoder/olcNES).
+
+## Building
 I use Visual Studio 2019 Community Edition while developing this project, so if you have it available you can simply open the solution file - otherwise
 you will have to add in the appropriate project files into your own solution.
 
