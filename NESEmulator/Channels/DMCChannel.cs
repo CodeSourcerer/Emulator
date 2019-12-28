@@ -151,7 +151,7 @@ namespace NESEmulator.Channels
                     _dmcTimer.CounterReload = _rateTableNTSC[RateIndex];
                     if (!IRQEnable)
                         InterruptFlag = false;
-                    Log.Debug($"DMC Channel written: [IRQEnable={IRQEnable}] [Loop={Loop}] [RateIndex={RateIndex:X2}]");
+                    //Log.Debug($"DMC Channel written: [IRQEnable={IRQEnable}] [Loop={Loop}] [RateIndex={RateIndex:X2}]");
                     break;
 
                 case ADDR_DIRECTLOAD:

@@ -83,6 +83,12 @@ namespace NESEmulator.Channels
             _lengthCounter.Clock();
         }
 
+        /// <summary>
+        /// Called from APU when FrameCounter detects we are on a quarter frame.
+        /// </summary>
+        /// <remarks>
+        /// This is where we update the volume envelope.
+        /// </remarks>
         public void ClockQuarterFrame()
         {
             _volumeEnvelope.Clock();
