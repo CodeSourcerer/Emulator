@@ -9,10 +9,7 @@ namespace NESEmulator
 
         public byte CoarseX
         {
-            get
-            {
-                return (byte)(reg & 0x1F);
-            }
+            get => (byte)(reg & 0x1F);
             set
             {
                 reg = reg.SetBit(0, value.TestBit(0));
@@ -25,10 +22,7 @@ namespace NESEmulator
 
         public byte CoarseY
         {
-            get
-            {
-                return (byte)((reg >> 5) & 0x1F);
-            }
+            get => (byte)((reg >> 5) & 0x1F);
             set
             {
                 reg = reg.SetBit(5, value.TestBit(0));
@@ -41,34 +35,19 @@ namespace NESEmulator
 
         public bool NameTableX
         {
-            get
-            {
-                return reg.TestBit(10);
-            }
-            set
-            {
-                reg = reg.SetBit(10, value);
-            }
+            get => reg.TestBit(10);
+            set => reg = reg.SetBit(10, value);
         }
 
         public bool NameTableY
         {
-            get
-            {
-                return reg.TestBit(11);
-            }
-            set
-            {
-                reg = reg.SetBit(11, value);
-            }
+            get => reg.TestBit(11);
+            set => reg = reg.SetBit(11, value);
         }
 
         public byte FineY
         {
-            get
-            {
-                return (byte)((reg >> 12) & 0x07);
-            }
+            get => (byte)((reg >> 12) & 0x07);
             set
             {
                 reg = reg.SetBit(12, value.TestBit(0));
@@ -77,24 +56,10 @@ namespace NESEmulator
             }
         }
 
-        /// <summary>
-        /// Represents A12 pin on PPU
-        /// </summary>
-        public bool A12
-        {
-            get => reg.TestBit(12);
-        }
-
         public bool Unused
         {
-            get
-            {
-                return reg.TestBit(15);
-            }
-            set
-            {
-                reg = reg.SetBit(15, value);
-            }
+            get => reg.TestBit(15);
+            set => reg = reg.SetBit(15, value);
         }
     }
 }
