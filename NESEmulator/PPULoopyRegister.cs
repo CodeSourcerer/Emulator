@@ -77,6 +77,14 @@ namespace NESEmulator
             }
         }
 
+        /// <summary>
+        /// Represents A12 pin on PPU
+        /// </summary>
+        public bool A12
+        {
+            get => reg.TestBit(12);
+        }
+
         public bool Unused
         {
             get
