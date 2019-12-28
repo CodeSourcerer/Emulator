@@ -109,7 +109,8 @@ namespace NESEmulator
 
         public override void HandleInterrupt(object sender, InterruptEventArgs e)
         {
-            //Log.Debug($"Handling {e.Interrupt} from {sender}");
+            //if (!(sender is CS2A03) && !(sender is CS2C02 && e.Interrupt == InterruptType.NMI))
+            //    Log.Debug($"Handling {e.Interrupt} from {sender}");
             switch (e.Interrupt)
             {
                 case InterruptType.NMI:
@@ -517,8 +518,6 @@ namespace NESEmulator
                     ((Bus)bus).GetPPU().OAM[_dmaAddr >> 2][_dmaAddr & 0x03] = _dmaData;
                     _dmaAddr++;
 
-                    // TODO: Apparently, technically _dmaAddr can start anywhere and it should wrap back to starting point
-                    // Implement that behavior later.
                     if (_dmaAddr == 0x00)
                     {
                         DMATransfer = false;
