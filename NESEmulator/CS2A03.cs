@@ -152,6 +152,7 @@ namespace NESEmulator
         public void Reset()
         {
             _apuClockCounter = 0;
+            Write(ADDR_STATUS, 0x00);
         }
 
         public bool Write(ushort addr, byte data)
