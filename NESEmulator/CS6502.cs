@@ -514,7 +514,6 @@ namespace NESEmulator
                 if (clockCounter % 2 == 0)
                 {
                     _dmaData = read((ushort)(_dmaPage << 8 | _dmaAddr));
-                    Log.Debug($"DMA read [addr={_dmaAddr:X2}] [data={_dmaData:X2}]");
                 }
                 else
                 {
