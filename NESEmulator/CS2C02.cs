@@ -33,6 +33,7 @@ namespace NESEmulator
 
         // PPU has it's own bus
         private Bus _ppuBus;
+        private Bus _bus;
 
         private PPUStatus _status;
         private PPUMask _mask;
@@ -52,12 +53,13 @@ namespace NESEmulator
         // Pixel "dot" position information
         private short  _scanline;
         private ushort _cycle;
+        private ulong  _frameCounter;
 
         // Background rendering
-        private byte _bg_nextTileId;
-        private byte _bg_nextTileAttrib;
-        private byte _bg_nextTileLSB;
-        private byte _bg_nextTileMSB;
+        private byte   _bg_nextTileId;
+        private byte   _bg_nextTileAttrib;
+        private byte   _bg_nextTileLSB;
+        private byte   _bg_nextTileMSB;
         private ushort _bg_shifterPatternLo;
         private ushort _bg_shifterPatternHi;
         private ushort _bg_shifterAttribLo;
@@ -71,23 +73,25 @@ namespace NESEmulator
         private byte[][] _tblPattern = new byte[2][];
         private Sprite[] _patternTable = { new Sprite(128, 128), new Sprite(128, 128) };
 
-        private byte[] _palette = new byte[32];
+        private byte[]  _palette = new byte[32];
         private Pixel[] _palScreen = new Pixel[0x40];
 
+        // Sprite rendering
         public ObjectAttributeEntry[] OAM = new ObjectAttributeEntry[64];
-        private byte _OAMaddr;
-
-        private ObjectAttributeEntry[] _spriteScanline = new ObjectAttributeEntry[8];
-        private byte _spriteCount;
-        private byte[] _spriteShifterPatternLo = new byte[8];
-        private byte[] _spriteShifterPatternHi = new byte[8];
-        private bool _spriteZeroHitPossible = false;
-        private bool _spriteZeroBeingRendered = false;
+        private ObjectAttributeEntry[] _secondaryOAM = new ObjectAttributeEntry[8];
+        private byte   _OAMaddr;
+        private byte   _spriteCurrCount;
+        private byte[] _spriteCurrShifterPatternLo = new byte[8];
+        private byte[] _spriteCurrShifterPatternHi = new byte[8];
+        private bool   _spriteZeroHitPossible = false;
+        private bool   _spriteZeroBeingRendered = false;
+        private byte   _spritePatternBitsLo;
+        private byte   _spritePatternBitsHi;
+        private ushort _spritePatternAddrLo;
+        private byte   _currSprite = 0;   // current sprite on scanline we are evaluating
 
         private Cartridge _cartridge;
-
         private List<PPUCycleNode>[] _cycleOperations;
-
         private Random _random;
 
         public CS2C02()
@@ -227,6 +231,11 @@ namespace NESEmulator
 
         #region Bus Communications
 
+        public void ConnectBus(Bus bus)
+        {
+            _bus = bus;
+        }
+
         public void Reset()
         {
             _fineX                  = 0;
@@ -234,6 +243,7 @@ namespace NESEmulator
             _ppuDataBuffer          = 0;
             _scanline               = 0;
             _cycle                  = 0;
+            _frameCounter           = 0;
             _bg_nextTileId          = 0;
             _bg_nextTileAttrib      = 0;
             _bg_nextTileLSB         = 0;
@@ -573,11 +583,13 @@ namespace NESEmulator
                 // Foreground Rendering ===================================================
                 if (_scanline != 261)
                 {
-                    if (_cycle == 64)
+                    // Do secondary OAM clear and sprite evaluation at cycle 258 other crap is
+                    // messing with sprite shift registers before this time and the evaluation
+                    // overwrites the sprite data for this scanline. Need to possibly revisit this later...
+                    if (_cycle == 258)
+                    { 
                         resetSpriteDataForScanline();
 
-                    if (_cycle == 256)
-                    {
                         // We've reached the end of a visible scanline. It is now time to determine which
                         // sprites are visible on the next scanline, and preload this info into buffers that
                         // we can work with while the scanline scans the row.
@@ -602,47 +614,46 @@ namespace NESEmulator
 
                 }
 
-                if (_cycle == 340)
+                if (_cycle > 256 && _cycle <= 320)
                 {
-                    // Now we're at the very end of the scanline, so prepare the sprite shifters with the 8 or
-                    // less selected sprites.
-                    for (byte i = 0; i < _spriteCount; i++)
+                    switch ((_cycle - 1) % 8)
                     {
-                        // We need to extract the 8-bit row patterns of the sprite with the correct vertical
-                        // offset. The "Sprite Mode" also affects this as the sprites may be 8 or 16 rows high.
-                        // Additionally, the sprite can be flipped both vertically and horizontally.
-                        byte sprite_pattern_bits_lo, sprite_pattern_bits_hi;
-                        ushort sprite_pattern_addr_lo, sprite_pattern_addr_hi;
+                        case 0:
+                            // Garbage NT byte fetch
+                            fetchNextBGTileId();
+                            break;
+                        case 2:
+                            // Garbage AT byte fetch
+                            fetchNextBGTileAttrib();
+                            break;
+                        case 4:
+                            // Low sprite tile byte
 
-                        // Determine the memory addresses that contain the byte of pattern data. We only need
-                        // the lo pattern address, because the hi pattern address is always offset by 8 from the
-                        // lo address.
-                        if (!_control.SpriteSize)
-                        {
-                            sprite_pattern_addr_lo = loadNextSpr8x8TileLSB(i);
-                        }
-                        else
-                        {
-                            sprite_pattern_addr_lo = loadNextSpr8x16TileLSB(i);
-                        }
+                            // Determine the memory addresses that contain the byte of pattern data. We only need
+                            // the lo pattern address, because the hi pattern address is always offset by 8 from the
+                            // lo address.
+                            _spritePatternAddrLo = _control.SpriteSize ? loadNextSpr8x16TileLSB(_currSprite) :
+                                                                           loadNextSpr8x8TileLSB(_currSprite);
+                            _spritePatternBitsLo = ppuRead(_spritePatternAddrLo);
+                            // If the sprite is flipped horizontally, we need to flip the pattern bytes
+                            if ((_secondaryOAM[_currSprite].attribute & 0x40) != 0)
+                                _spritePatternBitsLo = _spritePatternBitsLo.Flip();
+                            // Now we can load the pattern into our sprite shift registers ready for rendering on the next scanline
+                            _spriteCurrShifterPatternLo[_currSprite] = _spritePatternBitsLo;
+                            break;
+                        case 6:
+                            // High sprite tile byte
 
-                        // Hi bit plane equivalent is always offset by 8 bytes from lo bit plane
-                        sprite_pattern_addr_hi = (ushort)(sprite_pattern_addr_lo + 8);
+                            // Hi bit plane equivalent is always offset by 8 bytes from lo bit plane
+                            _spritePatternBitsHi = ppuRead((ushort)(_spritePatternAddrLo + 8));
+                            // If the sprite is flipped horizontally, we need to flip the pattern bytes
+                            if ((_secondaryOAM[_currSprite].attribute & 0x40) != 0)
+                                _spritePatternBitsHi = _spritePatternBitsHi.Flip();
+                            // Now we can load the pattern into our sprite shift registers ready for rendering on the next scanline
+                            _spriteCurrShifterPatternHi[_currSprite] = _spritePatternBitsHi;
 
-                        // Now we have the address of the sprite patterns, we can read them
-                        sprite_pattern_bits_lo = ppuRead(sprite_pattern_addr_lo);
-                        sprite_pattern_bits_hi = ppuRead(sprite_pattern_addr_hi);
-
-                        // If the sprite is flipped horizontally, we need to flip the pattern bytes
-                        if ((_spriteScanline[i].attribute & 0x40) != 0)
-                        {
-                            sprite_pattern_bits_lo = sprite_pattern_bits_lo.Flip();
-                            sprite_pattern_bits_hi = sprite_pattern_bits_hi.Flip();
-                        }
-
-                        // Now we can load the pattern into our sprite shift registers ready for rendering on the next scanline
-                        _spriteShifterPatternLo[i] = sprite_pattern_bits_lo;
-                        _spriteShifterPatternHi[i] = sprite_pattern_bits_hi;
+                            _currSprite++;
+                            break;
                     }
                 }
             }
@@ -686,23 +697,27 @@ namespace NESEmulator
                 // As soon as we find a non transparent pixel of a sprite, we can abort.
                 _spriteZeroBeingRendered = false;
 
-                for (byte i = 0; i < _spriteCount; i++)
+                for (byte i = 0; i < _spriteCurrCount; i++)
                 {
                     // Scanline cycle has "collided" with sprite, shifters taking over
-                    if (_spriteScanline[i].x == 0)
+                    if (_secondaryOAM[i].x == 0)
                     {
                         // Note: Fine X scrolling does not apply to sprites, the game should maintain their relationship
                         // with the background. So, we'll just use the MSB of the shifter.
 
                         // Determine the pixel value...
-                        byte fg_pixel_lo = (byte)((_spriteShifterPatternLo[i] & 0x80) > 0 ? 1 : 0);
-                        byte fg_pixel_hi = (byte)((_spriteShifterPatternHi[i] & 0x80) > 0 ? 1 : 0);
+                        byte fg_pixel_lo = (byte)((_spriteCurrShifterPatternLo[i] & 0x80) > 0 ? 1 : 0);
+                        byte fg_pixel_hi = (byte)((_spriteCurrShifterPatternHi[i] & 0x80) > 0 ? 1 : 0);
                         fg_pixel = (byte)((fg_pixel_hi << 1) | fg_pixel_lo);
 
                         // Extract the palette from the bottom 2 bits. Recall that foreground palettes are the latter 4
                         // in the palette memory.
-                        fg_palette = (byte)((_spriteScanline[i].attribute & 0x03) + 0x04);
-                        fg_priority = (byte)((_spriteScanline[i].attribute & 0x20) == 0 ? 1 : 0);
+                        fg_palette = (byte)((_secondaryOAM[i].attribute & 0x03) + 0x04);
+                        //fg_priority = (byte)((_spriteScanline[i].attribute & 0x20) == 0 ? 1 : 0);
+                        if ((_secondaryOAM[i].attribute & 0x20) == 0)
+                            fg_priority = 1;
+                        else
+                            fg_priority = 0;
 
                         // If pixel is not transparent, we render it and don't bother checking the rest because the earlier
                         // sprites in the list are higher priority
@@ -752,7 +767,7 @@ namespace NESEmulator
                 // The background pixel is visible
                 // The foreground pixel is visible
                 // Hmmm...
-                if (fg_priority != 0)
+                if (fg_priority == 1)
                 {
                     // Foreground cheats and wins!
                     pixel = fg_pixel;
@@ -820,11 +835,13 @@ namespace NESEmulator
             {
                 _cycle = 0;
                 _scanline++;
-                if (_scanline >= 262)
-                {
-                    _scanline = 0;
-                    FrameComplete = true;
-                }
+                _currSprite = 0;
+                //if (_scanline >= 262)
+                //{
+                //    _scanline = 0;
+                //    _currSprite = 0;
+                //    FrameComplete = true;
+                //}
                 _cycleOpItr = _cycleOperations[_scanline].GetEnumerator();
                 _cycleOpItr.MoveNext();
             }
@@ -986,16 +1003,16 @@ namespace NESEmulator
 
             if (_mask.RenderSprites && _cycle >= 1 && _cycle < 258)
             {
-                for (int i = 0; i < _spriteCount; i++)
+                for (int i = 0; i < _spriteCurrCount; i++)
                 {
-                    if (_spriteScanline[i].x > 0)
+                    if (_secondaryOAM[i].x > 0)
                     {
-                        _spriteScanline[i].x--;
+                        _secondaryOAM[i].x--;
                     }
                     else
                     {
-                        _spriteShifterPatternLo[i] <<= 1;
-                        _spriteShifterPatternHi[i] <<= 1;
+                        _spriteCurrShifterPatternLo[i] <<= 1;
+                        _spriteCurrShifterPatternHi[i] <<= 1;
                     }
                 }
             }
@@ -1003,13 +1020,25 @@ namespace NESEmulator
 
         private void skipCycle()
         {
-            _cycle = 0;
-            _scanline = 0;
-            FrameComplete = true;
+            advanceFrame();
+
+            // This only happens on odd frames, so do nothing on even frames
+            //if (_frameCounter % 2 == 0)
+            //    return;
+
             _cycleOpItr = _cycleOperations[_scanline].GetEnumerator();
             _cycleOpItr.MoveNext();
 
             fetchNextBGTileId();
+        }
+
+        private void advanceFrame()
+        {
+            ++_frameCounter;
+            _cycle = 0;
+            _scanline = 0;
+            _currSprite = 0;
+            FrameComplete = true;
         }
 
         private void noOp()
@@ -1036,10 +1065,11 @@ namespace NESEmulator
             fetchNextBGTileId();
         }
 
-        private void loadNextBGTileAttrib()
+        /// <summary>
+        /// AT byte fetch
+        /// </summary>
+        private void fetchNextBGTileAttrib()
         {
-            updateShifters();
-
             // Fetch the next background tile attribute.
 
             // Recall that each nametable has two rows of cells that are not tile information, instead
@@ -1079,6 +1109,14 @@ namespace NESEmulator
                                                          | ((_vram_addr.NameTableX ? 1 : 0) << 10)
                                                          | ((_vram_addr.CoarseY >> 2) << 3)
                                                          | (_vram_addr.CoarseX >> 2)));
+        }
+
+        private void loadNextBGTileAttrib()
+        {
+            updateShifters();
+
+            fetchNextBGTileAttrib();
+
             // We've read the correct attribute byte for a specified address, but the byte itself is
             // broken down further into the 2x2 tile groups in the 4x4 attribute zone.
 
@@ -1189,8 +1227,8 @@ namespace NESEmulator
             // Clear shifters
             for (int i = 0; i < 8; i++)
             {
-                _spriteShifterPatternLo[i] = 0;
-                _spriteShifterPatternHi[i] = 0;
+                _spriteCurrShifterPatternLo[i] = 0;
+                _spriteCurrShifterPatternHi[i] = 0;
             }
 
             // We also need to start pre-loading first scanline here
@@ -1220,15 +1258,15 @@ namespace NESEmulator
 
         private void resetSpriteDataForScanline()
         {
-            foreach (var sl in _spriteScanline)
+            foreach (var sl in _secondaryOAM)
                 sl.Fill(0xFF);
 
-            _spriteCount = 0;
+            _spriteCurrCount = 0;
 
             for (byte i = 0; i < 8; i++)
             {
-                _spriteShifterPatternLo[i] = 0;
-                _spriteShifterPatternHi[i] = 0;
+                _spriteCurrShifterPatternLo[i] = 0;
+                _spriteCurrShifterPatternHi[i] = 0;
             }
         }
 
@@ -1254,7 +1292,7 @@ namespace NESEmulator
                 {
                     // Sprite is visible, so copy the attribute entry over to our scanline sprite cache.
                     // I've added < 8 here to guard the array being written to.
-                    if (_spriteCount < 8)
+                    if (_spriteCurrCount < 8)
                     {
                         // Is this sprite zero?
                         if (OAMEntry == 0)
@@ -1263,8 +1301,8 @@ namespace NESEmulator
                             _spriteZeroHitPossible = true;
                         }
 
-                        _spriteScanline[_spriteCount] = OAM[OAMEntry];
-                        _spriteCount++;
+                        _secondaryOAM[_spriteCurrCount] = OAM[OAMEntry];
+                        _spriteCurrCount++;
                     }
                     else
                     {
@@ -1281,12 +1319,12 @@ namespace NESEmulator
         {
             ushort sprite_pattern_addr_lo;
 
-            ushort cellRow = (ushort)(_scanline - _spriteScanline[i].y);
-            cellRow = (ushort)((_spriteScanline[i].attribute & 0x80) == 0 ? cellRow : (7 - cellRow));
+            ushort cellRow = (ushort)(_scanline - _secondaryOAM[i].y);
+            cellRow = (ushort)((_secondaryOAM[i].attribute & 0x80) == 0 ? cellRow : (7 - cellRow));
 
             sprite_pattern_addr_lo = (ushort)(
                  ((_control.PatternSprite ? 1 : 0) << 12)   // Which pattern table? 0KB or 4KB offset
-                | (_spriteScanline[i].id << 4)              // Which cell? Tile ID * 16 (16B per tile)
+                | (_secondaryOAM[i].id << 4)              // Which cell? Tile ID * 16 (16B per tile)
                 | cellRow);                                 // Which row in cell?
 
             return sprite_pattern_addr_lo;
@@ -1297,16 +1335,16 @@ namespace NESEmulator
             ushort sprite_pattern_addr_lo;
 
             // 8x16 sprite mode - the sprite attribute determines the pattern table
-            bool inverted = (_spriteScanline[i].attribute & 0x80) != 0;
-            ushort cellRow  = (ushort)((_scanline - _spriteScanline[i].y) & 0x07);
+            bool inverted   = (_secondaryOAM[i].attribute & 0x80) != 0;
+            ushort cellRow  = (ushort)((_scanline - _secondaryOAM[i].y) & 0x07);
             cellRow         = (ushort)(!inverted ? cellRow : 7 - cellRow);
-            int topHalf     = (byte)((_scanline - _spriteScanline[i].y) < 8 ? 0 : 1);
+            int topHalf     = (byte)((_scanline - _secondaryOAM[i].y) < 8 ? 0 : 1);
             topHalf += inverted ? 1 : 0;
             if (topHalf > 1) topHalf = 0;
 
             sprite_pattern_addr_lo = (ushort)(
-                  ((_spriteScanline[i].id & 0x01) << 12)                // Which pattern table? 0KB or 4KB offset
-                | (((_spriteScanline[i].id & 0xFE) + topHalf) << 4)     // Which cell? Tile ID * 16 (16B per tile)
+                  ((_secondaryOAM[i].id & 0x01) << 12)                // Which pattern table? 0KB or 4KB offset
+                | (((_secondaryOAM[i].id & 0xFE) + topHalf) << 4)     // Which cell? Tile ID * 16 (16B per tile)
                 | cellRow);                                             // Which row in cell?
 
             return sprite_pattern_addr_lo;
