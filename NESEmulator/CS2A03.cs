@@ -78,7 +78,10 @@ namespace NESEmulator
             }
 
             if (_frameCounter.FrameInterrupt)
-                IRQ();
+            {
+                //IRQ();    // This is screwing stuff up for some reason
+                _frameCounter.FrameInterrupt = false;
+            }
 
             // APU clocks every other CPU cycle
             if (clockCounter % 6 == 0)

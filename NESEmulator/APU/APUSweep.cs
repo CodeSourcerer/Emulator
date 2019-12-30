@@ -24,9 +24,6 @@ namespace NESEmulator.APU
             set => _divider.CounterReload = value;
         }
         public byte ShiftCount { get; set; }
-        //public ushort ChannelPeriod { get; set; }
-
-        //public event EventHandler PeriodUpdate;
 
         private APUDivider _divider;
         private APUSequencer _pulseSequencer;
@@ -38,7 +35,6 @@ namespace NESEmulator.APU
             _pulseChannelNumber = pulseChannelNumber;
             _pulseSequencer = pulseSequencer;
             _divider = new APUDivider(divider_ReachedZero);
-            //this._divider.DividerReachedZero += divider_ReachedZero;
         }
 
         public void Clock()
@@ -46,20 +42,22 @@ namespace NESEmulator.APU
             calcTargetPeriod();
 
             _divider.Clock();
-        }
-
-        private void divider_ReachedZero(object sender, EventArgs e)
-        {
-            if (!MuteChannel && Enabled)
-            {
-                _pulseSequencer.TimerReload = (ushort)_targetPeriod;
-            }
 
             if (Reload)
             {
                 Reload = false;
                 _divider.Reset();
             }
+        }
+
+        private void divider_ReachedZero(object sender, EventArgs e)
+        {
+            if (!MuteChannel && Enabled && ShiftCount != 0)
+            {
+                _pulseSequencer.TimerReload = (ushort)_targetPeriod;
+            }
+            _divider.Reset();
+            Reload = false;
         }
 
         private void calcTargetPeriod()

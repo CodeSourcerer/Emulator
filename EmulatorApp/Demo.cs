@@ -22,8 +22,8 @@ namespace EmulatorApp
 {
     class Demo
     {
-        private const int SCREEN_WIDTH = 350;
-        private const int SCREEN_HEIGHT = 240;
+        private const int SCREEN_WIDTH = 750;
+        private const int SCREEN_HEIGHT = 500;
         private const int NUM_AUDIO_BUFFERS = 20;
 
         private static ILog Log = LogManager.GetLogger(typeof(Demo));
@@ -49,7 +49,7 @@ namespace EmulatorApp
         {
             _availableBuffers = new Stack<int>(NUM_AUDIO_BUFFERS);
             initAudioStuff();
-            window = new GLWindow(SCREEN_WIDTH, SCREEN_HEIGHT, 4, 4, appName);
+            window = new GLWindow(SCREEN_WIDTH, SCREEN_HEIGHT, 3, 3, appName);
             window.KeyDown += Window_KeyDown;
             pge = new PixelGameEngine(appName);
             pge.Construct(SCREEN_WIDTH, SCREEN_HEIGHT, window);
@@ -70,8 +70,10 @@ namespace EmulatorApp
             Thread.CurrentThread.Name = "main";
             Log.Info("Demo app started");
             Demo demo = new Demo("NES Emulator");
-            Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes"); 
+            //Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes"); 
             //Cartridge cartridge = demo.LoadCartridge("tests\\smb2.nes");
+            Cartridge cartridge = demo.LoadCartridge("tests\\smb3.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\test_ppu_read_buffer.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\donkey kong.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\tetris.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\megaman2.nes");
@@ -92,6 +94,7 @@ namespace EmulatorApp
             busDevices = new BusDevice[] { cpu, ram, ppu, nesController, apu };
             nesBus = new Bus(busDevices);
             cpu.ConnectBus(nesBus);
+            ppu.ConnectBus(nesBus);
             apu.ConnectBus(nesBus);
 
             if (!cartridge.ImageValid)
@@ -252,7 +255,8 @@ namespace EmulatorApp
             // DrawCpu(516, 2);
             // DrawCode(516, 72, 26);
 
-            //DrawOam(516, 72);
+            DrawOam(270, 140, 0, 32);
+            DrawOam(500, 140, 32, 32);
 
             // Draw Palettes & Pattern Tables
             //const int swatchSize = 6;
@@ -268,9 +272,8 @@ namespace EmulatorApp
             //pge.DrawRect(516 + selectedPalette * (swatchSize * 5) - 1, 339, (swatchSize * 4), swatchSize, Pixel.WHITE);
 
             // Generate Pattern Tables
-            //pge.DrawSprite(290, 48, ppu.GetPatternTable(0, (byte)selectedPalette));
-            //pge.DrawSprite(422, 48, ppu.GetPatternTable(1, (byte)selectedPalette));
-
+            pge.DrawSprite(270, 10, ppu.GetPatternTable(0, (byte)selectedPalette));
+            pge.DrawSprite(402, 10, ppu.GetPatternTable(1, (byte)selectedPalette));
             //for (int y = 0; y < 30; y++)
             //{
             //    for (int x = 0; x < 32; x++)
@@ -404,12 +407,15 @@ namespace EmulatorApp
             }
         }
 
-        void DrawOam(int x, int y)
+        void DrawOam(int x, int y, int start, int count)
         {
-            for (int i = 0; i < 26; i++)
+            for (int i = start, y_offset = 0; i < start + count; i++, y_offset++)
             {
-                string sOAM = string.Format("{0:X2}: ({1}, {2}) ID: {3:X2} AT: {4:X2}", i, ppu.OAM[i].x, ppu.OAM[i].y, ppu.OAM[i].id, ppu.OAM[i].attribute);
-                pge.DrawString(x, y + i * 10, sOAM, Pixel.WHITE);
+                var OAM = ppu.OAM[i];
+                string sOAM = $"{i:X2}: ({OAM.x}, {OAM.y}) ID: {OAM.id:X2} AT: {OAM.attribute:X2}";
+                pge.DrawString(x, y + y_offset * 10, sOAM, Pixel.WHITE);
+                //if ((OAM.attribute & 0x20) == 0)
+                //    pge.Draw(OAM.x, OAM.y, new Pixel((byte)(OAM.id * 4), 0, 0));
             }
         }
     }

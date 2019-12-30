@@ -64,6 +64,11 @@ namespace NESEmulator
         private bool _cartWrite;
         public void Write(ushort addr, byte data)
         {
+            //if (addr >= 0x6000 && addr < 0x8000)
+            //{
+            //    char d = data == 0 ? ' ' : (char)data;
+            //    Log.Debug($"[{addr:X4}]: {d}");
+            //}
             foreach (BusDevice device in _busDeviceList)
             {
                 if (device.Write(addr, data))
@@ -78,7 +83,7 @@ namespace NESEmulator
 
                     if (_cartConflicts && device.DeviceType == BusDeviceType.CPU && _cartWrite)
                     {
-                        Log.Debug($"CPU write used in BUS conflict");
+                        Log.Debug("CPU write used in BUS conflict");
                     }
                     break;
                 }

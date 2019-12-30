@@ -19,7 +19,6 @@ namespace NESEmulator.Mappers
         private byte _irqReload;
         private byte _irqCounter;
         private bool _irqEnable;
-        //private bool _irqActive;
         private byte _bankSelect;
         private int _targetRegister { get => _bankSelect & 0x07; }
         private byte[] _register = new byte[8]; // 0-5 = CHR, 6-7 = PRG
@@ -125,7 +124,7 @@ namespace NESEmulator.Mappers
             {
                 if (!cartridge.UseFourScreen)
                 {
-                    Log.Debug($"Setting mirror mode = {data & 1}");
+                    Log.Debug($"Write: [MirrorMode={data & 1}]");
                     if ((data & 1) == 0)
                         cartridge.mirror = Cartridge.Mirror.VERTICAL;
                     else
@@ -139,7 +138,7 @@ namespace NESEmulator.Mappers
             if (addr < 0xC000 && (addr & 1) == 1)
             {
                 PRGRAMEnable = data.TestBit(7);
-                Log.Debug($"RAM Enable={PRGRAMEnable}");
+                Log.Debug($"Write: [RAMEnable={PRGRAMEnable}]");
                 return true;
             }
 
@@ -147,22 +146,22 @@ namespace NESEmulator.Mappers
             if (addr < 0xE000 && (addr & 1) == 0)
             {
                 _irqReload = data;
-                Log.Debug($"IRQReload={_irqReload}");
+                //Log.Debug($"Write: [IRQReload={_irqReload}]");
                 return true;
             }
 
-            // Odd addresses between 0xC000 and 0xE000 sets IRQ reload
+            // Odd addresses between 0xC000 and 0xE000 sets IRQ reload flag
             if (addr < 0xE000 && (addr & 1) == 1)
             {
                 _irqCounter = 0;
-                Log.Debug($"IRQCounter={_irqCounter}");
+                //Log.Debug("Write: Set IRQReloadFlag");
                 return true;
             }
 
             if (addr <= 0xFFFF && (addr & 1) == 0)
             {
                 _irqEnable = false;
-                Log.Debug($"IRQEnable={_irqEnable}");
+                //Log.Debug($"IRQEnable={_irqEnable}");
                 //_irqActive = false;
                 return true;
             }
@@ -170,7 +169,7 @@ namespace NESEmulator.Mappers
             if (addr <= 0xFFFF && (addr & 1) == 1)
             {
                 _irqEnable = true;
-                Log.Debug($"IRQEnable={_irqEnable}");
+                //Log.Debug($"IRQEnable={_irqEnable}");
                 return true;
             }
 
@@ -254,20 +253,17 @@ namespace NESEmulator.Mappers
         private void updatePRGBankOffsets()
         {
             _pPRGBank[1] = (uint)((_register[7] & 0x3F) * 0x2000);
-            //_pPRGBank[1] = (uint)((_register[7]) * 0x2000);
             _pPRGBank[3] = (uint)((nPRGBanks * 2 - 1) * 0x2000);
 
             switch (PRGROMBankMode)
             {
                 case 0:
                     _pPRGBank[0] = (uint)((_register[6] & 0x3F) * 0x2000);
-                    //_pPRGBank[0] = (uint)((_register[6]) * 0x2000);
                     _pPRGBank[2] = (uint)((nPRGBanks * 2 - 2) * 0x2000);
                     break;
                 case 1:
                     _pPRGBank[0] = (uint)((nPRGBanks * 2 - 2) * 0x2000);
                     _pPRGBank[2] = (uint)((_register[6] & 0x3F) * 0x2000);
-                    //_pPRGBank[2] = (uint)((_register[6]) * 0x2000);
                     break;
             }
         }
@@ -278,7 +274,7 @@ namespace NESEmulator.Mappers
             {
                 case 0:
                     _pCHRBank[0] = (uint)(_register[0] * 0x0400);
-                    _pCHRBank[1] = (uint)(_pCHRBank[0] * 0x0400 + 0x0400);
+                    _pCHRBank[1] = (uint)(_register[0] * 0x0400 + 0x0400);
                     _pCHRBank[2] = (uint)(_register[1] * 0x0400);
                     _pCHRBank[3] = (uint)(_register[1] * 0x0400 + 0x0400);
                     _pCHRBank[4] = (uint)(_register[2] * 0x0400);
@@ -304,14 +300,17 @@ namespace NESEmulator.Mappers
             if (_irqCounter == 0)
             {
                 _irqCounter = _irqReload;
+                //Log.Debug("IRQCounter reloaded");
             }
             else
-                _irqCounter--;
-
-            if (_irqCounter == 0 && _irqEnable)
             {
-                Log.Debug($"ZOMG INTERRUPT!!!");
-                cartridge.Mapper_InvokeInterrupt(this, new InterruptEventArgs(InterruptType.IRQ));
+                _irqCounter--;
+                if (_irqCounter == 0 && _irqEnable)
+                {
+                    //Log.Debug("Triggering interrupt");
+                    cartridge.Mapper_InvokeInterrupt(this, new InterruptEventArgs(InterruptType.IRQ));
+                    //_irqEnable = false; // ??
+                }
             }
         }
     }
