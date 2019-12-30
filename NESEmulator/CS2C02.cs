@@ -29,6 +29,8 @@ namespace NESEmulator
 
         public event EventHandler DrawSprites;
 
+        private ulong _currentClockCycle;
+
         // PPU has it's own bus
         private Bus _ppuBus;
 
@@ -284,9 +286,10 @@ namespace NESEmulator
                         _addressLatch = 0;
                         break;
                     case 0x0003:    // OAM Address
+                        data = _OAMaddr;
                         break;
                     case 0x0004:    // OAM Data
-                        data = OAM[_OAMaddr >> 2][_OAMaddr & 0x03];    // maybe??
+                        data = OAM[_OAMaddr >> 2][_OAMaddr & 0x03];
                         break;
                     case 0x0005:    // Scroll - Not readable
                         break;
@@ -303,6 +306,7 @@ namespace NESEmulator
                         // immediately
                         if (_vram_addr.reg >= ADDR_PALETTE)
                             data = _ppuDataBuffer;
+
                         // All reads from the PPU data automatically increment the nametable address depending upon the
                         // mode set in the control register. If set to vertical mode, the increment is 32 so it skips
                         // one whole nametable row; in horizontal mode it just increments by 1, moving to the next column
@@ -314,6 +318,7 @@ namespace NESEmulator
             return dataRead;
         }
 
+        private ulong _lastA12HighCycle = 0;
         public bool Write(ushort addr, byte data)
         {
             bool dataWritten = false;
@@ -340,6 +345,7 @@ namespace NESEmulator
                         break;
                     case 0x0004:    // OAM Data
                         OAM[_OAMaddr >> 2][_OAMaddr & 0x03] = data;
+                        _OAMaddr++;
                         break;
                     case 0x0005:    // Scroll
                         if (_addressLatch == 0)
@@ -377,6 +383,13 @@ namespace NESEmulator
                             _vram_addr = _tram_addr;
                             _addressLatch = 0;
                         }
+                        // TODO: Somehow scanline/IRQ counter gets clocked here, but I don't know under what conditions
+                        if (_currentClockCycle - _lastA12HighCycle >= 8)
+                        {
+                            //Console.WriteLine("A12 0 -> 1");
+                            //DrawSprites?.Invoke(this, EventArgs.Empty);
+                        }
+                        _lastA12HighCycle = _currentClockCycle;
                         break;
                     case 0x0007:    // PPU Data
                         ppuWrite(_vram_addr.reg, data);
@@ -384,6 +397,7 @@ namespace NESEmulator
                         // mode set in the control register. If set to vertical mode, the increment is 32, so it skips
                         // one whole nametable row; in horizontal mode it just increments by 1, moving to the next column.
                         _vram_addr.reg += (ushort)(_control.IncrementMode ? 32 : 1);
+
                         break;
                 }
             }
@@ -535,6 +549,7 @@ namespace NESEmulator
 
         public void Clock(ulong clockCounter)
         {
+            _currentClockCycle = clockCounter;
             // As we progress through scanlines and cycles, the PPU is effectively
             // a state machine going through the motions of fetching background 
             // information and sprite information, compositing them into a pixel
@@ -551,24 +566,40 @@ namespace NESEmulator
             // ============================================================================
 
 
-            // All but 1 of the scanlines is visible to the user. The pre-render scanline at -1, is used
+            // All but 1 of the scanlines is visible to the user. The pre-render scanline at 261, is used
             // to configure the "shifters" for the first visible scanline, 0.
-            if (_scanline >= -1 && _scanline < 240)
+            if (_scanline >= 0 && _scanline < 240 || _scanline == 261)
             {
                 // Foreground Rendering ===================================================
-                if (_cycle == 257 && _scanline >= 0)
+                if (_scanline != 261)
                 {
-                    // We've reached the end of a visible scanline. It is now time to determine which
-                    // sprites are visible on the next scanline, and preload this info into buffers that
-                    // we can work with while the scanline scans the row.
-                    resetSpriteDataForScanline();
+                    if (_cycle == 64)
+                        resetSpriteDataForScanline();
 
-                    evaluateVisibleSpritesForScanline();
+                    if (_cycle == 256)
+                    {
+                        // We've reached the end of a visible scanline. It is now time to determine which
+                        // sprites are visible on the next scanline, and preload this info into buffers that
+                        // we can work with while the scanline scans the row.
+                        evaluateVisibleSpritesForScanline();
+                    }
                 }
 
-                if (_cycle == 260)
+                if (_mask.RenderBackground && _mask.RenderSprites)
                 {
-                    this.DrawSprites?.Invoke(this, EventArgs.Empty);
+                    if ((_cycle == 260 && _control.PatternSprite && !_control.PatternBackground) ||
+                        (_cycle == 324 && !_control.PatternSprite && _control.PatternBackground))
+                    {
+                        //Console.WriteLine($"Clock Scanline: {_scanline}; cycle: {_cycle}");
+                        this.DrawSprites?.Invoke(this, EventArgs.Empty);
+                    }
+
+                    if ((_cycle >= 260 && _cycle <= 320 && _control.PatternSprite && !_control.PatternBackground) ||
+                        (_cycle >= 324 && _cycle <= 340 && !_control.PatternSprite && _control.PatternBackground))
+                    {
+                        _lastA12HighCycle = _currentClockCycle;
+                    }
+
                 }
 
                 if (_cycle == 340)
@@ -984,6 +1015,9 @@ namespace NESEmulator
         private void noOp()
         { }
 
+        /// <summary>
+        /// NT Fetch
+        /// </summary>
         private void fetchNextBGTileId()
         {
             // Fetch the next background tile ID
@@ -1209,7 +1243,7 @@ namespace NESEmulator
             // New set of sprites. Sprite zero may not exist in the new set, so clear this flag.
             _spriteZeroHitPossible = false;
 
-            while (OAMEntry < 64 && _spriteCount < 9)
+            while (OAMEntry < 64 && !_status.SpriteOverflow)
             {
                 short diff = (short)(_scanline - OAM[OAMEntry].y);
 
@@ -1232,13 +1266,15 @@ namespace NESEmulator
                         _spriteScanline[_spriteCount] = OAM[OAMEntry];
                         _spriteCount++;
                     }
+                    else
+                    {
+                        // Set sprite overflow flag
+                        _status.SpriteOverflow = true;
+                    }
                 }
 
                 OAMEntry++;
             }
-
-            // Set sprite overflow flag
-            _status.SpriteOverflow = (_spriteCount > 8);
         }
 
         private ushort loadNextSpr8x8TileLSB(byte i)
@@ -1249,9 +1285,9 @@ namespace NESEmulator
             cellRow = (ushort)((_spriteScanline[i].attribute & 0x80) == 0 ? cellRow : (7 - cellRow));
 
             sprite_pattern_addr_lo = (ushort)(
-                 ((_control.PatternSprite ? 1 : 0) << 12)         // Which pattern table? 0KB or 4KB offset
-                | (_spriteScanline[i].id << 4)          // Which cell? Tile ID * 16 (16B per tile)
-                | cellRow);                             // Which row in cell?
+                 ((_control.PatternSprite ? 1 : 0) << 12)   // Which pattern table? 0KB or 4KB offset
+                | (_spriteScanline[i].id << 4)              // Which cell? Tile ID * 16 (16B per tile)
+                | cellRow);                                 // Which row in cell?
 
             return sprite_pattern_addr_lo;
         }

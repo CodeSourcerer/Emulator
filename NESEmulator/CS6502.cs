@@ -81,6 +81,7 @@ namespace NESEmulator
         /// </summary>
         public bool DMATransfer { get; private set; }
         private byte _dmaPage;
+        private byte _dmaStartAddr;
         private byte _dmaAddr;
         private byte _dmaData;
         private bool _dmaSync = false;
@@ -504,6 +505,8 @@ namespace NESEmulator
                 if (clockCounter % 2 == 1)
                 {
                     _dmaSync = true;
+                    _dmaStartAddr = read(0x2003);
+                    _dmaAddr = _dmaStartAddr;
                 }
             }
             else
@@ -511,6 +514,7 @@ namespace NESEmulator
                 if (clockCounter % 2 == 0)
                 {
                     _dmaData = read((ushort)(_dmaPage << 8 | _dmaAddr));
+                    Log.Debug($"DMA read [addr={_dmaAddr:X2}] [data={_dmaData:X2}]");
                 }
                 else
                 {
@@ -518,7 +522,7 @@ namespace NESEmulator
                     ((Bus)bus).GetPPU().OAM[_dmaAddr >> 2][_dmaAddr & 0x03] = _dmaData;
                     _dmaAddr++;
 
-                    if (_dmaAddr == 0x00)
+                    if (_dmaAddr == _dmaStartAddr)
                     {
                         DMATransfer = false;
                         _dmaSync = false;
@@ -603,7 +607,7 @@ namespace NESEmulator
             if (addr == 0x4014)
             {
                 _dmaPage = data;
-                _dmaAddr = 0x00;
+                //_dmaAddr = 0x00;
                 DMATransfer = true;
             }
             else
