@@ -339,10 +339,8 @@ namespace NESEmulator
         public Dictionary<ushort, string> Disassemble(ushort start, ushort stop)
         {
             uint addr = start;
-            byte value = 0x00, lo = 0x00, hi = 0x00;
             Dictionary<ushort, string> mapLines = new Dictionary<ushort, string>();
             ushort line_addr = 0;
-
 
             // Starting at the specified address we read an instruction
             // byte, which in turn yields information from the lookup table
