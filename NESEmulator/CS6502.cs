@@ -519,7 +519,7 @@ namespace NESEmulator
                 else
                 {
                     // So yeah, let's just break all encapsulation and grab that PPU. Kinda what the HW is doing, I suppose...
-                    ((Bus)bus).GetPPU().OAM[_dmaAddr >> 2][_dmaAddr & 0x03] = _dmaData;
+                    ((NESBus)bus).PPU.OAM[_dmaAddr >> 2][_dmaAddr & 0x03] = _dmaData;
                     _dmaAddr++;
 
                     if (_dmaAddr == _dmaStartAddr)

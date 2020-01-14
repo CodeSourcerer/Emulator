@@ -27,4 +27,7 @@
       <HintPath>lib\csPixelGameEngine.dll</HintPath>
     </Reference>
   </ItemGroup>
+  <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+    <Exec Command="xcopy /Y /I $(ProjectDir)tests\*.nes $(OutDir)roms\" />
+  </Target>
 </Project>

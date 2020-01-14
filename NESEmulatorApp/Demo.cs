@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Timers;
+using System.Threading;
 using csPixelGameEngine;
 using log4net;
 using log4net.Config;
@@ -17,32 +17,25 @@ namespace NESEmulatorApp
 {
     class Demo
     {
-        private const int SCREEN_WIDTH = 700;
-        private const int SCREEN_HEIGHT = 240;
-        private const int NUM_AUDIO_BUFFERS = 10;
+        private const int SCREEN_WIDTH      = 700;
+        private const int SCREEN_HEIGHT     = 240;
+        private const int NUM_AUDIO_BUFFERS = 20;
 
         private static ILog Log = LogManager.GetLogger(typeof(Demo));
 
         private PixelGameEngine pge;
         private GLWindow window;
         private AudioContext audioContext;
-        // private NESClock nesClock;
-        private Bus nesBus;
-        private BusDevice ram;
-        private BusDevice[] busDevices;
-        private CS6502 cpu;
-        private CS2C02 ppu;
-        private CS2A03 apu;
-        private NESController nesController;
+        private NESBus nesBus;
         private Dictionary<ushort, string> mapAsm;
         private bool runEmulation;
         private int selectedPalette;
         private int[] buffers, sources;
-        private Queue<int> _availableBuffers;
+        private Stack<int> _availableBuffers;
 
         public Demo(string appName)
         {
-            _availableBuffers = new Queue<int>(NUM_AUDIO_BUFFERS);
+            _availableBuffers = new Stack<int>(NUM_AUDIO_BUFFERS);
             initAudioStuff();
             window = new GLWindow(SCREEN_WIDTH, SCREEN_HEIGHT, 4, 4, appName);
             window.KeyDown += Window_KeyDown;
@@ -58,24 +51,18 @@ namespace NESEmulatorApp
             var logRepository = LogManager.GetRepository(Assembly.GetEntryAssembly());
             XmlConfigurator.Configure(logRepository, new FileInfo("log4net.config"));
 
+            Thread.CurrentThread.Name = "main";
+            Log.Info("NES app started");
+
             Demo demo = new Demo("NES Emulator");
-            //Cartridge cartridge = demo.LoadCartridge("tests/donkey kong.nes");
-            //Cartridge cartridge = demo.LoadCartridge("tests/smb_2.nes");
-            Cartridge cartridge = demo.LoadCartridge("tests/tetris.nes");
+            //Cartridge cartridge = demo.LoadCartridge("roms/donkey kong.nes");
+            Cartridge cartridge = demo.LoadCartridge("roms/smb_2.nes");
             demo.Start(cartridge);
         }
 
         public void Start(Cartridge cartridge)
         {
-            apu = new CS2A03();
-            ppu = new CS2C02();
-            ram = new Ram(0x07FF, 0x1FFF);
-            cpu = new CS6502();
-            nesController = new NESController();
-            busDevices = new BusDevice[] { cpu, ram, ppu, nesController, apu };
-            nesBus = new Bus(busDevices);
-            cpu.ConnectBus(nesBus);
-            //apu.ConnectBus(nesBus);
+            nesBus = new NESBus();
 
             if (!cartridge.ImageValid)
                 throw new ApplicationException("Invalid ROM image");
@@ -91,10 +78,8 @@ namespace NESEmulatorApp
             buffers = AL.GenBuffers(NUM_AUDIO_BUFFERS);
             sources = AL.GenSources(1);
             foreach (int buf in buffers)
-                _availableBuffers.Enqueue(buf);
+                _availableBuffers.Push(buf);
         }
-
-        DateTime dtLastTick;
 
         public Cartridge LoadCartridge(string fileName)
         {
@@ -113,31 +98,31 @@ namespace NESEmulatorApp
 
         private void handleControllerInputs(KeyboardState keyState)
         {
-            nesController.Reset();
+            nesBus.Controller.Reset();
 
             if (keyState.IsKeyDown(Key.X))
-                nesController.Press(NESController.Controller.Controller1, NESController.NESButton.A);
+                nesBus.Controller.Press(NESController.Controller.Controller1, NESController.NESButton.A);
 
             if (keyState.IsKeyDown(Key.Z))
-                nesController.Press(NESController.Controller.Controller1, NESController.NESButton.B);
+                nesBus.Controller.Press(NESController.Controller.Controller1, NESController.NESButton.B);
 
             if (keyState.IsKeyDown(Key.A))
-                nesController.Press(NESController.Controller.Controller1, NESController.NESButton.START);
+                nesBus.Controller.Press(NESController.Controller.Controller1, NESController.NESButton.START);
 
             if (keyState.IsKeyDown(Key.S))
-                nesController.Press(NESController.Controller.Controller1, NESController.NESButton.SELECT);
+                nesBus.Controller.Press(NESController.Controller.Controller1, NESController.NESButton.SELECT);
 
             if (keyState.IsKeyDown(Key.Up))
-                nesController.Press(NESController.Controller.Controller1, NESController.NESButton.UP);
+                nesBus.Controller.Press(NESController.Controller.Controller1, NESController.NESButton.UP);
 
             if (keyState.IsKeyDown(Key.Down))
-                nesController.Press(NESController.Controller.Controller1, NESController.NESButton.DOWN);
+                nesBus.Controller.Press(NESController.Controller.Controller1, NESController.NESButton.DOWN);
 
             if (keyState.IsKeyDown(Key.Left))
-                nesController.Press(NESController.Controller.Controller1, NESController.NESButton.LEFT);
+                nesBus.Controller.Press(NESController.Controller.Controller1, NESController.NESButton.LEFT);
 
             if (keyState.IsKeyDown(Key.Right))
-                nesController.Press(NESController.Controller.Controller1, NESController.NESButton.RIGHT);
+                nesBus.Controller.Press(NESController.Controller.Controller1, NESController.NESButton.RIGHT);
         }
 
         private void Window_KeyDown(object sender, KeyboardKeyEventArgs e)
@@ -164,23 +149,23 @@ namespace NESEmulatorApp
                     do
                     {
                         nesBus.clock();
-                    } while (!ppu.FrameComplete);
+                    } while (!nesBus.PPU.FrameComplete);
                     do
                     {
                         nesBus.clock();
-                    } while (!cpu.isComplete());
-                    ppu.FrameComplete = false;
+                    } while (!nesBus.CPU.isComplete());
+                    nesBus.PPU.FrameComplete = false;
                     break;
 
                 case OpenTK.Input.Key.C:
                     do
                     {
                         nesBus.clock();
-                    } while (!cpu.isComplete());
+                    } while (!nesBus.CPU.isComplete());
                     do
                     {
                         nesBus.clock();
-                    } while (cpu.isComplete());
+                    } while (nesBus.CPU.isComplete());
                     break;
             }
         }
@@ -189,7 +174,6 @@ namespace NESEmulatorApp
         private int _fps;
         private DateTime dtStart = DateTime.Now;
         private float residualTime = 0.0f;
-        private DateTime _frameTime;
         private void pge_OnUpdate(object sender, FrameUpdateEventArgs frameUpdateArgs)
         {
             pge.Clear(Pixel.BLUE);
@@ -208,8 +192,8 @@ namespace NESEmulatorApp
                     {
                         nesBus.clock();
                         playAudioWhenReady();
-                    } while (!ppu.FrameComplete);
-                    ppu.FrameComplete = false;
+                    } while (!nesBus.PPU.FrameComplete);
+                    nesBus.PPU.FrameComplete = false;
                     _frameCount++;
 
                     if (DateTime.Now - dtStart >= TimeSpan.FromSeconds(1))
@@ -218,14 +202,14 @@ namespace NESEmulatorApp
                         _fps = _frameCount;
                         _frameCount = 0;
                     }
-                    nesController.ControllerState[(int)NESController.Controller.Controller1] = 0;
+                    nesBus.Controller.ControllerState[(int)NESController.Controller.Controller1] = 0;
                 }
             }
 
             pge.DrawString(280, 2, $"FPS: {_fps}", Pixel.WHITE);
 
             // Draw rendered output
-            pge.DrawSprite(0, 0, ppu.GetScreen(), 1);
+            pge.DrawSprite(0, 0, nesBus.PPU.GetScreen(), 1);
 
             // Draw Ram Page 0x00
             //DrawRam(2, 2, 0x0000, 16, 16);
@@ -241,8 +225,8 @@ namespace NESEmulatorApp
             //pge.DrawRect(516 + selectedPalette * (swatchSize * 5) - 1, 339, (swatchSize * 4), swatchSize, Pixel.WHITE);
 
             // Generate Pattern Tables
-            pge.DrawSprite(316, 100, ppu.GetPatternTable(0, (byte)selectedPalette));
-            pge.DrawSprite(448, 100, ppu.GetPatternTable(1, (byte)selectedPalette));
+            pge.DrawSprite(316, 100, nesBus.PPU.GetPatternTable(0, (byte)selectedPalette));
+            pge.DrawSprite(448, 100, nesBus.PPU.GetPatternTable(1, (byte)selectedPalette));
         }
 
         private void pge_OnCreate(object sender, EventArgs e)
@@ -265,14 +249,14 @@ namespace NESEmulatorApp
         private void playAudioWhenReady()
         {
             // Get audio data
-            if (apu.IsAudioBufferReadyToPlay())
+            if (nesBus.APU.IsAudioBufferReadyToPlay())
             {
                 dequeueProcessedBuffers();
 
-                var soundData = apu.ReadAndResetAudio();
+                var soundData = nesBus.APU.ReadAndResetAudio();
                 if (_availableBuffers.Count > 0)
                 {
-                    int buffer = _availableBuffers.Dequeue();
+                    int buffer = _availableBuffers.Pop();
                     AL.BufferData(buffer, ALFormat.Mono16, soundData, soundData.Length * 2, 44100);
                     AL.SourceQueueBuffer(sources[0], buffer);
                     if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
@@ -296,7 +280,7 @@ namespace NESEmulatorApp
             {
                 var buffersDequeued = AL.SourceUnqueueBuffers(sources[0], processed);
                 foreach (var dqBuf in buffersDequeued)
-                    _availableBuffers.Enqueue(dqBuf);
+                    _availableBuffers.Push(dqBuf);
             }
         }
 
@@ -308,7 +292,7 @@ namespace NESEmulatorApp
                 int ps5 = p * swatchSize * 5;
                 for (int s = 0; s < 4; s++)
                 {
-                    pge.FillRect(x + ps5 + s * swatchSize, y, swatchSize, swatchSize, ppu.GetColorFromPaletteRam((byte)p, (byte)s));
+                    pge.FillRect(x + ps5 + s * swatchSize, y, swatchSize, swatchSize, nesBus.PPU.GetColorFromPaletteRam((byte)p, (byte)s));
                 }
             }
         }
@@ -332,24 +316,24 @@ namespace NESEmulatorApp
         void DrawCpu(int x, int y)
         {
             pge.DrawString(x, y, "STATUS:", Pixel.WHITE);
-            pge.DrawString(x + 64, y, "N", cpu.status.HasFlag(FLAGS6502.N) ? Pixel.GREEN : Pixel.RED);
-            pge.DrawString(x + 80, y, "V", cpu.status.HasFlag(FLAGS6502.V) ? Pixel.GREEN : Pixel.RED);
-            pge.DrawString(x + 96, y, "-", cpu.status.HasFlag(FLAGS6502.U) ? Pixel.GREEN : Pixel.RED);
-            pge.DrawString(x + 112, y, "B", cpu.status.HasFlag(FLAGS6502.B) ? Pixel.GREEN : Pixel.RED);
-            pge.DrawString(x + 128, y, "D", cpu.status.HasFlag(FLAGS6502.D) ? Pixel.GREEN : Pixel.RED);
-            pge.DrawString(x + 144, y, "I", cpu.status.HasFlag(FLAGS6502.I) ? Pixel.GREEN : Pixel.RED);
-            pge.DrawString(x + 160, y, "Z", cpu.status.HasFlag(FLAGS6502.Z) ? Pixel.GREEN : Pixel.RED);
-            pge.DrawString(x + 178, y, "C", cpu.status.HasFlag(FLAGS6502.C) ? Pixel.GREEN : Pixel.RED);
-            pge.DrawString(x, y + 10, string.Format("PC: ${0}", cpu.pc.ToString("X4")), Pixel.WHITE);
-            pge.DrawString(x, y + 20, string.Format("A: ${0} [{1}]", cpu.a.ToString("X2"), cpu.a.ToString()), Pixel.WHITE);
-            pge.DrawString(x, y + 30, string.Format("X: ${0} [{1}]", cpu.x.ToString("X2"), cpu.x.ToString()), Pixel.WHITE);
-            pge.DrawString(x, y + 40, string.Format("Y: ${0} [{1}]", cpu.y.ToString("X2"), cpu.y.ToString()), Pixel.WHITE);
-            pge.DrawString(x, y + 50, string.Format("Stack P: ${0}", cpu.sp.ToString("X4")), Pixel.WHITE);
+            pge.DrawString(x + 64, y, "N", nesBus.CPU.status.HasFlag(FLAGS6502.N) ? Pixel.GREEN : Pixel.RED);
+            pge.DrawString(x + 80, y, "V", nesBus.CPU.status.HasFlag(FLAGS6502.V) ? Pixel.GREEN : Pixel.RED);
+            pge.DrawString(x + 96, y, "-", nesBus.CPU.status.HasFlag(FLAGS6502.U) ? Pixel.GREEN : Pixel.RED);
+            pge.DrawString(x + 112, y, "B", nesBus.CPU.status.HasFlag(FLAGS6502.B) ? Pixel.GREEN : Pixel.RED);
+            pge.DrawString(x + 128, y, "D", nesBus.CPU.status.HasFlag(FLAGS6502.D) ? Pixel.GREEN : Pixel.RED);
+            pge.DrawString(x + 144, y, "I", nesBus.CPU.status.HasFlag(FLAGS6502.I) ? Pixel.GREEN : Pixel.RED);
+            pge.DrawString(x + 160, y, "Z", nesBus.CPU.status.HasFlag(FLAGS6502.Z) ? Pixel.GREEN : Pixel.RED);
+            pge.DrawString(x + 178, y, "C", nesBus.CPU.status.HasFlag(FLAGS6502.C) ? Pixel.GREEN : Pixel.RED);
+            pge.DrawString(x, y + 10, $"PC: ${nesBus.CPU.pc:X4}", Pixel.WHITE);
+            pge.DrawString(x, y + 20, $"A: ${nesBus.CPU.a:X2} [{nesBus.CPU.a}]", Pixel.WHITE);
+            pge.DrawString(x, y + 30, $"X: ${nesBus.CPU.x:X2} [{nesBus.CPU.x}]", Pixel.WHITE);
+            pge.DrawString(x, y + 40, $"Y: ${nesBus.CPU.y:X2} [{nesBus.CPU.y}]", Pixel.WHITE);
+            pge.DrawString(x, y + 50, $"Stack P: ${nesBus.CPU.sp:X4}", Pixel.WHITE);
         }
 
         void DrawCode(int x, int y, int nLines)
         {
-            ushort pc = cpu.pc;
+            ushort pc = nesBus.CPU.pc;
             int nLineY = (nLines >> 1) * 10 + y;
             ushort lastMem = mapAsm.Last().Key;
             var memKeysItr = mapAsm.Keys.GetEnumerator();
@@ -396,7 +380,7 @@ namespace NESEmulatorApp
         {
             for (int i = 0; i < 26; i++)
             {
-                string sOAM = string.Format("{0:X2}: ({1}, {2}) ID: {3:X2} AT: {4:X2}", i, ppu.OAM[i].x, ppu.OAM[i].y, ppu.OAM[i].id, ppu.OAM[i].attribute);
+                string sOAM = $"{i:X2}: ({nesBus.PPU.OAM[i].x}, {nesBus.PPU.OAM[i].y}) ID: {nesBus.PPU.OAM[i].id:X2} AT: {nesBus.PPU.OAM[i].attribute:X2}";
                 pge.DrawString(x, y + i * 10, sOAM, Pixel.WHITE);
             }
         }

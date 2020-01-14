@@ -32,7 +32,7 @@ namespace NESEmulator
         private ulong _currentClockCycle;
 
         // PPU has it's own bus
-        private Bus _ppuBus;
+        private NESBus _ppuBus;
 
         private PPUStatus _status;
         private PPUMask _mask;

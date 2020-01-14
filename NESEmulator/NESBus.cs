@@ -8,20 +8,37 @@ namespace NESEmulator
     /// <summary>
     /// Represents the main bus on the NES
     /// </summary>
-    public class Bus : IBus
+    public class NESBus : IBus
     {
-        private static readonly ILog Log = LogManager.GetLogger(typeof(Bus));
+        private static readonly ILog Log = LogManager.GetLogger(typeof(NESBus));
 
         private List<BusDevice> _busDeviceList;
         private ulong _systemClockCounter;
         private bool _cartConflicts;
 
-        private CS6502 _cpu;
+        public CS6502 CPU { get; private set; }
+        public CS2C02 PPU { get; private set; }
+        public CS2A03 APU { get; private set; }
+        public Ram RAM { get; private set; }
+        public NESController Controller { get; private set; }
 
-        public Bus(BusDevice[] busDevices)
+        public NESBus()
         {
-            _busDeviceList = new List<BusDevice>(busDevices);
+            APU = new CS2A03();
+            PPU = new CS2C02();
+            RAM = new Ram(0x07FF, 0x1FFF);
+            CPU = new CS6502();
+            Controller = new NESController();
+            _busDeviceList = new List<BusDevice>(new BusDevice[] { CPU, RAM, PPU, Controller, APU });
+            
+            CPU.ConnectBus(this);
+            APU.ConnectBus(this);
 
+            wireBusDeviceEvents();
+        }
+
+        private void wireBusDeviceEvents()
+        {
             List<InterruptingBusDevice> interruptingDevices = _busDeviceList.FindAll((bd) => bd is InterruptingBusDevice)
                                                                             .ConvertAll((bd) => (InterruptingBusDevice)bd);
             var interruptableBusDevices = getInterruptableDevices();
@@ -34,10 +51,8 @@ namespace NESEmulator
                     Log.Debug($"Added device {intDevice.DeviceType} as interrupting device");
                 }
             }
-
-            _cartConflicts = ((Cartridge)GetDevice(BusDeviceType.CART))?.HasBusConflicts ?? false;
-            Log.Debug($"Cartridge bus conflicts: {_cartConflicts}");
         }
+
 
         private IEnumerable<InterruptableBusDevice> getInterruptableDevices()
         {
@@ -95,8 +110,7 @@ namespace NESEmulator
         public void InsertCartridge(Cartridge cartridge)
         {
             _busDeviceList.Insert(0, cartridge);
-            CS2C02 ppu = GetPPU();
-            ppu?.ConnectCartridge(cartridge);
+            PPU.ConnectCartridge(cartridge);
 
             var interruptableBusDevices = getInterruptableDevices();
 
@@ -110,7 +124,7 @@ namespace NESEmulator
 
             if (cartridge.UsesScanlineCounter)
             {
-                ppu.DrawSprites += ((IScanlineCounterMapper)cartridge.mapper).OnSpriteFetch;
+                PPU.DrawSprites += ((IScanlineCounterMapper)cartridge.mapper).OnSpriteFetch;
             }
 
             Log.Debug($"Cartridge bus conflicts: {_cartConflicts}");
@@ -130,17 +144,6 @@ namespace NESEmulator
         public BusDevice GetDevice(BusDeviceType device)
         {
             return _busDeviceList.Find((bd) => bd.DeviceType == device);
-        }
-
-        public CS2C02 GetPPU()
-        {
-            return (CS2C02)GetDevice(BusDeviceType.PPU);
-        }
-
-        public CS6502 GetCPU()
-        {
-            _cpu = _cpu ?? (CS6502)GetDevice(BusDeviceType.CPU);
-            return _cpu;
         }
     }
 }

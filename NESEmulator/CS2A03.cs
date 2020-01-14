@@ -34,7 +34,7 @@ namespace NESEmulator
         private const ushort ADDR_STATUS        = 0x4015;
         private const ushort ADDR_FRAME_COUNTER = 0x4017;
 
-        private Bus _bus;
+        private NESBus _bus;
 
         private ushort          _apuClockCounter;
         private uint            _cpuClockCounter;
@@ -64,7 +64,7 @@ namespace NESEmulator
             _frameCounter    = new APUFrameCounter(_audioChannels, this);
         }
 
-        public void ConnectBus(Bus bus)
+        public void ConnectBus(NESBus bus)
         {
             _bus = bus;
         }
@@ -284,7 +284,7 @@ namespace NESEmulator
 
         public MemoryReader GetMemoryReader()
         {
-            return _bus?.GetCPU().ExternalMemoryReader;
+            return _bus.CPU.ExternalMemoryReader;
         }
     }
 }
