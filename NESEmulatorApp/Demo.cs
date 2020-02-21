@@ -238,8 +238,8 @@ namespace NESEmulatorApp
             //pge.DrawRect(516 + selectedPalette * (swatchSize * 5) - 1, 339, (swatchSize * 4), swatchSize, Pixel.WHITE);
 
             // Generate Pattern Tables
-            pge.DrawSprite(316, 100, nesBus.PPU.GetPatternTable(0, (byte)selectedPalette));
-            pge.DrawSprite(448, 100, nesBus.PPU.GetPatternTable(1, (byte)selectedPalette));
+            pge.DrawSprite(316, 10, nesBus.PPU.GetPatternTable(0, (byte)selectedPalette));
+            pge.DrawSprite(448, 10, nesBus.PPU.GetPatternTable(1, (byte)selectedPalette));
         }
 
         private void pge_OnCreate(object sender, EventArgs e)

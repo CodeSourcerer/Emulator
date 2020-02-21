@@ -230,11 +230,6 @@ namespace NESEmulator
 
         #region Bus Communications
 
-        public void ConnectBus(Bus bus)
-        {
-            _bus = bus;
-        }
-
         public void Reset()
         {
             _fineX                  = 0;
