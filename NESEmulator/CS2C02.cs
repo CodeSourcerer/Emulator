@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using csPixelGameEngine;
+using csPixelGameEngineCore;
 using NESEmulator.Util;
 
 namespace NESEmulator

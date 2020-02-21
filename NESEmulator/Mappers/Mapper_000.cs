@@ -18,6 +18,12 @@ namespace NESEmulator.Mappers
         {
             mapped_addr = 0;
 
+            if (addr >= 0x6000 & addr < 0x8000)
+            {
+                mapped_addr = 0xFFFFFFFF;
+                return true;
+            }
+
             if (addr >= 0x8000 && addr <= 0xFFFF)
             {
                 mapped_addr = (uint)(addr & (nPRGBanks > 1 ? 0x7FFF : 0x3FFF));
@@ -30,6 +36,12 @@ namespace NESEmulator.Mappers
         public override bool cpuMapWrite(ushort addr, out uint mapped_addr, ref byte data)
         {
             mapped_addr = 0;
+
+            if (addr >= 0x6000 & addr < 0x8000)
+            {
+                mapped_addr = 0xFFFFFFFF;
+                return true;
+            }
 
             if (addr >= 0x8000 && addr <= 0xFFFF)
             {
@@ -59,11 +71,8 @@ namespace NESEmulator.Mappers
 
             if (addr <= 0x1FFF)
             {
-                if (nCHRBanks == 0)
-                {
-                    mapped_addr = addr;
-                    return true;
-                }
+                mapped_addr = addr;
+                return true;
             }
 
             return false;

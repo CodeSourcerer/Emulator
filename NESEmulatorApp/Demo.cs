@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Timers;
-using csPixelGameEngine;
+using csPixelGameEngineCore;
 using log4net;
 using log4net.Config;
 using NESEmulator;
@@ -38,13 +38,13 @@ namespace NESEmulatorApp
         private bool runEmulation;
         private int selectedPalette;
         private int[] buffers, sources;
-        private Queue<int> _availableBuffers;
+        private Stack<int> _availableBuffers;
 
         public Demo(string appName)
         {
-            _availableBuffers = new Queue<int>(NUM_AUDIO_BUFFERS);
+            _availableBuffers = new Stack<int>(NUM_AUDIO_BUFFERS);
             initAudioStuff();
-            window = new GLWindow(SCREEN_WIDTH, SCREEN_HEIGHT, 4, 4, appName);
+            window = new GLWindow(SCREEN_WIDTH, SCREEN_HEIGHT, 3, 3, appName);
             window.KeyDown += Window_KeyDown;
             pge = new PixelGameEngine(appName);
             pge.Construct(SCREEN_WIDTH, SCREEN_HEIGHT, window);
@@ -59,9 +59,20 @@ namespace NESEmulatorApp
             XmlConfigurator.Configure(logRepository, new FileInfo("log4net.config"));
 
             Demo demo = new Demo("NES Emulator");
-            //Cartridge cartridge = demo.LoadCartridge("tests/donkey kong.nes");
-            //Cartridge cartridge = demo.LoadCartridge("tests/smb_2.nes");
-            Cartridge cartridge = demo.LoadCartridge("tests/tetris.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\BurgerTime.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\ice_climber.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\pacman-namco.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\smb2.nes");
+            Cartridge cartridge = demo.LoadCartridge("tests\\smb3.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\test_ppu_read_buffer.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\donkey kong.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\tetris.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\megaman2.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\bill_and_ted.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\ducktales.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\joust.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\paperboy.nes");
             demo.Start(cartridge);
         }
 
@@ -75,7 +86,8 @@ namespace NESEmulatorApp
             busDevices = new BusDevice[] { cpu, ram, ppu, nesController, apu };
             nesBus = new Bus(busDevices);
             cpu.ConnectBus(nesBus);
-            //apu.ConnectBus(nesBus);
+            ppu.ConnectBus(nesBus);
+            apu.ConnectBus(nesBus);
 
             if (!cartridge.ImageValid)
                 throw new ApplicationException("Invalid ROM image");
@@ -91,10 +103,8 @@ namespace NESEmulatorApp
             buffers = AL.GenBuffers(NUM_AUDIO_BUFFERS);
             sources = AL.GenSources(1);
             foreach (int buf in buffers)
-                _availableBuffers.Enqueue(buf);
+                _availableBuffers.Push(buf);
         }
-
-        DateTime dtLastTick;
 
         public Cartridge LoadCartridge(string fileName)
         {
@@ -232,7 +242,8 @@ namespace NESEmulatorApp
             //DrawRam(2, 182, 0x0100, 16, 16);
             //DrawCpu(516, 2);
             //DrawCode(516, 72, 26);
-            //DrawOam(516, 72);
+            DrawOam(270, 140, 0, 32);
+            DrawOam(500, 140, 32, 32);
 
             // Draw Palettes & Pattern Tables
             //DrawPalettes(516, 340);
@@ -241,8 +252,8 @@ namespace NESEmulatorApp
             //pge.DrawRect(516 + selectedPalette * (swatchSize * 5) - 1, 339, (swatchSize * 4), swatchSize, Pixel.WHITE);
 
             // Generate Pattern Tables
-            pge.DrawSprite(316, 100, ppu.GetPatternTable(0, (byte)selectedPalette));
-            pge.DrawSprite(448, 100, ppu.GetPatternTable(1, (byte)selectedPalette));
+            pge.DrawSprite(270, 10, ppu.GetPatternTable(0, (byte)selectedPalette));
+            pge.DrawSprite(402, 10, ppu.GetPatternTable(1, (byte)selectedPalette));
         }
 
         private void pge_OnCreate(object sender, EventArgs e)
@@ -272,18 +283,13 @@ namespace NESEmulatorApp
                 var soundData = apu.ReadAndResetAudio();
                 if (_availableBuffers.Count > 0)
                 {
-                    int buffer = _availableBuffers.Dequeue();
+                    int buffer = _availableBuffers.Pop();
                     AL.BufferData(buffer, ALFormat.Mono16, soundData, soundData.Length * 2, 44100);
                     AL.SourceQueueBuffer(sources[0], buffer);
                     if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
                     {
-                        Log.Warn("Starving audio buffer!");
                         AL.SourcePlay(sources[0]);
                     }
-                }
-                else
-                {
-                    Log.Warn("Full audio buffers!");
                 }
             }
         }
@@ -296,7 +302,7 @@ namespace NESEmulatorApp
             {
                 var buffersDequeued = AL.SourceUnqueueBuffers(sources[0], processed);
                 foreach (var dqBuf in buffersDequeued)
-                    _availableBuffers.Enqueue(dqBuf);
+                    _availableBuffers.Push(dqBuf);
             }
         }
 
@@ -392,12 +398,13 @@ namespace NESEmulatorApp
             }
         }
 
-        void DrawOam(int x, int y)
+        void DrawOam(int x, int y, int start, int count)
         {
-            for (int i = 0; i < 26; i++)
+            for (int i = start, y_offset = 0; i < start + count; i++, y_offset++)
             {
-                string sOAM = string.Format("{0:X2}: ({1}, {2}) ID: {3:X2} AT: {4:X2}", i, ppu.OAM[i].x, ppu.OAM[i].y, ppu.OAM[i].id, ppu.OAM[i].attribute);
-                pge.DrawString(x, y + i * 10, sOAM, Pixel.WHITE);
+                var OAM = ppu.OAM[i];
+                string sOAM = $"{i:X2}: ({OAM.x}, {OAM.y}) ID: {OAM.id:X2} AT: {OAM.attribute:X2}";
+                pge.DrawString(x, y + y_offset * 10, sOAM, Pixel.WHITE);
             }
         }
     }
