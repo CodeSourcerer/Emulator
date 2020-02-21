@@ -19,7 +19,7 @@ who support OpenAL.
 ## Running
 
 ### Windows
-You must go to OpenAL.org and download the OpenAL SDK, if you do not already have it installed.
+You must go to OpenAL.org and [download the OpenAL SDK](https://www.openal.org/downloads/), if you do not already have it installed.
 
 ### Mac
 MacOS ships with OpenAL installed by default.

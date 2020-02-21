@@ -6,9 +6,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="bin\Release\netcoreapp3.1\tests\**" />
-    <EmbeddedResource Remove="bin\Release\netcoreapp3.1\tests\**" />
-    <None Remove="bin\Release\netcoreapp3.1\tests\**" />
+    <Compile Remove="bin\**" />
+    <EmbeddedResource Remove="bin\**" />
+    <None Remove="bin\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -26,7 +26,6 @@
     <PackageReference Include="OpenTK.NetStandard" Version="1.0.5.12" />
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="bin\Release\netcoreapp3.1\" />
     <Folder Include="lib\" />
   </ItemGroup>
 </Project>

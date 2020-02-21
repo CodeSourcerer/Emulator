@@ -47,9 +47,9 @@ namespace NESEmulator
         public bool HasBusConflicts { get => mapper.HasBusConflicts; }
         public bool UsesScanlineCounter { get => mapper.HasScanlineCounter; }
 
-        private Bus _bus;
+        private NESBus _bus;
 
-        public Cartridge(Bus parentBus)
+        public Cartridge(NESBus parentBus)
         {
             _bus = parentBus;
             mirror = Mirror.HORIZONTAL;
