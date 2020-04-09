@@ -1,8 +1,12 @@
 ﻿using System;
+using log4net;
+
 namespace NESEmulator
 {
     public abstract class Mapper
     {
+        protected ILog Log = LogManager.GetLogger(typeof(Mapper));
+
         protected byte nPRGBanks;
         protected byte nCHRBanks;
         protected readonly Cartridge cartridge;
