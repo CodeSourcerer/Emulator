@@ -23,6 +23,8 @@ namespace NESEmulator
         private const ushort CYCLES     = 341;
         private const ushort SCANLINES  = 262;
 
+        private const uint WARMUP_CYCLES_AFTER_RESET = 88974;
+
         public BusDeviceType DeviceType => BusDeviceType.PPU;
 
         public event InterruptingDeviceHandler RaiseInterrupt;
@@ -335,11 +337,17 @@ namespace NESEmulator
                 switch (addr)
                 {
                     case 0x0000:    // Control
+                        if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
+
                         _control.reg = data;
                         _tram_addr.NameTableX = _control.NameTableX;
                         _tram_addr.NameTableY = _control.NameTableY;
+                        if (_control.EnableNMI && _status.VerticalBlank)
+                            this.RaiseInterrupt.Invoke(this, new InterruptEventArgs(InterruptType.NMI));
                         break;
                     case 0x0001:    // Mask
+                        if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
+
                         _mask.reg = data;
                         break;
                     case 0x0002:    // Status
@@ -352,6 +360,8 @@ namespace NESEmulator
                         _OAMaddr++;
                         break;
                     case 0x0005:    // Scroll
+                        if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
+
                         if (_addressLatch == 0)
                         {
                             // First write to scroll register contains X offset in pixel space which we split into
@@ -370,6 +380,8 @@ namespace NESEmulator
                         }
                         break;
                     case 0x0006:    // PPU Address
+                        if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
+
                         if (_addressLatch == 0)
                         {
                             // PPU address bus can be accessed by CPU via the ADDR and DATA registers. The first
@@ -1199,12 +1211,17 @@ namespace NESEmulator
         {
             // Effectively end of frame, so set vertical blank flag
             _status.VerticalBlank = true;
+        }
 
+        private void checkAndRaiseNMI()
+        {
             // If the control register tells us to emit a NMI when entering vertical blanking period,
             // do it! The CPU will be informed that rendering is complete so it can perform operations
             // with the PPU knowing it won't produce visible artifacts.
             if (_control.EnableNMI)
+            {
                 this.RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.NMI));
+            }
         }
 
         private void clearVerticalBlank()
@@ -1469,6 +1486,7 @@ namespace NESEmulator
             _cycleOperations[scanline].Add(new PPUCycleNode(0, noOp));
             _cycleOperations[scanline].Add(new PPUCycleNode(1, startVerticalBlank));
             _cycleOperations[scanline].Add(new PPUCycleNode(2, noOp));
+            _cycleOperations[scanline].Add(new PPUCycleNode(16, checkAndRaiseNMI));
             scanline++; // scanline = 242
 
             // Scanlines 242-260 do absolutely nothing. Boy are they lazy!
