@@ -18,7 +18,7 @@ namespace NESEmulatorApp
     class Demo
     {
         private const int SCREEN_WIDTH      = 700;
-        private const int SCREEN_HEIGHT     = 240;
+        private const int SCREEN_HEIGHT     = 300;
         private const int NUM_AUDIO_BUFFERS = 20;
 
         private static ILog Log = LogManager.GetLogger(typeof(Demo));
@@ -37,7 +37,7 @@ namespace NESEmulatorApp
         {
             _availableBuffers = new Stack<int>(NUM_AUDIO_BUFFERS);
             initAudioStuff();
-            window = new GLWindow(SCREEN_WIDTH, SCREEN_HEIGHT, 3, 3, appName);
+            window = new GLWindow(SCREEN_WIDTH, SCREEN_HEIGHT, 2, 2, appName);
             window.KeyDown += Window_KeyDown;
             pge = new PixelGameEngine(appName);
             pge.Construct(SCREEN_WIDTH, SCREEN_HEIGHT, window);
@@ -56,11 +56,11 @@ namespace NESEmulatorApp
 
             Demo demo = new Demo("NES Emulator");
             //Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes");
-            //Cartridge cartridge = demo.LoadCartridge("tests\\BurgerTime.nes");
+            Cartridge cartridge = demo.LoadCartridge("tests\\BurgerTime.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\ice_climber.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\pacman-namco.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\smb2.nes");
-            Cartridge cartridge = demo.LoadCartridge("tests\\smb3.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\smb3.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\test_ppu_read_buffer.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\donkey kong.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\tetris.nes");
@@ -228,8 +228,8 @@ namespace NESEmulatorApp
             //DrawRam(2, 182, 0x0100, 16, 16);
             //DrawCpu(516, 2);
             //DrawCode(516, 72, 26);
-            DrawOam(270, 140, 0, 32);
-            DrawOam(500, 140, 32, 32);
+            //DrawOam(270, 140, 0, 32);
+            //DrawOam(500, 140, 32, 32);
 
             // Draw Palettes & Pattern Tables
             //DrawPalettes(516, 340);
@@ -238,8 +238,8 @@ namespace NESEmulatorApp
             //pge.DrawRect(516 + selectedPalette * (swatchSize * 5) - 1, 339, (swatchSize * 4), swatchSize, Pixel.WHITE);
 
             // Generate Pattern Tables
-            pge.DrawSprite(316, 10, nesBus.PPU.GetPatternTable(0, (byte)selectedPalette));
-            pge.DrawSprite(448, 10, nesBus.PPU.GetPatternTable(1, (byte)selectedPalette));
+            //pge.DrawSprite(316, 10, nesBus.PPU.GetPatternTable(0, (byte)selectedPalette));
+            //pge.DrawSprite(448, 10, nesBus.PPU.GetPatternTable(1, (byte)selectedPalette));
         }
 
         private void pge_OnCreate(object sender, EventArgs e)
@@ -389,7 +389,7 @@ namespace NESEmulatorApp
             for (int i = start, y_offset = 0; i < start + count; i++, y_offset++)
             {
                 string sOAM = $"{i:X2}: ({nesBus.PPU.OAM[i].x}, {nesBus.PPU.OAM[i].y}) ID: {nesBus.PPU.OAM[i].id:X2} AT: {nesBus.PPU.OAM[i].attribute:X2}";
-                pge.DrawString(x, y + i * 10, sOAM, Pixel.WHITE);
+                pge.DrawString(x, y + y_offset * 10, sOAM, Pixel.WHITE);
             }
         }
     }
