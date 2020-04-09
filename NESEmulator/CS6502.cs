@@ -50,6 +50,8 @@ namespace NESEmulator
         private List<Instruction> opcode_lookup;
         private IBus bus;
 
+        private bool _irqPending = false;
+
         #region Well-Known Addresses
 
         /// <summary>
@@ -176,6 +178,8 @@ namespace NESEmulator
             addr_rel = addr_abs = 0x0000;
             fetched = 0x00;
 
+            _irqPending = false;
+
             // Reset takes time
             cycles = 8;
         }
@@ -220,6 +224,10 @@ namespace NESEmulator
 
                 // IRQ cycles
                 cycles = 7;
+            }
+            else
+            {
+                _irqPending = true;
             }
         }
 
@@ -555,6 +563,13 @@ namespace NESEmulator
             else
             {
                 status &= ~f;
+
+                // If IRQ occurred with flag set, we want to raise the interrupt now
+                if (f == FLAGS6502.I && _irqPending)
+                {
+                    _irqPending = false;
+                    IRQ();
+                }
             }
         }
 
