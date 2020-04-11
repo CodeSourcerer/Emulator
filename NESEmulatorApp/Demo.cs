@@ -37,7 +37,7 @@ namespace NESEmulatorApp
         {
             _availableBuffers = new Stack<int>(NUM_AUDIO_BUFFERS);
             initAudioStuff();
-            window = new GLWindow(SCREEN_WIDTH, SCREEN_HEIGHT, 2, 2, appName);
+            window = new GLWindow(SCREEN_WIDTH, SCREEN_HEIGHT, 3, 3, appName);
             window.KeyDown += Window_KeyDown;
             pge = new PixelGameEngine(appName);
             pge.Construct(SCREEN_WIDTH, SCREEN_HEIGHT, window);
@@ -56,7 +56,7 @@ namespace NESEmulatorApp
 
             Demo demo = new Demo("NES Emulator");
             //Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes");
-            Cartridge cartridge = demo.LoadCartridge("tests\\BurgerTime.nes");
+            Cartridge cartridge = demo.LoadCartridge("tests\\burgertime.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\ice_climber.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\pacman-namco.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\smb2.nes");
@@ -126,14 +126,11 @@ namespace NESEmulatorApp
 
             if (keyState.IsKeyDown(Key.Up))
                 nesBus.Controller.Press(NESController.Controller.Controller1, NESController.NESButton.UP);
-
-            if (keyState.IsKeyDown(Key.Down))
+            else if (keyState.IsKeyDown(Key.Down))
                 nesBus.Controller.Press(NESController.Controller.Controller1, NESController.NESButton.DOWN);
-
-            if (keyState.IsKeyDown(Key.Left))
+            else if (keyState.IsKeyDown(Key.Left))
                 nesBus.Controller.Press(NESController.Controller.Controller1, NESController.NESButton.LEFT);
-
-            if (keyState.IsKeyDown(Key.Right))
+            else if (keyState.IsKeyDown(Key.Right))
                 nesBus.Controller.Press(NESController.Controller.Controller1, NESController.NESButton.RIGHT);
         }
 
