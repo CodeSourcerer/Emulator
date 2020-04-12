@@ -55,8 +55,8 @@ namespace NESEmulatorApp
             Log.Info("NES app started");
 
             Demo demo = new Demo("NES Emulator");
-            //Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes");
-            Cartridge cartridge = demo.LoadCartridge("tests\\burgertime.nes");
+            Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes");
+            //Cartridge cartridge = demo.LoadCartridge("tests\\burgertime.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\ice_climber.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\pacman-namco.nes");
             //Cartridge cartridge = demo.LoadCartridge("tests\\smb2.nes");

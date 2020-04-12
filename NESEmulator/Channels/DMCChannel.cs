@@ -156,18 +156,18 @@ namespace NESEmulator.Channels
 
                 case ADDR_DIRECTLOAD:
                     Output = (byte)(data & 0x7F);
-                    Log.Debug($"DMC Channel written: [DirectLoad={Output}]");
+                    //Log.Debug($"DMC Channel written: [DirectLoad={Output}]");
                     break;
 
                 case ADDR_SAMPLEADDR:
                     SampleAddress = (ushort)(0xC000 | (data << 6));
-                    Log.Debug($"DMC Channel written: [SampleAddress={SampleAddress:X2}]");
+                    //Log.Debug($"DMC Channel written: [SampleAddress={SampleAddress:X2}]");
                     break;
 
                 case ADDR_SAMPLELENGTH:
                     SampleLength = (ushort)((data << 4) + 1);
                     _bytesRemaining = SampleLength;
-                    Log.Debug($"DMC Chennel written: [SampleLength={SampleLength:X2}]");
+                    //Log.Debug($"DMC Chennel written: [SampleLength={SampleLength:X2}]");
                     break;
             }
         }

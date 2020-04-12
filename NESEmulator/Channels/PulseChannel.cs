@@ -93,8 +93,8 @@ namespace NESEmulator.Channels
         /// </remarks>
         public void ClockHalfFrame()
         {
-            _lengthCounter.Clock();
             _sweepUnit.Clock();
+            _lengthCounter.Clock();
         }
 
         /// <summary>

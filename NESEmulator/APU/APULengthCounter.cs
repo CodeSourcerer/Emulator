@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using log4net;
 
 namespace NESEmulator.APU
 {
@@ -8,6 +9,8 @@ namespace NESEmulator.APU
     /// </summary>
     public class APULengthCounter
     {
+        private static ILog Log = LogManager.GetLogger(typeof(APULengthCounter));
+
         public bool Halt { get; set; }
 
         private bool _enabled;
@@ -24,8 +27,6 @@ namespace NESEmulator.APU
         }
 
         public ushort Length { get; set; }
-
-        public event EventHandler CounterElapsed;
 
         private static Dictionary<byte, byte> _lengthTable; // { get; set; }
 
@@ -50,7 +51,9 @@ namespace NESEmulator.APU
                     //this.CounterElapsed?.Invoke(this, EventArgs.Empty);
                 }
                 else
+                {
                     --Length;
+                }
             }
         }
 

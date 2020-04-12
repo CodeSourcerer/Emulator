@@ -41,7 +41,7 @@ namespace NESEmulator.APU
 
         public void Reset()
         {
-            _counter = CounterReload + 1;
+            _counter = CounterReload;
         }
     }
 }

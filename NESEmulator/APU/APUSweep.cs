@@ -25,6 +25,7 @@ namespace NESEmulator.APU
         }
         public byte ShiftCount { get; set; }
 
+        // This represents the period of the sweep
         private APUDivider _divider;
         private APUSequencer _pulseSequencer;
         private int _pulseChannelNumber;
@@ -54,7 +55,15 @@ namespace NESEmulator.APU
         {
             if (!MuteChannel && Enabled && ShiftCount != 0)
             {
+                // Update current period
                 _pulseSequencer.TimerReload = (ushort)_targetPeriod;
+                if (_pulseSequencer.TimerReload < 8)
+                {
+                    if (!MuteChannel)
+                        Log.Debug($"Sweep muted channel. [_targetPeriod={_targetPeriod:X2}] [ShiftCount={ShiftCount}] [TimerReload={_pulseSequencer.TimerReload}]");
+
+                    MuteChannel = true;
+                }
             }
             _divider.Reset();
             Reload = false;
@@ -74,7 +83,12 @@ namespace NESEmulator.APU
 
             _targetPeriod = _pulseSequencer.TimerReload + shiftAmount;
             if (_targetPeriod > MAX_TARGET_PERIOD)
+            {
+                if (!MuteChannel)
+                    Log.Debug($"Sweep muted channel. [_targetPeriod={_targetPeriod:X2}] [ShiftCount={ShiftCount}] [TimerReload={_pulseSequencer.TimerReload}]");
+
                 MuteChannel = true;
+            }
         }
     }
 }
