@@ -19,19 +19,30 @@ namespace NESEmulatorApp
     {
         private const int SCREEN_WIDTH      = 700;
         private const int SCREEN_HEIGHT     = 300;
-        private const int NUM_AUDIO_BUFFERS = 20;
+        private const int NUM_AUDIO_BUFFERS = 50;
 
         private static ILog Log = LogManager.GetLogger(typeof(Demo));
 
         private PixelGameEngine pge;
         private GLWindow window;
-        private AudioContext audioContext;
         private NESBus nesBus;
-        private Dictionary<ushort, string> mapAsm;
         private bool runEmulation;
+
+        // Debugging
+        private Dictionary<ushort, string> mapAsm;
         private int selectedPalette;
+
+        // Audio vars
+        private AudioContext audioContext;
         private int[] buffers, sources;
         private Stack<int> _availableBuffers;
+
+        // Update vars
+        private int _frameCount;
+        private int _fps;
+        private DateTime dtStart = DateTime.Now;
+        private double residualTime = 0.0;
+
 
         public Demo(string appName)
         {
@@ -52,23 +63,23 @@ namespace NESEmulatorApp
             XmlConfigurator.Configure(logRepository, new FileInfo("log4net.config"));
 
             Thread.CurrentThread.Name = "main";
-            Log.Info("NES app started");
+            Log.Info($"NES app started with args {string.Join(' ', args)}");
 
             Demo demo = new Demo("NES Emulator");
-            Cartridge cartridge = demo.LoadCartridge("tests\\smb_2.nes");
-            //Cartridge cartridge = demo.LoadCartridge("tests\\burgertime.nes");
-            //Cartridge cartridge = demo.LoadCartridge("tests\\ice_climber.nes");
-            //Cartridge cartridge = demo.LoadCartridge("tests\\pacman-namco.nes");
-            //Cartridge cartridge = demo.LoadCartridge("tests\\smb2.nes");
-            //Cartridge cartridge = demo.LoadCartridge("tests\\smb3.nes");
-            //Cartridge cartridge = demo.LoadCartridge("tests\\test_ppu_read_buffer.nes");
-            //Cartridge cartridge = demo.LoadCartridge("tests\\donkey kong.nes");
-            //Cartridge cartridge = demo.LoadCartridge("tests\\tetris.nes");
-            //Cartridge cartridge = demo.LoadCartridge("tests\\megaman2.nes");
-            //Cartridge cartridge = demo.LoadCartridge("tests\\bill_and_ted.nes");
-            //Cartridge cartridge = demo.LoadCartridge("tests\\ducktales.nes");
-            //Cartridge cartridge = demo.LoadCartridge("tests\\joust.nes");
-            //Cartridge cartridge = demo.LoadCartridge("tests\\paperboy.nes");
+
+            string romfile = "tests\\smb_2.nes";
+            //string romfile = "tests\\smb2.nes";
+            //string romfile = "tests\\smb3.nes";
+            //string romfile = "tests\\burgertime.nes";
+            //string romfile = "tests\\ice_climber.nes";
+            //string romfile = "tests\\pacman-namco.nes";
+            //string romfile = "tests\\ducktales.nes";
+
+            if (args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]))
+                romfile = args[0];
+
+            Cartridge cartridge = demo.LoadCartridge(romfile);
+
             demo.Start(cartridge);
         }
 
@@ -179,24 +190,19 @@ namespace NESEmulatorApp
             }
         }
 
-        private int _frameCount;
-        private int _fps;
-        private DateTime dtStart = DateTime.Now;
-        private float residualTime = 0.0f;
         private void pge_OnUpdate(object sender, FrameUpdateEventArgs frameUpdateArgs)
         {
             pge.Clear(Pixel.BLUE);
 
-            handleControllerInputs(Keyboard.GetState());
-
             if (runEmulation)
             {
                 if (residualTime > 0.0f)
-                    residualTime -= (float)frameUpdateArgs.ElapsedTime;
+                    residualTime -= frameUpdateArgs.ElapsedTime;
                 else
                 {
-                    residualTime += (1.0f / 60.0988f) - (float)frameUpdateArgs.ElapsedTime;
+                    residualTime += (1.0 / 60.0988) - frameUpdateArgs.ElapsedTime;
 
+                    handleControllerInputs(Keyboard.GetState());
                     do
                     {
                         nesBus.clock();
@@ -211,7 +217,6 @@ namespace NESEmulatorApp
                         _fps = _frameCount;
                         _frameCount = 0;
                     }
-                    nesBus.Controller.ControllerState[(int)NESController.Controller.Controller1] = 0;
                 }
             }
 
@@ -272,7 +277,12 @@ namespace NESEmulatorApp
                     if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
                     {
                         AL.SourcePlay(sources[0]);
+                        Log.Debug("Sound buffers emptied - restarted audio");
                     }
+                }
+                else
+                {
+                    Log.Debug("No available sound buffers!");
                 }
             }
         }

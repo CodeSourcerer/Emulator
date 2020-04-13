@@ -2,6 +2,9 @@
 
 namespace NESEmulator.APU
 {
+    /// <summary>
+    /// This is just a countdown timer that will execute a callback when it reaches 0.
+    /// </summary>
     public class APUDivider
     {
         private int _counterReload;

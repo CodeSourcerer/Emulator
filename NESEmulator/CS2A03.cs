@@ -14,12 +14,12 @@ namespace NESEmulator
     {
         public BusDeviceType DeviceType => BusDeviceType.APU;
         public event InterruptingDeviceHandler RaiseInterrupt;
-        public const int SOUND_BUFFER_SIZE_MS   = 20;
+        public const int SOUND_BUFFER_SIZE_MS   = 10;
 
         private static ILog Log = LogManager.GetLogger(typeof(CS2A03));
         private const float  CLOCK_NTSC_HZ      = 1789773.0f;
         private const double CLOCK_NTSC_APU     = 894886.5;
-        private const int   SAMPLE_FREQUENCY    = 20;
+        private const int    SAMPLE_FREQUENCY   = 20;
 
         private const ushort ADDR_PULSE1_LO     = 0x4000;
         private const ushort ADDR_PULSE1_HI     = 0x4003;
@@ -50,10 +50,18 @@ namespace NESEmulator
         private bool    _audioReadyToPlay;
         private int     _audioBufferPtr;
         private short[] _audioBuffer;
+        private short[] _highDefAudioBuf;
+        private int     _highDefAudioBufPtr;
+
+        // Temp vars for accurately handling weird situations
+        private bool _frameCounterWritten;      // frame counter not written right away, so we need this
+        private byte _frameCounterCycleWait;    // 3 when write occurs on APU cycle, 4 otherwise.
+        private byte _frameCounterData;
 
         public CS2A03()
         {
             _audioBuffer     = new short[AUDIO_BUFFER_SIZE];
+            _highDefAudioBuf = new short[SAMPLE_FREQUENCY];
             _pulseChannel1   = new PulseChannel(1);
             _pulseChannel2   = new PulseChannel(2);
             _triangleChannel = new TriangleChannel();
@@ -71,6 +79,24 @@ namespace NESEmulator
 
         public void Clock(ulong clockCounter)
         {
+            // Clock frame counter every CPU cycle
+            if ((clockCounter & 3) == 0)
+            {
+                ++_cpuClockCounter;
+
+                // Check if we need to do our special case frame counter write handling
+                if (_frameCounterWritten)
+                {
+                    if (--_frameCounterCycleWait == 0)
+                    {
+                        updateFrameCounter();
+                        _frameCounterWritten = false;
+                    }
+                }
+
+                _frameCounter.Clock(_cpuClockCounter);
+            }
+
             // Clock all audio channels, letting them determine whether or not to actually do something or not
             foreach (var audioChannel in _audioChannels)
             {
@@ -87,24 +113,23 @@ namespace NESEmulator
             if (clockCounter % 6 == 0)
             {
                 ++_apuClockCounter;
+
+                _highDefAudioBuf[_highDefAudioBufPtr++] = GetMixedAudioSample();
+
+                if (_highDefAudioBufPtr == SAMPLE_FREQUENCY)
+                    _highDefAudioBufPtr = 0;
+
                 if (_apuClockCounter % SAMPLE_FREQUENCY == 0)
                 {
                     if (_audioBufferPtr < AUDIO_BUFFER_SIZE)
                     {
-                        _audioBuffer[_audioBufferPtr++] = GetMixedAudioSample();
+                        _audioBuffer[_audioBufferPtr++] = (short)(_highDefAudioBuf.Sum(x => x) / SAMPLE_FREQUENCY); //GetMixedAudioSample();
                     }
                     else
                     {
                         _audioReadyToPlay = true;
                     }
                 }
-            }
-
-            // Clock frame counter every CPU cycle
-            if (clockCounter % 3 == 0)
-            {
-                ++_cpuClockCounter;
-                _frameCounter.Clock(_cpuClockCounter);
             }
         }
 
@@ -140,7 +165,9 @@ namespace NESEmulator
                 dataRead = true;
                 data = (byte)((_dmcChannel.InterruptFlag ? 0 : 1) << 7 |
                               (_frameCounter.FrameInterrupt ? 0 : 1) << 6);
-                _frameCounter.FrameInterrupt = false;
+                // "If an interrupt flag was set at the same moment of the read, it will read back as 1 but it will not be cleared."
+                if (!_frameCounter.IsInterruptCycle())
+                    _frameCounter.FrameInterrupt = false;
                 Log.Debug("Status register read");
             }
             else if (addr == ADDR_FRAME_COUNTER)
@@ -155,6 +182,7 @@ namespace NESEmulator
         public void Reset()
         {
             _apuClockCounter = 0;
+            _frameCounterWritten = false;
             Write(ADDR_STATUS, 0x00);
         }
 
@@ -205,20 +233,23 @@ namespace NESEmulator
             else if (addr == ADDR_FRAME_COUNTER)
             {
                 dataWritten = true;
-                _frameCounter.Reset();
-                _frameCounter.InterruptInhibit = data.TestBit(6);
-                if (_frameCounter.InterruptInhibit)
-                    _frameCounter.FrameInterrupt = false;
+                _frameCounterData = data;
+                _frameCounterWritten = true;
+                _frameCounterCycleWait = (byte)(((_cpuClockCounter & 0x1) == 0) ? 4 : 3);
+                //_frameCounter.Reset();
+                //_frameCounter.InterruptInhibit = data.TestBit(6);
+                //if (_frameCounter.InterruptInhibit)
+                //    _frameCounter.FrameInterrupt = false;
 
-                if (data.TestBit(7) == false)
-                {
-                    _frameCounter.Mode = SequenceMode.FourStep;
-                }
-                else
-                {
-                    _frameCounter.Mode = SequenceMode.FiveStep;
-                }
-                Log.Debug($"Frame counter written [data={data:X2}]");
+                //if (data.TestBit(7) == false)
+                //{
+                //    _frameCounter.Mode = SequenceMode.FourStep;
+                //}
+                //else
+                //{
+                //    _frameCounter.Mode = SequenceMode.FiveStep;
+                //}
+                Log.Debug($"Pending frame counter write in {_frameCounterCycleWait} cycles [data={data:X2}]");
             }
 
             return dataWritten;
@@ -288,6 +319,18 @@ namespace NESEmulator
         public MemoryReader GetMemoryReader()
         {
             return _bus.CPU.ExternalMemoryReader;
+        }
+
+        private void updateFrameCounter()
+        {
+            _frameCounter.Reset();
+            _frameCounter.InterruptInhibit = _frameCounterData.TestBit(6);
+            if (_frameCounter.InterruptInhibit)
+                _frameCounter.FrameInterrupt = false;
+
+            _frameCounter.Mode = (_frameCounterData.TestBit(7) ? SequenceMode.FiveStep : SequenceMode.FourStep);
+
+            Log.Debug($"Frame counter written [data={_frameCounterData:X2}]");
         }
     }
 }

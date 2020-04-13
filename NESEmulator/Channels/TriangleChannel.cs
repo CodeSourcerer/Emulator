@@ -47,8 +47,8 @@ namespace NESEmulator.Channels
         {
             _lengthCounter = new APULengthCounter(lengthCounter_Elapsed);
             _lengthCounter.Enabled = true;
-            _sequencer = new APUSequencer();
-            _sequencer.OnTimerElapsed += sequencer_GenerateWave;
+            _sequencer = new APUSequencer(sequencer_GenerateWave);
+            //_sequencer.OnTimerElapsed += sequencer_GenerateWave;
 
             _sequenceDirection = -1;
             _sequencePtr = 15;

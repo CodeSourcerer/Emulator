@@ -6,7 +6,8 @@ using log4net;
 namespace NESEmulator.APU
 {
     /// <summary>
-    /// Represents the pulse channel sweep unit
+    /// Represents the pulse channel sweep unit. This works by manipulating the sequencer timer reload value
+    /// up or down, which in turn, affects the frequency of duty cycle updates.
     /// </summary>
     public class APUSweep
     {
@@ -27,11 +28,11 @@ namespace NESEmulator.APU
 
         // This represents the period of the sweep
         private APUDivider _divider;
-        private APUSequencer _pulseSequencer;
+        private APUDivider _pulseSequencer;
         private int _pulseChannelNumber;
         private int _targetPeriod;
 
-        public APUSweep(int pulseChannelNumber, APUSequencer pulseSequencer)
+        public APUSweep(int pulseChannelNumber, APUDivider pulseSequencer)
         {
             _pulseChannelNumber = pulseChannelNumber;
             _pulseSequencer = pulseSequencer;
@@ -56,11 +57,12 @@ namespace NESEmulator.APU
             if (!MuteChannel && Enabled && ShiftCount != 0)
             {
                 // Update current period
-                _pulseSequencer.TimerReload = (ushort)_targetPeriod;
-                if (_pulseSequencer.TimerReload < 8)
+                _pulseSequencer.CounterReload = (ushort)_targetPeriod;
+                // Mute the channel when the frequency drops below 8
+                if (_pulseSequencer.CounterReload < 8)
                 {
                     if (!MuteChannel)
-                        Log.Debug($"Sweep muted channel. [_targetPeriod={_targetPeriod:X2}] [ShiftCount={ShiftCount}] [TimerReload={_pulseSequencer.TimerReload}]");
+                        Log.Debug($"Sweep muted channel. [_targetPeriod={_targetPeriod:X2}] [ShiftCount={ShiftCount}] [TimerReload={_pulseSequencer.CounterReload}]");
 
                     MuteChannel = true;
                 }
@@ -71,7 +73,7 @@ namespace NESEmulator.APU
 
         private void calcTargetPeriod()
         {
-            int shiftAmount = _pulseSequencer.TimerReload >> ShiftCount;
+            int shiftAmount = _pulseSequencer.CounterReload >> ShiftCount;
 
             if (Negate)
             {
@@ -81,11 +83,11 @@ namespace NESEmulator.APU
                     shiftAmount = -shiftAmount; // take 2's compliment
             }
 
-            _targetPeriod = _pulseSequencer.TimerReload + shiftAmount;
+            _targetPeriod = _pulseSequencer.CounterReload + shiftAmount;
             if (_targetPeriod > MAX_TARGET_PERIOD)
             {
                 if (!MuteChannel)
-                    Log.Debug($"Sweep muted channel. [_targetPeriod={_targetPeriod:X2}] [ShiftCount={ShiftCount}] [TimerReload={_pulseSequencer.TimerReload}]");
+                    Log.Debug($"Sweep muted channel. [_targetPeriod={_targetPeriod:X2}] [ShiftCount={ShiftCount}] [TimerReload={_pulseSequencer.CounterReload}]");
 
                 MuteChannel = true;
             }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 using NESEmulator.Util;
@@ -105,6 +106,16 @@ namespace NESEmulator.APU
                     }
                 }
             }
+        }
+
+        public bool IsInterruptCycle()
+        {
+            Dictionary<ulong, SequenceAction[]> sequences;
+
+            sequences = (Mode == SequenceMode.FourStep ? _fourStepSequence : _fiveStepSequence);
+
+            return sequences.ContainsKey(_clockCounter) &&
+                   sequences[_clockCounter].Any(seq => seq == SequenceAction.Interrupt);
         }
 
         public void Reset()

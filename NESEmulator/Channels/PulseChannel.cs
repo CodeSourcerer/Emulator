@@ -13,7 +13,7 @@ namespace NESEmulator.Channels
         private static ILog Log = LogManager.GetLogger(typeof(PulseChannel));
 
         private APULengthCounter _lengthCounter;
-        private APUSequencer _sequencer;
+        private APUDivider _sequencer;
         private APUVolumeEnvelope _volumeEnvelope;
         private APUSweep _sweepUnit;
 
@@ -53,8 +53,8 @@ namespace NESEmulator.Channels
             _dutyCycle = DUTY_CYCLE[0];
             _lengthCounter = new APULengthCounter(lengthCounterElapsed);
             _lengthCounter.Enabled = true;
-            _sequencer = new APUSequencer();
-            _sequencer.OnTimerElapsed += sequencer_GenerateWave;
+            //_sequencer.OnTimerElapsed += sequencer_GenerateWave;
+            _sequencer = new APUDivider(sequencer_GenerateWave);
             _sweepUnit = new APUSweep(channel, _sequencer);
         }
 
@@ -63,6 +63,12 @@ namespace NESEmulator.Channels
 
         }
 
+        /// <summary>
+        /// When the sequencer ticks down to 0, this will advance the duty cycle index generating
+        /// the appropriate square wave form.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void sequencer_GenerateWave(object sender, EventArgs e)
         {
             _dutyCycleIndex = (--_dutyCycleIndex) & 7;
@@ -127,7 +133,7 @@ namespace NESEmulator.Channels
             {
                 _sweepUnit.Enabled       = data.TestBit(7);
                 _sweepUnit.Negate        = data.TestBit(3);
-                _sweepUnit.DividerPeriod = ((data >> 4) & 7);
+                _sweepUnit.DividerPeriod = ((data >> 4) & 7) + 1;
                 _sweepUnit.ShiftCount    = (byte)(data & 7);
                 _sweepUnit.Reload        = true;
                 //Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [SweepEnabled={_sweepUnit.Enabled}] [DividerPeriod={_sweepUnit.DividerPeriod}] [Negate={_sweepUnit.Negate}] [ShiftCount={_sweepUnit.ShiftCount}]");
@@ -135,15 +141,15 @@ namespace NESEmulator.Channels
             // Pulse channel 1 & 2 timer low bits
             else if (addr == 0x4002 || addr == 0x4006)
             {
-                _sequencer.TimerReload &= 0xFF00; // Preserve data in high byte, clearing data in low byte
-                _sequencer.TimerReload |= data;
+                _sequencer.CounterReload &= 0xFF00; // Preserve data in high byte, clearing data in low byte
+                _sequencer.CounterReload |= data;
             }
             // Pulse channel 1 & 2 length counter load and timer high bits
             else if (addr == 0x4003 || addr == 0x4007)
             {
                 _lengthCounter.LoadLength((byte)(data >> 3));
-                _sequencer.TimerReload &= 0x00FF; // Clear data in high byte, preserving data in low byte
-                _sequencer.TimerReload |= (ushort)((data & 0x07) << 8);
+                _sequencer.CounterReload &= 0x00FF; // Clear data in high byte, preserving data in low byte
+                _sequencer.CounterReload |= (ushort)((data & 0x07) << 8) + 1;
 
                 _dutyCycleIndex = 0;
                 _volumeEnvelope.Start = true;
@@ -155,7 +161,7 @@ namespace NESEmulator.Channels
         private bool isChannelMuted()
         {
             bool isMuted = (_lengthCounter.Length == 0 ||
-                            _sequencer.TimerReload < 8 ||
+                            _sequencer.CounterReload < 8 ||
                             _sweepUnit.MuteChannel);
 
             return isMuted;
