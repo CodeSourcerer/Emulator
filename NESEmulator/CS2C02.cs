@@ -91,6 +91,10 @@ namespace NESEmulator
         private ushort _spritePatternAddrLo;
         private byte   _currSprite = 0;   // current sprite on scanline we are evaluating
 
+        // Special case flags
+        private bool _frameSuppressVBL;
+        private bool _frameSuppressNMI;
+
         private Cartridge _cartridge;
         private List<PPUCycleNode>[] _cycleOperations;
         private Random _random;
@@ -284,6 +288,21 @@ namespace NESEmulator
                         // gets picked up on the bottom 5 bits which represent the last PPU bus transaction. Some games
                         // "may" use this noise as valid data (even though they probably shouldn't)
                         data = (byte)((_status.reg & 0xE0) | (_ppuDataBuffer & 0x1F));
+
+                        if (_scanline == 241)
+                        {
+                            // Special case 1: Reading one PPU clock before reads it as clear and never sets the flag or generates NMI for that frame.
+                            if (_cycle == 0)
+                            {
+                                _frameSuppressVBL = true;
+                                data.SetBit(7, false);
+                            }
+                            // Special case 2: Reading on the same PPU clock or one later reads it as set, clears it, and suppresses the NMI for that frame.
+                            else if (_cycle == 1 || _cycle == 2)
+                            {
+                                _frameSuppressNMI = true;
+                            }
+                        }
 
                         // Clear the vertical blanking flag
                         _status.VerticalBlank = false;
@@ -1044,6 +1063,8 @@ namespace NESEmulator
             _cycle = 0;
             _scanline = 0;
             _currSprite = 0;
+            _frameSuppressVBL = false;
+            _frameSuppressNMI = false;
             FrameComplete = true;
         }
 
@@ -1210,7 +1231,8 @@ namespace NESEmulator
         private void startVerticalBlank()
         {
             // Effectively end of frame, so set vertical blank flag
-            _status.VerticalBlank = true;
+            if (!_frameSuppressVBL)
+                _status.VerticalBlank = true;
         }
 
         private void checkAndRaiseNMI()
@@ -1218,7 +1240,7 @@ namespace NESEmulator
             // If the control register tells us to emit a NMI when entering vertical blanking period,
             // do it! The CPU will be informed that rendering is complete so it can perform operations
             // with the PPU knowing it won't produce visible artifacts.
-            if (_control.EnableNMI)
+            if (_control.EnableNMI && !_frameSuppressNMI)
             {
                 this.RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.NMI));
             }
@@ -1486,7 +1508,7 @@ namespace NESEmulator
             _cycleOperations[scanline].Add(new PPUCycleNode(0, noOp));
             _cycleOperations[scanline].Add(new PPUCycleNode(1, startVerticalBlank));
             _cycleOperations[scanline].Add(new PPUCycleNode(2, noOp));
-            _cycleOperations[scanline].Add(new PPUCycleNode(16, checkAndRaiseNMI));
+            _cycleOperations[scanline].Add(new PPUCycleNode(3, checkAndRaiseNMI));
             scanline++; // scanline = 242
 
             // Scanlines 242-260 do absolutely nothing. Boy are they lazy!

@@ -67,10 +67,10 @@ namespace NESEmulatorApp
 
             Demo demo = new Demo("NES Emulator");
 
-            string romfile = "tests\\smb_2.nes";
+            //string romfile = "tests\\smb_2.nes";
             //string romfile = "tests\\smb2.nes";
             //string romfile = "tests\\smb3.nes";
-            //string romfile = "tests\\burgertime.nes";
+            string romfile = "tests\\burgertime.nes";
             //string romfile = "tests\\ice_climber.nes";
             //string romfile = "tests\\pacman-namco.nes";
             //string romfile = "tests\\ducktales.nes";
