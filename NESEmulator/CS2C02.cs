@@ -417,13 +417,6 @@ namespace NESEmulator
                             _vram_addr = _tram_addr;
                             _addressLatch = 0;
                         }
-                        // TODO: Somehow scanline/IRQ counter gets clocked here, but I don't know under what conditions
-                        if (_currentClockCycle - _lastA12HighCycle >= 8)
-                        {
-                            //Console.WriteLine("A12 0 -> 1");
-                            //DrawSprites?.Invoke(this, EventArgs.Empty);
-                        }
-                        _lastA12HighCycle = _currentClockCycle;
                         break;
                     case 0x0007:    // PPU Data
                         ppuWrite(_vram_addr.reg, data);
@@ -503,6 +496,16 @@ namespace NESEmulator
                 if (addr == 0x001C) addr = 0x000C;
 
                 data = (byte)(_palette[addr] & (_mask.GrayScale ? 0x30 : 0x3F));
+            }
+
+            if ((addr & 0x1000) > 0)
+            {
+                if (_currentClockCycle - _lastA12HighCycle >= 15)
+                {
+                    //Console.WriteLine("A12 0 -> 1");
+                    DrawSprites?.Invoke(this, EventArgs.Empty);
+                }
+                _lastA12HighCycle = _currentClockCycle;
             }
 
             return data;
@@ -621,23 +624,6 @@ namespace NESEmulator
                     }
                 }
 
-                if (_mask.RenderBackground && _mask.RenderSprites)
-                {
-                    if ((_cycle == 260 && _control.PatternSprite && !_control.PatternBackground) ||
-                        (_cycle == 324 && !_control.PatternSprite && _control.PatternBackground))
-                    {
-                        //Console.WriteLine($"Clock Scanline: {_scanline}; cycle: {_cycle}");
-                        this.DrawSprites?.Invoke(this, EventArgs.Empty);
-                    }
-
-                    if ((_cycle >= 260 && _cycle <= 320 && _control.PatternSprite && !_control.PatternBackground) ||
-                        (_cycle >= 324 && _cycle <= 340 && !_control.PatternSprite && _control.PatternBackground))
-                    {
-                        _lastA12HighCycle = _currentClockCycle;
-                    }
-
-                }
-
                 if (_cycle > 256 && _cycle <= 320)
                 {
                     switch ((_cycle - 1) % 8)
@@ -657,7 +643,7 @@ namespace NESEmulator
                             // the lo pattern address, because the hi pattern address is always offset by 8 from the
                             // lo address.
                             _spritePatternAddrLo = _control.SpriteSize ? loadNextSpr8x16TileLSB(_currSprite) :
-                                                                           loadNextSpr8x8TileLSB(_currSprite);
+                                                                         loadNextSpr8x8TileLSB(_currSprite);
                             _spritePatternBitsLo = ppuRead(_spritePatternAddrLo);
                             // If the sprite is flipped horizontally, we need to flip the pattern bytes
                             if ((_secondaryOAM[_currSprite].attribute & 0x40) != 0)
