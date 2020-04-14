@@ -16,7 +16,7 @@ namespace NESEmulator
         /// </summary>
         Z = (1 << 1),
         /// <summary>
-        /// Interrupt enable
+        /// Interrupt disable
         /// </summary>
         I = (1 << 2),
         /// <summary>
@@ -51,6 +51,11 @@ namespace NESEmulator
         private IBus bus;
 
         private bool _irqPending = false;
+        private bool _irqDisablePending = false;
+        private byte _irqEnableLatency = 0;
+        private byte _irqDisableLatency = 0;
+        private bool _startCountingIRQs = true;
+        private int  _irqCount = 0;
 
         #region Well-Known Addresses
 
@@ -204,8 +209,17 @@ namespace NESEmulator
         /// </remarks>
         public void IRQ()
         {
-            if (getFlag(FLAGS6502.I) == 0)
+            if (getFlag(FLAGS6502.I) == 0 || _irqDisablePending)
             {
+                //if (_startCountingIRQs)
+                //{
+                //    _irqCount++;
+                //    Log.Debug($"IRQCount = {_irqCount}");
+                //}
+
+                _irqDisablePending = false;
+                _irqPending = false;
+
                 // Push the PC to the stack. It is 16-bits, so requires 2 pushes
                 push((byte)((pc >> 8) & 0x00FF));
                 push((byte)(pc & 0x00FF));
@@ -262,6 +276,49 @@ namespace NESEmulator
         }
 
         /// <summary>
+        /// Who knew interrupting code could be so complicated?
+        /// </summary>
+        private void pollForIRQ()
+        {
+            // OMG!! I know you don't want to be interrupted, Mr. CPU - but I JUST asked for an IRQ!!
+            if (getFlag(FLAGS6502.I) == 1 && _irqDisablePending && _irqPending && _irqEnableLatency == 0)
+            {
+                // Fine - this is the LAST ONE. After this, I'm cutting you off!
+                IRQ();
+
+                //// Well, normally we wouldn't allow an IRQ, but we may have an exception
+                //if (_irqDisableLatency == 1 && _irqPending)
+                //{
+                //    // Alright, sir - this is the LAST ONE. After this, I'm cutting you off!
+                //    _irqDisableLatency = 0;
+                //    _irqDisablePending = false;
+                //    _irqPending = false;
+                //    IRQ();
+                //}
+                //else
+                //{
+                //    // Nope! Go interrupt me when I'm not busy. Now, GET LOST!
+                //    _irqDisablePending = false;
+                //    _irqDisableLatency = 0;
+                //}
+            }
+            else if (getFlag(FLAGS6502.I) == 0 && _irqPending)
+            {
+                // Whoa! Hold on there, Mr. Interrupty-pants. Did you JUST enable interrupts?
+                if (_irqEnableLatency > 0)
+                {
+                    // Look, you're gonna have to wait until the next instruction.
+                    --_irqEnableLatency;
+                }
+                else
+                {
+                    // Ok, thanks for being patient. You can interrupt now!
+                    IRQ();
+                }
+            }
+        }
+
+        /// <summary>
         /// Perform clock cycle
         /// </summary>
         /// <remarks>
@@ -293,6 +350,8 @@ namespace NESEmulator
             {
                 if (cycles == 0)
                 {
+                    pollForIRQ();
+
                     //var (addr, sInst) = Disassemble(pc);
                     //Log.Debug($"[{clock_count}] {sInst}");
 
@@ -563,13 +622,6 @@ namespace NESEmulator
             else
             {
                 status &= ~f;
-
-                // If IRQ occurred with flag set, we want to raise the interrupt now
-                if (f == FLAGS6502.I && _irqPending)
-                {
-                    _irqPending = false;
-                    IRQ();
-                }
             }
         }
 
@@ -1247,13 +1299,16 @@ namespace NESEmulator
         }
 
         /// <summary>
-        /// Instruction: Disable Interrupts / Clear Interrupt Flag
+        /// Instruction: Enable Interrupts / Clear Interrupt Disable Flag
         /// Function:    I = 0
         /// </summary>
         /// <returns></returns>
         private byte CLI()
         {
+            _startCountingIRQs = true;
+            _irqCount = 0;
             setFlag(FLAGS6502.I, false);
+            _irqEnableLatency = 1;
             return 0;
         }
 
@@ -1433,6 +1488,8 @@ namespace NESEmulator
             return 0;
         }
 
+        #region Load instructions
+
         /// <summary>
         /// Instruction: Load The Accumulator
         /// Function:    A = M
@@ -1477,6 +1534,8 @@ namespace NESEmulator
             testAndSet(FLAGS6502.N, y);
             return 1;
         }
+
+        #endregion // Load instructions
 
         /// <summary>
         /// No operation
@@ -1570,6 +1629,7 @@ namespace NESEmulator
         private byte PLP()
         {
             status = (FLAGS6502)pop();
+            _irqEnableLatency = 1;
             setFlag(FLAGS6502.U, true);
             return 0;
         }
@@ -1702,16 +1762,25 @@ namespace NESEmulator
         }
 
         /// <summary>
-        /// Instruction: Set Interrupt Flag / Enable Interrupts
+        /// Instruction: Set Interrupt Disable Flag / Disable Interrupts
         /// Function:    I = 1
         /// Flags Out:   I
         /// </summary>
         /// <returns></returns>
         private byte SEI()
         {
+            if (getFlag(FLAGS6502.I) == 0)
+            {
+                _irqDisablePending = true;
+                _irqDisableLatency = 1;
+                _startCountingIRQs = false;
+            }
+
             setFlag(FLAGS6502.I, true);
             return 0;
         }
+
+        #region Store instructions
 
         /// <summary>
         /// Instruction: Store Accumulator at Address
@@ -1748,6 +1817,10 @@ namespace NESEmulator
             write(addr_abs, y);
             return 0;
         }
+
+        #endregion // Store instructions
+
+        #region Transfer instructions
 
         /// <summary>
         /// Instruction: Transfer Accumulator to X Register
@@ -1830,6 +1903,8 @@ namespace NESEmulator
             testAndSet(FLAGS6502.N, a);
             return 0;
         }
+
+        #endregion // Transfer instructions
 
         /// <summary>
         /// All "unofficial" opcodes will be routed here.

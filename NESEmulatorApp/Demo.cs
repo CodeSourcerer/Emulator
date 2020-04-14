@@ -69,11 +69,15 @@ namespace NESEmulatorApp
 
             //string romfile = "tests\\smb_2.nes";
             //string romfile = "tests\\smb2.nes";
-            //string romfile = "tests\\smb3.nes";
-            string romfile = "tests\\burgertime.nes";
+            string romfile = "tests\\smb3.nes";
+            //string romfile = "tests\\burgertime.nes";
             //string romfile = "tests\\ice_climber.nes";
             //string romfile = "tests\\pacman-namco.nes";
             //string romfile = "tests\\ducktales.nes";
+
+            // Test roms
+            //string romfile = "tests\\ppu_vbl_nmi.nes";
+            //string romfile = "tests\\cpu_interrupts.nes";
 
             if (args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]))
                 romfile = args[0];

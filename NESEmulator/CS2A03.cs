@@ -95,18 +95,18 @@ namespace NESEmulator
                 }
 
                 _frameCounter.Clock(_cpuClockCounter);
+
+                if (_frameCounter.FrameInterrupt && !_frameCounter.InterruptInhibit)
+                {
+                    IRQ();    // This is screwing stuff up for some reason
+                    _frameCounter.FrameInterrupt = false;
+                }
             }
 
             // Clock all audio channels, letting them determine whether or not to actually do something or not
             foreach (var audioChannel in _audioChannels)
             {
                 audioChannel.Clock(clockCounter);
-            }
-
-            if (_frameCounter.FrameInterrupt)
-            {
-                //IRQ();    // This is screwing stuff up for some reason
-                _frameCounter.FrameInterrupt = false;
             }
 
             // APU clocks every other CPU cycle
@@ -183,6 +183,7 @@ namespace NESEmulator
         {
             _apuClockCounter = 0;
             _frameCounterWritten = false;
+            _frameCounter.InterruptInhibit = true;
             Write(ADDR_STATUS, 0x00);
         }
 
@@ -330,7 +331,7 @@ namespace NESEmulator
 
             _frameCounter.Mode = (_frameCounterData.TestBit(7) ? SequenceMode.FiveStep : SequenceMode.FourStep);
 
-            Log.Debug($"Frame counter written [data={_frameCounterData:X2}]");
+            Log.Debug($"Frame counter written [data={_frameCounterData:X2}] [I={_frameCounter.InterruptInhibit}] [Mode={_frameCounter.Mode}]");
         }
     }
 }

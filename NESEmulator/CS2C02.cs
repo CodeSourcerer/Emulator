@@ -361,8 +361,7 @@ namespace NESEmulator
                         _control.reg = data;
                         _tram_addr.NameTableX = _control.NameTableX;
                         _tram_addr.NameTableY = _control.NameTableY;
-                        if (_control.EnableNMI && _status.VerticalBlank)
-                            this.RaiseInterrupt.Invoke(this, new InterruptEventArgs(InterruptType.NMI));
+                        checkAndRaiseNMI();
                         break;
                     case 0x0001:    // Mask
                         if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
@@ -1232,7 +1231,10 @@ namespace NESEmulator
         {
             // Effectively end of frame, so set vertical blank flag
             if (!_frameSuppressVBL)
+            {
                 _status.VerticalBlank = true;
+                checkAndRaiseNMI();
+            }
         }
 
         private void checkAndRaiseNMI()
@@ -1240,7 +1242,7 @@ namespace NESEmulator
             // If the control register tells us to emit a NMI when entering vertical blanking period,
             // do it! The CPU will be informed that rendering is complete so it can perform operations
             // with the PPU knowing it won't produce visible artifacts.
-            if (_control.EnableNMI && !_frameSuppressNMI)
+            if (_control.EnableNMI && _status.VerticalBlank && !_frameSuppressNMI)
             {
                 this.RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.NMI));
             }
@@ -1507,8 +1509,8 @@ namespace NESEmulator
             _cycleOperations[scanline] = new List<PPUCycleNode>();
             _cycleOperations[scanline].Add(new PPUCycleNode(0, noOp));
             _cycleOperations[scanline].Add(new PPUCycleNode(1, startVerticalBlank));
-            _cycleOperations[scanline].Add(new PPUCycleNode(2, noOp));
-            _cycleOperations[scanline].Add(new PPUCycleNode(3, checkAndRaiseNMI));
+            //_cycleOperations[scanline].Add(new PPUCycleNode(2, checkAndRaiseNMI));
+            //_cycleOperations[scanline].Add(new PPUCycleNode(3, checkAndRaiseNMI));
             scanline++; // scanline = 242
 
             // Scanlines 242-260 do absolutely nothing. Boy are they lazy!

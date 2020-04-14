@@ -129,8 +129,8 @@ namespace NESEmulator.APU
             this._fourStepSequence.Add(STEP1, new SequenceAction[] { SequenceAction.QuarterFrame });
             this._fourStepSequence.Add(STEP2, new SequenceAction[] { SequenceAction.QuarterFrame, SequenceAction.HalfFrame });
             this._fourStepSequence.Add(STEP3, new SequenceAction[] { SequenceAction.QuarterFrame });
-            this._fourStepSequence.Add(FOURSTEP_STEP4, new SequenceAction[] { SequenceAction.Interrupt });
-            this._fourStepSequence.Add(FOURSTEP_STEP4 + 1, new SequenceAction[] { SequenceAction.QuarterFrame, SequenceAction.HalfFrame, SequenceAction.Interrupt });
+            //this._fourStepSequence.Add(FOURSTEP_STEP4, new SequenceAction[] { SequenceAction.Interrupt });
+            this._fourStepSequence.Add(FOURSTEP_STEP4 + 1, new SequenceAction[] { SequenceAction.QuarterFrame, SequenceAction.HalfFrame });
             this._fourStepSequence.Add(FOURSTEP_FINAL, new SequenceAction[] { SequenceAction.Interrupt });
             
             this._fiveStepSequence = new Dictionary<ulong, SequenceAction[]>(10);
