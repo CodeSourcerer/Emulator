@@ -182,6 +182,7 @@ namespace NESEmulator
         public void Clock(ulong clockCounter)
         {
             ThisClockCycle = clockCounter;
+            mapper.clock(clockCounter);
         }
         #endregion // Bus Interface
 

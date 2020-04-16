@@ -138,7 +138,7 @@ namespace NESEmulator.Mappers
             if (addr < 0xC000 && (addr & 1) == 1)
             {
                 PRGRAMEnable = data.TestBit(7);
-                Log.Debug($"Write: [RAMEnable={PRGRAMEnable}]");
+                Log.Debug($"[{cpuClockCycle}] Write: [RAMEnable={PRGRAMEnable}]");
                 return true;
             }
 
@@ -146,7 +146,7 @@ namespace NESEmulator.Mappers
             if (addr < 0xE000 && (addr & 1) == 0)
             {
                 _irqReload = data;
-                //Log.Debug($"Write: [IRQReload={_irqReload}]");
+                Log.Debug($"[{cpuClockCycle}] Write: [IRQReload={_irqReload}]");
                 return true;
             }
 
@@ -154,14 +154,14 @@ namespace NESEmulator.Mappers
             if (addr < 0xE000 && (addr & 1) == 1)
             {
                 _irqCounter = 0;
-                //Log.Debug("Write: Set IRQReloadFlag");
+                Log.Debug($"[{cpuClockCycle}] Write: Set IRQReloadFlag");
                 return true;
             }
 
             if (addr <= 0xFFFF && (addr & 1) == 0)
             {
                 _irqEnable = false;
-                //Log.Debug($"IRQEnable={_irqEnable}");
+                Log.Debug($"[{cpuClockCycle}] IRQEnable={_irqEnable}");
                 //_irqActive = false;
                 return true;
             }
@@ -169,7 +169,7 @@ namespace NESEmulator.Mappers
             if (addr <= 0xFFFF && (addr & 1) == 1)
             {
                 _irqEnable = true;
-                //Log.Debug($"IRQEnable={_irqEnable}");
+                Log.Debug($"[{cpuClockCycle}] IRQEnable={_irqEnable}");
                 return true;
             }
 
@@ -295,21 +295,29 @@ namespace NESEmulator.Mappers
             }
         }
 
+        private bool _irqFlag = false;
+
+        public override void clock(ulong clockCycle)
+        {
+            base.clock(clockCycle);
+        }
+
         public void OnSpriteFetch(object sender, EventArgs e)
         {
             if (_irqCounter == 0)
             {
                 _irqCounter = _irqReload;
-                //Log.Debug("IRQCounter reloaded");
+                Log.Debug($"[{cpuClockCycle}] IRQCounter reloaded [_irqCounter={_irqCounter}]");
             }
             else
             {
                 _irqCounter--;
+                Log.Debug($"[{cpuClockCycle}] IRQCounter decremented [_irqCounter={_irqCounter}]");
+
                 if (_irqCounter == 0 && _irqEnable)
                 {
-                    //Log.Debug("Triggering interrupt");
                     cartridge.Mapper_InvokeInterrupt(this, new InterruptEventArgs(InterruptType.IRQ));
-                    //_irqEnable = false; // ??
+                    Log.Debug($"[{cpuClockCycle}] Interrupt triggered");
                 }
             }
         }

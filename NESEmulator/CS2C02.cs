@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using csPixelGameEngineCore;
+using log4net;
 using NESEmulator.Util;
 
 namespace NESEmulator
@@ -10,6 +11,8 @@ namespace NESEmulator
     /// </summary>
     public class CS2C02 : InterruptingBusDevice
     {
+        private readonly ILog Log = LogManager.GetLogger(typeof(CS2C02));
+
         private const ushort ADDR_PPU_MIN   = 0x2000;
         private const ushort ADDR_PPU_MAX   = 0x3FFF;
         private const ushort ADDR_PALETTE   = 0x3F00;
@@ -29,7 +32,7 @@ namespace NESEmulator
 
         public event InterruptingDeviceHandler RaiseInterrupt;
 
-        public event EventHandler DrawSprites;
+        public event EventHandler A12FilteredHigh;
 
         private ulong _currentClockCycle;
 
@@ -398,7 +401,7 @@ namespace NESEmulator
                         }
                         break;
                     case 0x0006:    // PPU Address
-                        if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
+                        //if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
 
                         if (_addressLatch == 0)
                         {
@@ -417,6 +420,16 @@ namespace NESEmulator
                             _vram_addr = _tram_addr;
                             _addressLatch = 0;
                         }
+
+                        //if ((_tram_addr.reg & 0x1000) > 0)
+                        //{
+                        //if ((_currentClockCycle - _lastA12HighCycle) >= 15)
+                        //{
+                        //    //Console.WriteLine("A12 0 -> 1");
+                        //    A12FilteredHigh?.Invoke(this, EventArgs.Empty);
+                        //}
+                        //_lastA12HighCycle = _currentClockCycle;
+                        //}
                         break;
                     case 0x0007:    // PPU Data
                         ppuWrite(_vram_addr.reg, data);
@@ -445,7 +458,7 @@ namespace NESEmulator
             {
 
             }
-            else if (addr >= 0x0000 && addr <= 0x1FFF)  // Pattern (sprite) memory range
+            else if (addr <= 0x1FFF)  // Pattern (sprite) memory range
             {
                 // If the cartridge can't map the address, have a physical location ready here
                 data = _tblPattern[(addr & 0x1000) >> 12][addr & 0x0FFF];
@@ -500,10 +513,10 @@ namespace NESEmulator
 
             if ((addr & 0x1000) > 0)
             {
-                if (_currentClockCycle - _lastA12HighCycle >= 15)
+                if ((_currentClockCycle - _lastA12HighCycle) >= 15)
                 {
                     //Console.WriteLine("A12 0 -> 1");
-                    DrawSprites?.Invoke(this, EventArgs.Empty);
+                    A12FilteredHigh?.Invoke(this, EventArgs.Empty);
                 }
                 _lastA12HighCycle = _currentClockCycle;
             }
@@ -573,6 +586,16 @@ namespace NESEmulator
 
                 _palette[addr] = data;
             }
+
+            //if ((addr & 0x1000) > 0)
+            //{
+            //    if ((_currentClockCycle - _lastA12HighCycle) >= 15)
+            //    {
+            //        //Console.WriteLine("A12 0 -> 1");
+            //        A12FilteredHigh?.Invoke(this, EventArgs.Empty);
+            //    }
+            //    _lastA12HighCycle = _currentClockCycle;
+            //}
         }
 
         #endregion // Bus Communications
@@ -1036,8 +1059,11 @@ namespace NESEmulator
             //if (_frameCounter % 2 == 0)
             //    return;
 
-            _cycleOpItr = _cycleOperations[_scanline].GetEnumerator();
-            _cycleOpItr.MoveNext();
+            if (_mask.RenderBackground || _mask.RenderSprites)
+            {
+                _cycleOpItr = _cycleOperations[_scanline].GetEnumerator();
+                _cycleOpItr.MoveNext();
+            }
 
             fetchNextBGTileId();
         }
@@ -1218,6 +1244,7 @@ namespace NESEmulator
             // Effectively end of frame, so set vertical blank flag
             if (!_frameSuppressVBL)
             {
+                //Log.Debug($"[{_currentClockCycle}] [RenderBackground={_mask.RenderBackground}] START VBL");
                 _status.VerticalBlank = true;
                 checkAndRaiseNMI();
             }
@@ -1230,14 +1257,22 @@ namespace NESEmulator
             // with the PPU knowing it won't produce visible artifacts.
             if (_control.EnableNMI && _status.VerticalBlank && !_frameSuppressNMI)
             {
+                //Log.Debug($"[{_currentClockCycle / 3}] Raising NMI [scanline={_scanline}] [_cycle={_cycle}]");
                 this.RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.NMI));
             }
+        }
+
+        private void clearVBL()
+        {
+            _status.VerticalBlank = false;
+            //Log.Debug($"[{_currentClockCycle}] [RenderBackground={_mask.RenderBackground}] END VBL");
         }
 
         private void clearVerticalBlank()
         {
             // Effectively start of new frame, so clear vertical blank flag
-            _status.VerticalBlank = false;
+            clearVBL();
+            //_status.VerticalBlank = false;
 
             // Clear sprite overflow flag
             _status.SpriteOverflow = false;

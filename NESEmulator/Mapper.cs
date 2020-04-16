@@ -7,6 +7,9 @@ namespace NESEmulator
     {
         protected ILog Log = LogManager.GetLogger(typeof(Mapper));
 
+        protected ulong clockCycle;
+        protected ulong cpuClockCycle;
+
         protected byte nPRGBanks;
         protected byte nCHRBanks;
         protected readonly Cartridge cartridge;
@@ -31,5 +34,13 @@ namespace NESEmulator
         public abstract bool ppuMapWrite(ushort addr, out uint mapped_addr, ref byte data);
 
         public abstract void reset();
+
+        // for debugging
+        public virtual void clock(ulong clockCycle)
+        {
+            this.clockCycle = clockCycle;
+            if ((clockCycle & 0x3) == 0)
+                ++cpuClockCycle;
+        }
     }
 }

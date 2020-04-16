@@ -129,7 +129,7 @@ namespace NESEmulator
 
             if (cartridge.UsesScanlineCounter)
             {
-                PPU.DrawSprites += ((IScanlineCounterMapper)cartridge.mapper).OnSpriteFetch;
+                PPU.A12FilteredHigh += ((IScanlineCounterMapper)cartridge.mapper).OnSpriteFetch;
             }
 
             Log.Debug($"Cartridge bus conflicts: {_cartConflicts}");

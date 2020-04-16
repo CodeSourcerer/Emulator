@@ -69,15 +69,26 @@ namespace NESEmulatorApp
 
             //string romfile = "tests\\smb_2.nes";
             //string romfile = "tests\\smb2.nes";
-            string romfile = "tests\\smb3.nes";
+            //string romfile = "tests\\smb3.nes";
             //string romfile = "tests\\burgertime.nes";
             //string romfile = "tests\\ice_climber.nes";
             //string romfile = "tests\\pacman-namco.nes";
             //string romfile = "tests\\ducktales.nes";
 
             // Test roms
+            //string romfile = "tests\\1.Branch_Basics.nes";
+            //string romfile = "tests\\2.Backward_Branch.nes";
+            //string romfile = "tests\\3.Forward_Branch.nes";
+            //string romfile = "tests\\official_only.nes";
+            string romfile = "tests\\15-brk.nes";
+            //string romfile = "tests\\16-special.nes";
+
             //string romfile = "tests\\ppu_vbl_nmi.nes";
             //string romfile = "tests\\cpu_interrupts.nes";
+            // MMC3 tests
+            //string romfile = "tests\\1-clocking.nes";
+            //string romfile = "tests\\3-A12_clocking.nes";
+            //string romfile = "tests\\4.Scanline_timing.nes";
 
             if (args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]))
                 romfile = args[0];
@@ -281,12 +292,12 @@ namespace NESEmulatorApp
                     if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
                     {
                         AL.SourcePlay(sources[0]);
-                        Log.Debug("Sound buffers emptied - restarted audio");
+                        //Log.Debug("Sound buffers emptied - restarted audio");
                     }
                 }
                 else
                 {
-                    Log.Debug("No available sound buffers!");
+                    //Log.Debug("No available sound buffers!");
                 }
             }
         }

@@ -143,7 +143,7 @@ namespace NESEmulator.Mappers
                 int bankNum = addr < 0x1000 ? 0 : 1;
                 mapped_addr = (uint)(_pCHRBank[bankNum] + (addr & 0x0FFF));
 
-                Log.Debug($"CHR ROM write [bankNum={bankNum}] [addr={addr:X4}]");
+                //Log.Debug($"CHR ROM write [bankNum={bankNum}] [addr={addr:X4}]");
                 return true;
             }
 
@@ -198,14 +198,14 @@ namespace NESEmulator.Mappers
                 // Select CHR bank 0
                 _chrBank[0] = (byte)(CHRROMBankMode == 0 ? (_shiftRegister & 0x1E) : (_shiftRegister & 0x1F));
                 updateCHRBankOffsets();
-                Log.Debug($"CHR bank 0 written. [chrBank0={_shiftRegister}]");
+                //Log.Debug($"CHR bank 0 written. [chrBank0={_shiftRegister}]");
             }
             else if (addr < 0xE000)
             {
                 // Select CHR bank 1
                 _chrBank[1] = (byte)(_shiftRegister & 0x1F);
                 updateCHRBankOffsets();
-                Log.Debug($"CHR bank 1 written. [chrBank1={_shiftRegister}]");
+                //Log.Debug($"CHR bank 1 written. [chrBank1={_shiftRegister}]");
             }
             else
             {

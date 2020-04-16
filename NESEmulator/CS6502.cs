@@ -56,6 +56,7 @@ namespace NESEmulator
         private byte _irqDisableLatency = 0;
         private bool _startCountingIRQs = true;
         private int  _irqCount = 0;
+        private bool _nmiPending = false;
 
         #region Well-Known Addresses
 
@@ -122,7 +123,8 @@ namespace NESEmulator
             switch (e.Interrupt)
             {
                 case InterruptType.NMI:
-                    NMI();
+                    Log.Debug($"[{clock_count}] NMI raised");
+                    _nmiPending = true;
                     break;
 
                 case InterruptType.IRQ:
@@ -141,7 +143,20 @@ namespace NESEmulator
         public byte x { get; set; }
         public byte y { get; set; }
         public byte sp { get; set; }
-        public ushort pc { get; set; }
+//        private ushort _pc;
+        public ushort pc
+        { 
+            get; private set;
+            //get => _pc;
+            //private set
+            //{
+            //    _pc = value;
+            //    if (value == 928)
+            //    {
+            //        _pc = _pc;
+            //    }
+            //}
+        }
         public FLAGS6502 status { get; set; }
         #endregion // Register Properties
 
@@ -176,7 +191,7 @@ namespace NESEmulator
 
             // Reset internal registers
             a = x = y = 0;
-            sp = 0xFD;
+            sp = 0xFF;
             status = 0x00 | FLAGS6502.U;
 
             // Clear internal helper variables
@@ -217,6 +232,7 @@ namespace NESEmulator
                 //    Log.Debug($"IRQCount = {_irqCount}");
                 //}
 
+                Log.Debug($"[{clock_count}] IRQ");
                 _irqDisablePending = false;
                 _irqPending = false;
 
@@ -226,8 +242,7 @@ namespace NESEmulator
 
                 // Then push status register to the stack
                 setFlag(FLAGS6502.B, false);
-                setFlag(FLAGS6502.U, true);
-                push((byte)status);
+                push((byte)(status | FLAGS6502.U));
                 setFlag(FLAGS6502.I, true);
 
                 // Read new PC location from fixed address
@@ -255,15 +270,15 @@ namespace NESEmulator
         /// </remarks>
         public void NMI()
         {
+            Log.Debug($"[{clock_count}] NMI start");
             // Push the PC to the stack. It is 16-bits, so requires 2 pushes
             push((byte)((pc >> 8) & 0x00FF));
             push((byte)(pc & 0x00FF));
 
             // Then push status register to the stack
             setFlag(FLAGS6502.B, false);
-            setFlag(FLAGS6502.U, true);
             setFlag(FLAGS6502.I, true);
-            push((byte)status);
+            push((byte)(status | FLAGS6502.U));
 
             // Read new PC location from fixed address
             addr_abs = ADDR_NMI;
@@ -278,13 +293,15 @@ namespace NESEmulator
         /// <summary>
         /// Who knew interrupting code could be so complicated?
         /// </summary>
-        private void pollForIRQ()
+        private bool pollForIRQ()
         {
+            bool shouldInterrupt = false;
             // OMG!! I know you don't want to be interrupted, Mr. CPU - but I JUST asked for an IRQ!!
             if (getFlag(FLAGS6502.I) == 1 && _irqDisablePending && _irqPending && _irqEnableLatency == 0)
             {
                 // Fine - this is the LAST ONE. After this, I'm cutting you off!
-                IRQ();
+                //IRQ();
+                shouldInterrupt = true;
 
                 //// Well, normally we wouldn't allow an IRQ, but we may have an exception
                 //if (_irqDisableLatency == 1 && _irqPending)
@@ -313,9 +330,12 @@ namespace NESEmulator
                 else
                 {
                     // Ok, thanks for being patient. You can interrupt now!
-                    IRQ();
+                    //IRQ();
+                    shouldInterrupt = true;
                 }
             }
+
+            return shouldInterrupt;
         }
 
         /// <summary>
@@ -335,7 +355,7 @@ namespace NESEmulator
         /// </remarks>
         public override void Clock(ulong clockCounter)
         {
-            if (clockCounter % 3 != 0)
+            if ((clockCounter % 3) != 0)
                 return;
 
             if (DMATransfer)
@@ -350,41 +370,52 @@ namespace NESEmulator
             {
                 if (cycles == 0)
                 {
-                    pollForIRQ();
+                    if (_nmiPending)
+                    {
+                        _nmiPending = false;
+                        NMI();
+                    }
+                    else if (pollForIRQ())
+                    {
+                        IRQ();
+                    }
+                    else
+                    {
 
-                    //var (addr, sInst) = Disassemble(pc);
-                    //Log.Debug($"[{clock_count}] {sInst}");
+                        //var (addr, sInst) = Disassemble(pc);
+                        //Log.Debug($"[{clock_count}] {sInst}");
 
-                    // Read the next instruction byte. This 8-bit value is used to index the translation
-                    // table to get the relevat information about how to implement the instruction
-                    opcode = read(pc);
+                        // Read the next instruction byte. This 8-bit value is used to index the translation
+                        // table to get the relevat information about how to implement the instruction
+                        opcode = read(pc);
 
-                    // Make sure Unused status flag is 1
-                    setFlag(FLAGS6502.U, true);
+                        // Make sure Unused status flag is 1
+                        setFlag(FLAGS6502.U, true);
 
-                    // After reading opcode, increment pc
-                    pc++;
+                        // After reading opcode, increment pc
+                        pc++;
 
-                    // Get starting number of cycles
-                    cycles = opcode_lookup[opcode].cycles;
+                        // Get starting number of cycles
+                        cycles = opcode_lookup[opcode].cycles;
 
-                    // Perform fetch of intermediate data using the required addressing mode
-                    byte additional_cycle1 = opcode_lookup[opcode].addr_mode();
+                        // Perform fetch of intermediate data using the required addressing mode
+                        byte additional_cycle1 = opcode_lookup[opcode].addr_mode();
 
-                    // Perform operation
-                    byte additional_cycle2 = opcode_lookup[opcode].operation();
+                        // Perform operation
+                        byte additional_cycle2 = opcode_lookup[opcode].operation();
 
-                    // Add additional cycles that may be required to complete operation
-                    cycles += (byte)(additional_cycle1 & additional_cycle2);
+                        // Add additional cycles that may be required to complete operation
+                        cycles += (byte)(additional_cycle1 & additional_cycle2);
 
-                    // Make sure Unused status flag is 1
-                    setFlag(FLAGS6502.U, true);
+                        // Make sure Unused status flag is 1
+                        setFlag(FLAGS6502.U, true);
+                    }
                 }
-
-                clock_count++;
 
                 cycles--;
             }
+
+            clock_count++;
         }
 
         /// <summary>
@@ -1010,7 +1041,8 @@ namespace NESEmulator
             a = (byte)(a & fetched);
             testAndSet(FLAGS6502.Z, a);
             testAndSet(FLAGS6502.N, a);
-            return 1;
+
+            return 0;
         }
 
         /// <summary>
@@ -1260,17 +1292,19 @@ namespace NESEmulator
         /// <returns></returns>
         private byte BRK()
         {
-            pc++;
+            pc++; // skip padding byte
 
+            if (_nmiPending)
+                return 0;
+
+            push((byte)(pc >> 8));      // hi byte
+            push((byte)(pc & 0x00FF));  // lo byte
+
+            push((byte)(status | FLAGS6502.B | FLAGS6502.U));
             setFlag(FLAGS6502.I, true);
-            push((byte)((pc >> 8) & 0x00FF));
-            push((byte)(pc & 0x00FF));
-
-            setFlag(FLAGS6502.B, true);
-            push((byte)status);
             setFlag(FLAGS6502.B, false);
 
-            pc = (ushort)(read(0xFFFE) | (read(0xFFFF) << 8));
+            pc = (ushort)((read(0xFFFF) << 8) | read(0xFFFE));
             return 0;
         }
 
@@ -1598,10 +1632,9 @@ namespace NESEmulator
         /// <returns></returns>
         private byte PHP()
         {
-            write((ushort)(ADDR_STACK + sp), (byte)(status | FLAGS6502.B | FLAGS6502.U));
+            push((byte)(status | FLAGS6502.B | FLAGS6502.U));
             setFlag(FLAGS6502.B, false);
-            setFlag(FLAGS6502.U, false);
-            sp--;
+            setFlag(FLAGS6502.U, true);
             return 0;
         }
 
@@ -1629,7 +1662,9 @@ namespace NESEmulator
         private byte PLP()
         {
             status = (FLAGS6502)pop();
+            // This can enable interrupts, and possibly trigger one
             _irqEnableLatency = 1;
+            setFlag(FLAGS6502.B, false);
             setFlag(FLAGS6502.U, true);
             return 0;
         }
@@ -1689,8 +1724,7 @@ namespace NESEmulator
         private byte RTI()
         {
             status = (FLAGS6502)pop();
-            status &= ~FLAGS6502.B;
-            status &= ~FLAGS6502.U;
+            setFlag(FLAGS6502.B, false);
 
             pc = pop();
             pc |= (ushort)(pop() << 8);
@@ -1919,7 +1953,7 @@ namespace NESEmulator
         private void build_lookup()
         {
             this.opcode_lookup = new List<Instruction>() {
-                new Instruction() { name = "BRK", operation = BRK, addr_mode = IMM, cycles = 7 },
+                new Instruction() { name = "BRK", operation = BRK, addr_mode = IMP, cycles = 7 },
                 new Instruction() { name = "ORA", operation = ORA, addr_mode = IZX, cycles = 6 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 8 },
