@@ -16,20 +16,7 @@ namespace NESEmulator.APU
 
         public bool FrameInterrupt;
 
-        private SequenceMode _mode;
-        public SequenceMode Mode
-        {
-            get => _mode;
-            set
-            {
-                _mode = value;
-                foreach(var channel in _audioChannels)
-                {
-                    channel.ClockQuarterFrame();
-                    channel.ClockHalfFrame();
-                }
-            }
-        }
+        public SequenceMode Mode { get; set; }
 
         private const ulong STEP1 = 7457;
         private const ulong STEP2 = 14913;
@@ -48,8 +35,8 @@ namespace NESEmulator.APU
 
         public APUFrameCounter(IEnumerable<Channel> audioChannels, CS2A03 connectedAPU)
         {
-            this._audioChannels = audioChannels;
-            this._apu = connectedAPU;
+            _audioChannels = audioChannels;
+            _apu = connectedAPU;
             buildSequencers();
         }
 
@@ -64,23 +51,17 @@ namespace NESEmulator.APU
             SequenceAction[] sequenceActions = null;
             if (this.Mode == SequenceMode.FourStep)
             {
-                if (this._fourStepSequence.ContainsKey(_clockCounter))
+                if (_fourStepSequence.ContainsKey(_clockCounter))
                 {
-                    sequenceActions = this._fourStepSequence[_clockCounter];
+                    sequenceActions = _fourStepSequence[_clockCounter];
                 }
-
-                if (_clockCounter >= FOURSTEP_FINAL)
-                    _clockCounter = 0;
             }
             else
             {
-                if (this._fiveStepSequence.ContainsKey(_clockCounter))
+                if (_fiveStepSequence.ContainsKey(_clockCounter))
                 {
-                    sequenceActions = this._fiveStepSequence[_clockCounter];
+                    sequenceActions = _fiveStepSequence[_clockCounter];
                 }
-
-                if (_clockCounter >= FIVESTEP_FINAL)
-                    _clockCounter = 0;
             }
 
             if (sequenceActions != null)
@@ -99,22 +80,31 @@ namespace NESEmulator.APU
                                 channel.ClockHalfFrame();
                                 break;
                             case SequenceAction.Interrupt:
-                                if (!InterruptInhibit)
-                                    FrameInterrupt = true;
+                                if (!this.InterruptInhibit && !this.FrameInterrupt)
+                                    this.FrameInterrupt = true;
                                 break;
                         }
                     }
                 }
             }
+
+            if (this.Mode == SequenceMode.FourStep && _clockCounter == FOURSTEP_FINAL)
+                _clockCounter = 0;
+            else if (this.Mode == SequenceMode.FiveStep && _clockCounter == FIVESTEP_FINAL)
+                _clockCounter = 0;
         }
 
         public bool IsInterruptCycle()
         {
-            Dictionary<ulong, SequenceAction[]> sequences;
+            if (this.Mode == SequenceMode.FiveStep)
+                return false;   // Interrupts cannot happen in this mode
 
-            sequences = (Mode == SequenceMode.FourStep ? _fourStepSequence : _fiveStepSequence);
+            if (this.InterruptInhibit)
+                return false;   // Interrupts are inhibited
 
-            return sequences.ContainsKey(_clockCounter) &&
+            Dictionary<ulong, SequenceAction[]> sequences = _fourStepSequence;
+
+            return _clockCounter == 0 || sequences.ContainsKey(_clockCounter) &&
                    sequences[_clockCounter].Any(seq => seq == SequenceAction.Interrupt);
         }
 
@@ -125,20 +115,20 @@ namespace NESEmulator.APU
 
         private void buildSequencers()
         {
-            this._fourStepSequence = new Dictionary<ulong, SequenceAction[]>(10);
-            this._fourStepSequence.Add(STEP1, new SequenceAction[] { SequenceAction.QuarterFrame });
-            this._fourStepSequence.Add(STEP2, new SequenceAction[] { SequenceAction.QuarterFrame, SequenceAction.HalfFrame });
-            this._fourStepSequence.Add(STEP3, new SequenceAction[] { SequenceAction.QuarterFrame });
-            //this._fourStepSequence.Add(FOURSTEP_STEP4, new SequenceAction[] { SequenceAction.Interrupt });
-            this._fourStepSequence.Add(FOURSTEP_STEP4 + 1, new SequenceAction[] { SequenceAction.QuarterFrame, SequenceAction.HalfFrame });
-            this._fourStepSequence.Add(FOURSTEP_FINAL, new SequenceAction[] { SequenceAction.Interrupt });
+            _fourStepSequence = new Dictionary<ulong, SequenceAction[]>(10);
+            _fourStepSequence.Add(STEP1, new SequenceAction[] { SequenceAction.QuarterFrame });
+            _fourStepSequence.Add(STEP2, new SequenceAction[] { SequenceAction.QuarterFrame, SequenceAction.HalfFrame });
+            _fourStepSequence.Add(STEP3, new SequenceAction[] { SequenceAction.QuarterFrame });
+            _fourStepSequence.Add(FOURSTEP_STEP4, new SequenceAction[] { SequenceAction.Interrupt });
+            _fourStepSequence.Add(FOURSTEP_STEP4 + 1, new SequenceAction[] { SequenceAction.QuarterFrame, SequenceAction.HalfFrame, SequenceAction.Interrupt });
+            _fourStepSequence.Add(FOURSTEP_FINAL, new SequenceAction[] { SequenceAction.Interrupt });
             
-            this._fiveStepSequence = new Dictionary<ulong, SequenceAction[]>(10);
-            this._fiveStepSequence.Add(STEP1, new SequenceAction[] { SequenceAction.QuarterFrame });
-            this._fiveStepSequence.Add(STEP2, new SequenceAction[] { SequenceAction.QuarterFrame, SequenceAction.HalfFrame });
-            this._fiveStepSequence.Add(STEP3, new SequenceAction[] { SequenceAction.QuarterFrame });
+            _fiveStepSequence = new Dictionary<ulong, SequenceAction[]>(10);
+            _fiveStepSequence.Add(STEP1, new SequenceAction[] { SequenceAction.QuarterFrame });
+            _fiveStepSequence.Add(STEP2, new SequenceAction[] { SequenceAction.QuarterFrame, SequenceAction.HalfFrame });
+            _fiveStepSequence.Add(STEP3, new SequenceAction[] { SequenceAction.QuarterFrame });
             // step 4, do nothing??
-            this._fiveStepSequence.Add(FIVESTEP_STEP5, new SequenceAction[] { SequenceAction.QuarterFrame, SequenceAction.HalfFrame });
+            _fiveStepSequence.Add(FIVESTEP_STEP5, new SequenceAction[] { SequenceAction.QuarterFrame, SequenceAction.HalfFrame });
         }
     }
 }

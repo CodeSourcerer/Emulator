@@ -160,7 +160,7 @@ namespace NESEmulator.Channels
                 _dutyCycleIndex = 0;
                 _volumeEnvelope.Start = true;
                 _sweepUnit.MuteChannel = false;
-                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Enabled={Enabled}] [LengthIndex={data >> 3}] [LengthCounter={_lengthCounter.Length}] [TimerReload={_sequencer.CounterReload}]");
+                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Data={data:X2}] [Enabled={Enabled}] [LengthIndex={(data >> 3):X2}] [LengthCounter={_lengthCounter.Length}] [TimerReload={_sequencer.CounterReload}]");
             }
         }
 

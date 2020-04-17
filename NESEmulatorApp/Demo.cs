@@ -85,7 +85,9 @@ namespace NESEmulatorApp
             //string romfile = "tests\\instr_timing.nes";
 
             // APU tests
-            string romfile = "tests\\APU\\01.len_ctr.nes";
+            //string romfile = "tests\\APU\\01.len_ctr.nes";
+            //string romfile = "tests\\APU\\02.len_table.nes";
+            string romfile = "tests\\APU\\03.irq_flag.nes";
 
             //string romfile = "tests\\ppu_vbl_nmi.nes";
             //string romfile = "tests\\cpu_interrupts.nes";
