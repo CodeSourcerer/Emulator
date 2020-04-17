@@ -1,4 +1,5 @@
 ﻿using System;
+using log4net;
 
 namespace NESEmulator.APU
 {
@@ -7,6 +8,8 @@ namespace NESEmulator.APU
     /// </summary>
     public class APUDivider
     {
+        private readonly ILog Log = LogManager.GetLogger(typeof(APUDivider));
+
         private int _counterReload;
         public int CounterReload
         {
@@ -19,13 +22,15 @@ namespace NESEmulator.APU
         }
 
         private int _counter;
+        private readonly string _unitName;
 
         //public event EventHandler DividerReachedZero;
         private EventHandler _dividerReachedZero;
 
-        public APUDivider(EventHandler callback)
+        public APUDivider(EventHandler callback, string unitName = "")
         {
             _dividerReachedZero = callback;
+            _unitName = unitName;
         }
 
         public void Clock()

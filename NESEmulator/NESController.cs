@@ -63,9 +63,9 @@ namespace NESEmulator
         {
             bool dataWritten = false;
 
-            if (addr == 0x4016 || addr == 0x4017)
+            if (addr == 0x4016)
             {
-                int controllerNum = addr & 0x0001;
+                int controllerNum = 0; // just assume 0 until I can figure out how it's supposed to be done...
                 _controller_state[controllerNum] = ControllerState[controllerNum];
                 dataWritten = true;
             }

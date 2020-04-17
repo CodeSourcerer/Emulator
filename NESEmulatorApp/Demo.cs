@@ -80,11 +80,16 @@ namespace NESEmulatorApp
             //string romfile = "tests\\2.Backward_Branch.nes";
             //string romfile = "tests\\3.Forward_Branch.nes";
             //string romfile = "tests\\official_only.nes";
-            string romfile = "tests\\15-brk.nes";
+            //string romfile = "tests\\15-brk.nes";
             //string romfile = "tests\\16-special.nes";
+            //string romfile = "tests\\instr_timing.nes";
+
+            // APU tests
+            string romfile = "tests\\APU\\01.len_ctr.nes";
 
             //string romfile = "tests\\ppu_vbl_nmi.nes";
             //string romfile = "tests\\cpu_interrupts.nes";
+
             // MMC3 tests
             //string romfile = "tests\\1-clocking.nes";
             //string romfile = "tests\\3-A12_clocking.nes";

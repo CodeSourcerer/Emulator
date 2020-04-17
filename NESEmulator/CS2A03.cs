@@ -54,7 +54,7 @@ namespace NESEmulator
         private int     _highDefAudioBufPtr;
 
         // Temp vars for accurately handling weird situations
-        private bool _frameCounterWritten;      // frame counter not written right away, so we need this
+        private bool _frameCounterWritePending; // frame counter not written right away, so we need this
         private byte _frameCounterCycleWait;    // 3 when write occurs on APU cycle, 4 otherwise.
         private byte _frameCounterData;
 
@@ -85,12 +85,12 @@ namespace NESEmulator
                 ++_cpuClockCounter;
 
                 // Check if we need to do our special case frame counter write handling
-                if (_frameCounterWritten)
+                if (_frameCounterWritePending)
                 {
                     if (--_frameCounterCycleWait == 0)
                     {
                         updateFrameCounter();
-                        _frameCounterWritten = false;
+                        _frameCounterWritePending = false;
                     }
                 }
 
@@ -164,7 +164,13 @@ namespace NESEmulator
             {
                 dataRead = true;
                 data = (byte)((_dmcChannel.InterruptFlag ? 0 : 1) << 7 |
-                              (_frameCounter.FrameInterrupt ? 0 : 1) << 6);
+                              (_frameCounter.FrameInterrupt ? 0 : 1) << 6 |
+                              (0 << 5) |
+                              (_dmcChannel.Enabled ? 1 : 0) << 4 |
+                              (_noiseChannel.Enabled ? 1 : 0) << 3 |
+                              (_triangleChannel.Enabled ? 1 : 0) << 2 |
+                              (_pulseChannel2.Enabled ? 1 : 0) << 1 |
+                              (_pulseChannel1.Enabled ? 1 : 0));
                 // "If an interrupt flag was set at the same moment of the read, it will read back as 1 but it will not be cleared."
                 if (!_frameCounter.IsInterruptCycle())
                     _frameCounter.FrameInterrupt = false;
@@ -182,9 +188,13 @@ namespace NESEmulator
         public void Reset()
         {
             _apuClockCounter = 0;
-            _frameCounterWritten = false;
-            _frameCounter.InterruptInhibit = true;
-            Write(ADDR_STATUS, 0x00);
+            _frameCounterWritePending = false;
+            _frameCounter.InterruptInhibit = false;
+            for (ushort addr = ADDR_PULSE1_LO; addr < ADDR_FRAME_COUNTER; addr++)
+            {
+                if (addr != 0x4013 && addr != 0x4016)
+                    Write(addr, 0x00);
+            }
         }
 
         public bool Write(ushort addr, byte data)
@@ -230,13 +240,25 @@ namespace NESEmulator
                 _noiseChannel.Enabled = data.TestBit(3);
                 _dmcChannel.Enabled = data.TestBit(4);
                 _dmcChannel.InterruptFlag = false;
+                Log.Debug($"Status written [PC1={_pulseChannel1.Enabled}] [PC2={_pulseChannel2.Enabled}] [TC={_triangleChannel.Enabled}] [NC={_noiseChannel.Enabled}] [DMC={_dmcChannel.Enabled}]");
             }
             else if (addr == ADDR_FRAME_COUNTER)
             {
                 dataWritten = true;
                 _frameCounterData = data;
-                _frameCounterWritten = true;
-                _frameCounterCycleWait = (byte)(((_cpuClockCounter & 0x1) == 0) ? 4 : 3);
+                _frameCounterWritePending = true;
+                _frameCounterCycleWait = (byte)(((_cpuClockCounter % 6) == 0) ? 3 : 4);
+                Log.Debug($"Pending frame counter write in {_frameCounterCycleWait} cycles [data={data:X2}]");
+
+                // SPECIAL CASE: If the mode flag is set, then both "quarter frame" and "half frame" signals are also generated
+                if (_frameCounterData.TestBit(7))
+                {
+                    foreach (var chan in _audioChannels)
+                    {
+                        chan.ClockQuarterFrame();
+                        chan.ClockHalfFrame();
+                    }
+                }
                 //_frameCounter.Reset();
                 //_frameCounter.InterruptInhibit = data.TestBit(6);
                 //if (_frameCounter.InterruptInhibit)
@@ -250,7 +272,6 @@ namespace NESEmulator
                 //{
                 //    _frameCounter.Mode = SequenceMode.FiveStep;
                 //}
-                Log.Debug($"Pending frame counter write in {_frameCounterCycleWait} cycles [data={data:X2}]");
             }
 
             return dataWritten;

@@ -50,6 +50,7 @@ namespace NESEmulator
         private List<Instruction> opcode_lookup;
         private IBus bus;
 
+        private bool _enableIrqDebugging = false;
         private bool _irqPending = false;
         private bool _irqDisablePending = false;
         private byte _irqEnableLatency = 0;
@@ -123,12 +124,15 @@ namespace NESEmulator
             switch (e.Interrupt)
             {
                 case InterruptType.NMI:
-                    Log.Debug($"[{clock_count}] NMI raised");
+                    if (_enableIrqDebugging)
+                        Log.Debug($"[{clock_count}] NMI raised");
                     _nmiPending = true;
                     break;
 
                 case InterruptType.IRQ:
-                    IRQ();
+                    if (_enableIrqDebugging)
+                        Log.Debug($"[{clock_count}] IRQ raised");
+                    _irqPending = true;
                     break;
             }
         }
@@ -143,20 +147,7 @@ namespace NESEmulator
         public byte x { get; set; }
         public byte y { get; set; }
         public byte sp { get; set; }
-//        private ushort _pc;
-        public ushort pc
-        { 
-            get; private set;
-            //get => _pc;
-            //private set
-            //{
-            //    _pc = value;
-            //    if (value == 928)
-            //    {
-            //        _pc = _pc;
-            //    }
-            //}
-        }
+        public ushort pc { get; private set; }
         public FLAGS6502 status { get; set; }
         #endregion // Register Properties
 
@@ -191,7 +182,7 @@ namespace NESEmulator
 
             // Reset internal registers
             a = x = y = 0;
-            sp = 0xFF;
+            sp = 0xFD;
             status = 0x00 | FLAGS6502.U;
 
             // Clear internal helper variables
@@ -224,6 +215,8 @@ namespace NESEmulator
         /// </remarks>
         public void IRQ()
         {
+            if (_enableIrqDebugging)
+                Log.Debug($"[{clock_count}] IRQ [I={status.HasFlag(FLAGS6502.I)}] [_irqDisablePending={_irqDisablePending}]");
             if (getFlag(FLAGS6502.I) == 0 || _irqDisablePending)
             {
                 //if (_startCountingIRQs)
@@ -232,7 +225,9 @@ namespace NESEmulator
                 //    Log.Debug($"IRQCount = {_irqCount}");
                 //}
 
-                Log.Debug($"[{clock_count}] IRQ");
+                //Log.Debug($"[{clock_count}] IRQ [I={status.HasFlag(FLAGS6502.I)}] [_irqDisablePending={_irqDisablePending}]");
+                if (_enableIrqDebugging)
+                    Log.Debug($"[{clock_count}] IRQ handler");
                 _irqDisablePending = false;
                 _irqPending = false;
 
@@ -270,7 +265,8 @@ namespace NESEmulator
         /// </remarks>
         public void NMI()
         {
-            Log.Debug($"[{clock_count}] NMI start");
+            if (_enableIrqDebugging)
+                Log.Debug($"[{clock_count}] NMI start");
             // Push the PC to the stack. It is 16-bits, so requires 2 pushes
             push((byte)((pc >> 8) & 0x00FF));
             push((byte)(pc & 0x00FF));
@@ -297,27 +293,17 @@ namespace NESEmulator
         {
             bool shouldInterrupt = false;
             // OMG!! I know you don't want to be interrupted, Mr. CPU - but I JUST asked for an IRQ!!
-            if (getFlag(FLAGS6502.I) == 1 && _irqDisablePending && _irqPending && _irqEnableLatency == 0)
+            if (getFlag(FLAGS6502.I) == 1 && _irqDisablePending && _irqPending)
             {
-                // Fine - this is the LAST ONE. After this, I'm cutting you off!
-                //IRQ();
-                shouldInterrupt = true;
-
-                //// Well, normally we wouldn't allow an IRQ, but we may have an exception
-                //if (_irqDisableLatency == 1 && _irqPending)
-                //{
-                //    // Alright, sir - this is the LAST ONE. After this, I'm cutting you off!
-                //    _irqDisableLatency = 0;
-                //    _irqDisablePending = false;
-                //    _irqPending = false;
-                //    IRQ();
-                //}
-                //else
-                //{
-                //    // Nope! Go interrupt me when I'm not busy. Now, GET LOST!
-                //    _irqDisablePending = false;
-                //    _irqDisableLatency = 0;
-                //}
+                // Well, normally we wouldn't allow an IRQ, but we may have an exception
+                if (_irqDisableLatency > 0)
+                {
+                    --_irqDisableLatency;
+                }
+                else
+                {
+                    shouldInterrupt = true;
+                }
             }
             else if (getFlag(FLAGS6502.I) == 0 && _irqPending)
             {
@@ -330,7 +316,6 @@ namespace NESEmulator
                 else
                 {
                     // Ok, thanks for being patient. You can interrupt now!
-                    //IRQ();
                     shouldInterrupt = true;
                 }
             }
@@ -1339,6 +1324,9 @@ namespace NESEmulator
         /// <returns></returns>
         private byte CLI()
         {
+            if (_enableIrqDebugging)
+                Log.Debug($"[{clock_count}] CLI");
+
             _startCountingIRQs = true;
             _irqCount = 0;
             setFlag(FLAGS6502.I, false);
@@ -1724,6 +1712,8 @@ namespace NESEmulator
         private byte RTI()
         {
             status = (FLAGS6502)pop();
+            if (_enableIrqDebugging)
+                Log.Debug($"[{clock_count}] RTI [I={status.HasFlag(FLAGS6502.I)}]");
             setFlag(FLAGS6502.B, false);
 
             pc = pop();
@@ -1803,7 +1793,9 @@ namespace NESEmulator
         /// <returns></returns>
         private byte SEI()
         {
-            if (getFlag(FLAGS6502.I) == 0)
+            if (_enableIrqDebugging)
+                Log.Debug($"[{clock_count}] SEI [I={status.HasFlag(FLAGS6502.I)}] [_irqPending={_irqPending}]");
+            if (getFlag(FLAGS6502.I) == 0 && _irqPending)
             {
                 _irqDisablePending = true;
                 _irqDisableLatency = 1;
