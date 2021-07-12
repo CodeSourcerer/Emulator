@@ -1030,11 +1030,14 @@ namespace NESEmulator
 
         private void skipCycle()
         {
-            advanceFrame();
-
             // This only happens on odd frames, so do nothing on even frames
-            //if (_frameCounter % 2 == 0)
-            //    return;
+            // Also only happens when rendering is turned on.
+            if (_frameCounter % 2 == 0 && (_mask.RenderBackground || _mask.RenderSprites))
+            {
+                fetchNextBGTileId();
+                return;
+            }
+            advanceFrame();
 
             _cycleOpItr = _cycleOperations[_scanline].GetEnumerator();
             _cycleOpItr.MoveNext();
@@ -1515,6 +1518,7 @@ namespace NESEmulator
 
             // Replace last cycle with the skip
              _cycleOperations[scanline][_cycleOperations[scanline].Count - 1] = new PPUCycleNode(339, skipCycle);
+            _cycleOperations[scanline][_cycleOperations[scanline].Count - 1] = new PPUCycleNode(340, advanceFrame);
 
             // SPECIAL CASE: Do Y address xfer every cycle from 280-304
             // Find the index of the "no-op" at cycle 258 and jamb these in right after
