@@ -67,7 +67,7 @@ namespace NESEmulator
             {
                 int controllerNum = addr & 0x0001;
                 _controller_state[controllerNum] = ControllerState[controllerNum];
-                dataWritten = true;
+                //dataWritten = true;
             }
 
             return dataWritten;

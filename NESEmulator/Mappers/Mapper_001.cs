@@ -143,7 +143,7 @@ namespace NESEmulator.Mappers
                 int bankNum = addr < 0x1000 ? 0 : 1;
                 mapped_addr = (uint)(_pCHRBank[bankNum] + (addr & 0x0FFF));
 
-                Log.Debug($"CHR ROM write [bankNum={bankNum}] [addr={addr:X4}]");
+                //Log.Debug($"CHR ROM write [bankNum={bankNum}] [addr={addr:X4}]");
                 return true;
             }
 

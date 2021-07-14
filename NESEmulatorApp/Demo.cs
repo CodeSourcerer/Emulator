@@ -11,7 +11,10 @@ using NESEmulator;
 using OpenTK;
 using OpenTK.Audio;
 using OpenTK.Audio.OpenAL;
-using OpenTK.Input;
+//using OpenTK.Input;
+using Microsoft.Extensions.DependencyInjection;
+using OpenTK.Graphics;
+using csPixelGameEngineCore.Enums;
 
 namespace NESEmulatorApp
 {
@@ -20,8 +23,10 @@ namespace NESEmulatorApp
         private const int SCREEN_WIDTH      = 700;
         private const int SCREEN_HEIGHT     = 300;
         private const int NUM_AUDIO_BUFFERS = 50;
+        private const string APP_NAME = "NES Emulator";
 
         private static ILog Log = LogManager.GetLogger(typeof(Demo));
+        private static ServiceProvider serviceProvider;
 
         private PixelGameEngine pge;
         private GLWindow window;
@@ -43,18 +48,19 @@ namespace NESEmulatorApp
         private DateTime dtStart = DateTime.Now;
         private double residualTime = 0.0;
 
-
         public Demo(string appName)
         {
             _availableBuffers = new Stack<int>(NUM_AUDIO_BUFFERS);
             initAudioStuff();
-            window = new GLWindow(SCREEN_WIDTH, SCREEN_HEIGHT, 3, 3, appName);
-            window.KeyDown += Window_KeyDown;
-            pge = new PixelGameEngine(appName);
-            pge.Construct(SCREEN_WIDTH, SCREEN_HEIGHT, window);
+            //window = new GLWindow(SCREEN_WIDTH, SCREEN_HEIGHT, 3, 3, appName);
+            //window.KeyDown += Window_KeyDown;
+            var renderer = serviceProvider.GetService<IRenderer>();
+            pge = new PixelGameEngine(renderer, serviceProvider.GetService<IPlatform>(), appName);
+            pge.Construct(SCREEN_WIDTH, SCREEN_HEIGHT, 3, 3, false, false);
             pge.OnCreate += pge_OnCreate;
             pge.OnFrameUpdate += pge_OnUpdate;
             pge.OnDestroy += pge_OnDestroy;
+            pge.Platform.KeyDown += OnKeyDown;
         }
 
         static void Main(string[] args)
@@ -65,19 +71,32 @@ namespace NESEmulatorApp
             Thread.CurrentThread.Name = "main";
             Log.Info($"NES app started with args {string.Join(' ', args)}");
 
-            Demo demo = new Demo("NES Emulator");
+            var gameWindow = new GameWindow(SCREEN_WIDTH, SCREEN_HEIGHT, GraphicsMode.Default, APP_NAME, GameWindowFlags.Default, DisplayDevice.Default, 2, 1,
+                                GraphicsContextFlags.Default);
+
+            serviceProvider = new ServiceCollection()
+                .AddSingleton(gameWindow)
+                .AddScoped<IRenderer, GL21Renderer>()
+                .AddScoped<IPlatform, OpenTkPlatform>()
+                .BuildServiceProvider();
+
+            Demo demo = new Demo(APP_NAME);
 
             //string romfile = "tests\\smb_2.nes";
             //string romfile = "tests\\smb2.nes";
-            string romfile = "tests\\smb3.nes";
+            //string romfile = "tests\\smb3.nes";
             //string romfile = "tests\\burgertime.nes";
             //string romfile = "tests\\ice_climber.nes";
             //string romfile = "tests\\pacman-namco.nes";
             //string romfile = "tests\\ducktales.nes";
 
             // Test roms
+            //string romfile = "tests\\nestest.nes";
+            //string romfile = "tests\\1.Branch_Basics.nes";
+            //string romfile = "tests\\2.Backward_Branch.nes";
+            //string romfile = "tests\\3.Forward_Branch.nes";
             //string romfile = "tests\\ppu_vbl_nmi.nes";
-            //string romfile = "tests\\cpu_interrupts.nes";
+            string romfile = "tests\\cpu_interrupts.nes";
 
             if (args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]))
                 romfile = args[0];
@@ -149,7 +168,7 @@ namespace NESEmulatorApp
                 nesBus.Controller.Press(NESController.Controller.Controller1, NESController.NESButton.RIGHT);
         }
 
-        private void Window_KeyDown(object sender, KeyboardKeyEventArgs e)
+        private void OnKeyDown(object sender, KeyboardEventArgs e)
         {
             if (e.IsRepeat)
                 return;
@@ -157,11 +176,11 @@ namespace NESEmulatorApp
             // Emulator inputs
             switch (e.Key)
             {
-                case OpenTK.Input.Key.Space:
+                case Key.Space:
                     runEmulation = !runEmulation;
                     break;
 
-                case OpenTK.Input.Key.R:
+                case Key.R:
                     nesBus.Reset();
                     break;
 
@@ -169,7 +188,7 @@ namespace NESEmulatorApp
                     selectedPalette = (selectedPalette + 1) & 0x07;
                     break;
 
-                case OpenTK.Input.Key.F:
+                case Key.F:
                     do
                     {
                         nesBus.clock();
@@ -181,7 +200,7 @@ namespace NESEmulatorApp
                     nesBus.PPU.FrameComplete = false;
                     break;
 
-                case OpenTK.Input.Key.C:
+                case Key.C:
                     do
                     {
                         nesBus.clock();
@@ -206,7 +225,7 @@ namespace NESEmulatorApp
                 {
                     residualTime += (1.0 / 60.0988) - frameUpdateArgs.ElapsedTime;
 
-                    handleControllerInputs(Keyboard.GetState());
+                    handleControllerInputs(pge.Platform.KeyboardState);
                     do
                     {
                         nesBus.clock();
@@ -281,7 +300,7 @@ namespace NESEmulatorApp
                     if (AL.GetSourceState(sources[0]) != ALSourceState.Playing)
                     {
                         AL.SourcePlay(sources[0]);
-                        Log.Debug("Sound buffers emptied - restarted audio");
+                        //Log.Debug("Sound buffers emptied - restarted audio");
                     }
                 }
                 else

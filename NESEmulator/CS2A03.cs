@@ -57,6 +57,7 @@ namespace NESEmulator
         private bool _frameCounterWritten;      // frame counter not written right away, so we need this
         private byte _frameCounterCycleWait;    // 3 when write occurs on APU cycle, 4 otherwise.
         private byte _frameCounterData;
+        private bool _frameInterruptOccurred;
 
         public CS2A03()
         {
@@ -80,9 +81,10 @@ namespace NESEmulator
         public void Clock(ulong clockCounter)
         {
             // Clock frame counter every CPU cycle
-            if ((clockCounter & 3) == 0)
+            if ((clockCounter % 3) == 0)
             {
                 ++_cpuClockCounter;
+                if (_cpuClockCounter < 29780) return;
 
                 // Check if we need to do our special case frame counter write handling
                 if (_frameCounterWritten)
@@ -98,8 +100,18 @@ namespace NESEmulator
 
                 if (_frameCounter.FrameInterrupt && !_frameCounter.InterruptInhibit)
                 {
-                    IRQ();    // This is screwing stuff up for some reason
-                    _frameCounter.FrameInterrupt = false;
+                    // Sending IRQs rapid-fire via the event system causes stuff to really slow down, so
+                    // we'll just send it once. The CPU will have to pretend once an IRQ is raised, that
+                    // the device is continually asserting it.
+                    if (!_frameInterruptOccurred)
+                    {
+                        IRQ();
+                        _frameInterruptOccurred = true;
+                    }
+                }
+                else
+                {
+                    _frameInterruptOccurred = false;
                 }
             }
 
@@ -167,7 +179,11 @@ namespace NESEmulator
                               (_frameCounter.FrameInterrupt ? 0 : 1) << 6);
                 // "If an interrupt flag was set at the same moment of the read, it will read back as 1 but it will not be cleared."
                 if (!_frameCounter.IsInterruptCycle())
+                {
                     _frameCounter.FrameInterrupt = false;
+                    // Might not need this...
+                    RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.CLEAR_IRQ));
+                }
                 Log.Debug("Status register read");
             }
             else if (addr == ADDR_FRAME_COUNTER)
@@ -190,7 +206,7 @@ namespace NESEmulator
         public bool Write(ushort addr, byte data)
         {
             bool dataWritten = false;
-
+            //Log.Debug($"APU WRITE [addr={addr:X4}]");
             if (addr >= ADDR_PULSE1_LO && addr <= ADDR_PULSE1_HI)
             {
                 _pulseChannel1.Write(addr, data);
@@ -237,19 +253,19 @@ namespace NESEmulator
                 _frameCounterData = data;
                 _frameCounterWritten = true;
                 _frameCounterCycleWait = (byte)(((_cpuClockCounter & 0x1) == 0) ? 4 : 3);
-                //_frameCounter.Reset();
-                //_frameCounter.InterruptInhibit = data.TestBit(6);
+                _frameCounter.Reset();
+                _frameCounter.InterruptInhibit = data.TestBit(6);
                 //if (_frameCounter.InterruptInhibit)
                 //    _frameCounter.FrameInterrupt = false;
 
-                //if (data.TestBit(7) == false)
-                //{
-                //    _frameCounter.Mode = SequenceMode.FourStep;
-                //}
-                //else
-                //{
-                //    _frameCounter.Mode = SequenceMode.FiveStep;
-                //}
+                if (data.TestBit(7) == false)
+                {
+                    _frameCounter.Mode = SequenceMode.FourStep;
+                }
+                else
+                {
+                    _frameCounter.Mode = SequenceMode.FiveStep;
+                }
                 Log.Debug($"Pending frame counter write in {_frameCounterCycleWait} cycles [data={data:X2}]");
             }
 
@@ -326,8 +342,8 @@ namespace NESEmulator
         {
             _frameCounter.Reset();
             _frameCounter.InterruptInhibit = _frameCounterData.TestBit(6);
-            if (_frameCounter.InterruptInhibit)
-                _frameCounter.FrameInterrupt = false;
+            //if (_frameCounter.InterruptInhibit)
+            //    _frameCounter.FrameInterrupt = false;
 
             _frameCounter.Mode = (_frameCounterData.TestBit(7) ? SequenceMode.FiveStep : SequenceMode.FourStep);
 

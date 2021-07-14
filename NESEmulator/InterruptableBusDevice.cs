@@ -4,7 +4,7 @@ using System.Text;
 
 namespace NESEmulator
 {
-    public enum InterruptType { NMI, IRQ }
+    public enum InterruptType { NMI, IRQ, CLEAR_IRQ }
 
     public abstract class InterruptableBusDevice : BusDevice
     {

@@ -50,6 +50,7 @@ namespace NESEmulator
         private List<Instruction> opcode_lookup;
         private IBus bus;
 
+        private bool _nmiPending = false;
         private bool _irqPending = false;
         private bool _irqDisablePending = false;
         private byte _irqEnableLatency = 0;
@@ -122,11 +123,18 @@ namespace NESEmulator
             switch (e.Interrupt)
             {
                 case InterruptType.NMI:
-                    NMI();
+                    _nmiPending = true;
+                    //NMI();
                     break;
 
                 case InterruptType.IRQ:
-                    IRQ();
+                    _irqPending = true;
+                    //Log.Debug($"[{clock_count}] IRQ signal received");
+                    break;
+
+                case InterruptType.CLEAR_IRQ:
+                    _irqPending = false;
+                    Log.Debug($"[{clock_count}] Clear IRQ signal received");
                     break;
             }
         }
@@ -184,6 +192,7 @@ namespace NESEmulator
             fetched = 0x00;
 
             _irqPending = false;
+            _nmiPending = false;
 
             // Reset takes time
             cycles = 8;
@@ -209,16 +218,13 @@ namespace NESEmulator
         /// </remarks>
         public void IRQ()
         {
-            if (getFlag(FLAGS6502.I) == 0 || _irqDisablePending)
-            {
+            //if (getFlag(FLAGS6502.I) == 0 || _irqDisablePending)
+            //{
                 //if (_startCountingIRQs)
                 //{
                 //    _irqCount++;
                 //    Log.Debug($"IRQCount = {_irqCount}");
                 //}
-
-                _irqDisablePending = false;
-                _irqPending = false;
 
                 // Push the PC to the stack. It is 16-bits, so requires 2 pushes
                 push((byte)((pc >> 8) & 0x00FF));
@@ -238,11 +244,7 @@ namespace NESEmulator
 
                 // IRQ cycles
                 cycles = 7;
-            }
-            else
-            {
-                _irqPending = true;
-            }
+            //}
         }
 
         /// <summary>
@@ -271,6 +273,8 @@ namespace NESEmulator
             ushort hi = read((ushort)(addr_abs + 1));
             pc = (ushort)((hi << 8) | lo);
 
+            _nmiPending = false;
+
             // NMI cycles
             cycles = 8;
         }
@@ -278,44 +282,39 @@ namespace NESEmulator
         /// <summary>
         /// Who knew interrupting code could be so complicated?
         /// </summary>
-        private void pollForIRQ()
+        private bool pollForIRQ()
         {
-            // OMG!! I know you don't want to be interrupted, Mr. CPU - but I JUST asked for an IRQ!!
-            if (getFlag(FLAGS6502.I) == 1 && _irqDisablePending && _irqPending && _irqEnableLatency == 0)
+            if (_nmiPending)
             {
+                NMI();
+                return true;
+            }
+
+            // OMG!! I know you don't want to be interrupted, Mr. CPU - but I JUST asked for an IRQ!!
+            if (getFlag(FLAGS6502.I) == 1 && _irqPending && _irqDisablePending)
+            {
+                _irqDisablePending = false;
                 // Fine - this is the LAST ONE. After this, I'm cutting you off!
                 IRQ();
-
-                //// Well, normally we wouldn't allow an IRQ, but we may have an exception
-                //if (_irqDisableLatency == 1 && _irqPending)
-                //{
-                //    // Alright, sir - this is the LAST ONE. After this, I'm cutting you off!
-                //    _irqDisableLatency = 0;
-                //    _irqDisablePending = false;
-                //    _irqPending = false;
-                //    IRQ();
-                //}
-                //else
-                //{
-                //    // Nope! Go interrupt me when I'm not busy. Now, GET LOST!
-                //    _irqDisablePending = false;
-                //    _irqDisableLatency = 0;
-                //}
+                return true;
             }
-            else if (getFlag(FLAGS6502.I) == 0 && _irqPending)
+            else if (getFlag(FLAGS6502.I) == 0)
             {
-                // Whoa! Hold on there, Mr. Interrupty-pants. Did you JUST enable interrupts?
-                if (_irqEnableLatency > 0)
+                if (_irqPending && _irqEnableLatency == 0)
                 {
-                    // Look, you're gonna have to wait until the next instruction.
-                    --_irqEnableLatency;
-                }
-                else
-                {
-                    // Ok, thanks for being patient. You can interrupt now!
                     IRQ();
+                    return true;
                 }
+
+                if (_irqEnableLatency > 0)
+                    --_irqEnableLatency;
+
+                return false;
             }
+
+            _irqDisablePending = false;
+
+            return false;
         }
 
         /// <summary>
@@ -350,35 +349,37 @@ namespace NESEmulator
             {
                 if (cycles == 0)
                 {
-                    pollForIRQ();
+                    if (!pollForIRQ())
+                    {
 
-                    //var (addr, sInst) = Disassemble(pc);
-                    //Log.Debug($"[{clock_count}] {sInst}");
+                        //var (addr, sInst) = Disassemble(pc);
+                        //Log.Debug($"[{clock_count}] {sInst}");
 
-                    // Read the next instruction byte. This 8-bit value is used to index the translation
-                    // table to get the relevat information about how to implement the instruction
-                    opcode = read(pc);
+                        // Read the next instruction byte. This 8-bit value is used to index the translation
+                        // table to get the relevat information about how to implement the instruction
+                        opcode = read(pc);
 
-                    // Make sure Unused status flag is 1
-                    setFlag(FLAGS6502.U, true);
+                        // Make sure Unused status flag is 1
+                        setFlag(FLAGS6502.U, true);
 
-                    // After reading opcode, increment pc
-                    pc++;
+                        // After reading opcode, increment pc
+                        pc++;
 
-                    // Get starting number of cycles
-                    cycles = opcode_lookup[opcode].cycles;
+                        // Get starting number of cycles
+                        cycles = opcode_lookup[opcode].cycles;
 
-                    // Perform fetch of intermediate data using the required addressing mode
-                    byte additional_cycle1 = opcode_lookup[opcode].addr_mode();
+                        // Perform fetch of intermediate data using the required addressing mode
+                        byte additional_cycle1 = opcode_lookup[opcode].addr_mode();
 
-                    // Perform operation
-                    byte additional_cycle2 = opcode_lookup[opcode].operation();
+                        // Perform operation
+                        byte additional_cycle2 = opcode_lookup[opcode].operation();
 
-                    // Add additional cycles that may be required to complete operation
-                    cycles += (byte)(additional_cycle1 & additional_cycle2);
+                        // Add additional cycles that may be required to complete operation
+                        cycles += (byte)(additional_cycle1 & additional_cycle2);
 
-                    // Make sure Unused status flag is 1
-                    setFlag(FLAGS6502.U, true);
+                        // Make sure Unused status flag is 1
+                        setFlag(FLAGS6502.U, true);
+                    }
                 }
 
                 clock_count++;
@@ -1299,20 +1300,6 @@ namespace NESEmulator
         }
 
         /// <summary>
-        /// Instruction: Enable Interrupts / Clear Interrupt Disable Flag
-        /// Function:    I = 0
-        /// </summary>
-        /// <returns></returns>
-        private byte CLI()
-        {
-            _startCountingIRQs = true;
-            _irqCount = 0;
-            setFlag(FLAGS6502.I, false);
-            _irqEnableLatency = 1;
-            return 0;
-        }
-
-        /// <summary>
         /// Instruction: Clear Overflow Flag
         /// Function:    V = 0
         /// </summary>
@@ -1628,8 +1615,12 @@ namespace NESEmulator
         /// </returns>
         private byte PLP()
         {
+            bool prevI = getFlag(FLAGS6502.I) == 1;
             status = (FLAGS6502)pop();
-            _irqEnableLatency = 1;
+            if (!prevI && getFlag(FLAGS6502.I) == 1)
+                _irqDisablePending = true;
+            if (prevI && getFlag(FLAGS6502.I) == 0)
+                _irqEnableLatency = 1;
             setFlag(FLAGS6502.U, true);
             return 0;
         }
@@ -1677,6 +1668,43 @@ namespace NESEmulator
                 write(addr_abs, fetched);   // write original value first
                 write(addr_abs, (byte)(temp & 0x00FF));
             }
+            return 0;
+        }
+
+        /// <summary>
+        /// Instruction: Enable Interrupts / Clear Interrupt Disable Flag
+        /// Function:    I = 0
+        /// </summary>
+        /// <returns></returns>
+        private byte CLI()
+        {
+            Log.Debug($"[{clock_count}] CLI");
+            _startCountingIRQs = true;
+            _irqCount = 0;
+            if (getFlag(FLAGS6502.I) == 1)
+            {
+                _irqEnableLatency = 1;
+            }
+            setFlag(FLAGS6502.I, false);
+            return 0;
+        }
+
+        /// <summary>
+        /// Instruction: Set Interrupt Disable Flag / Disable Interrupts
+        /// Function:    I = 1
+        /// Flags Out:   I
+        /// </summary>
+        /// <returns></returns>
+        private byte SEI()
+        {
+            if (getFlag(FLAGS6502.I) == 0)
+            {
+                _irqDisablePending = true;
+                //                _irqDisableLatency = 1;
+                _startCountingIRQs = false;
+            }
+
+            setFlag(FLAGS6502.I, true);
             return 0;
         }
 
@@ -1758,25 +1786,6 @@ namespace NESEmulator
         private byte SED()
         {
             setFlag(FLAGS6502.D, true);
-            return 0;
-        }
-
-        /// <summary>
-        /// Instruction: Set Interrupt Disable Flag / Disable Interrupts
-        /// Function:    I = 1
-        /// Flags Out:   I
-        /// </summary>
-        /// <returns></returns>
-        private byte SEI()
-        {
-            if (getFlag(FLAGS6502.I) == 0)
-            {
-                _irqDisablePending = true;
-                _irqDisableLatency = 1;
-                _startCountingIRQs = false;
-            }
-
-            setFlag(FLAGS6502.I, true);
             return 0;
         }
 

@@ -55,6 +55,7 @@ namespace NESEmulator.Channels
         private byte _shifter;
         private byte _bitsRemaining;
         private bool _silence;  // I keel you!
+        private bool _interruptOccurred;
         public bool InterruptFlag { get; set; }
 
         public DMCChannel(CS2A03 apu)
@@ -124,8 +125,16 @@ namespace NESEmulator.Channels
 
             if (InterruptFlag == true)
             {
-                _apu.IRQ();
-                Log.Debug("DMC IRQ");
+                if (!_interruptOccurred)
+                {
+                    _apu.IRQ();
+                    _interruptOccurred = true;
+                    Log.Debug("DMC IRQ");
+                }
+            }
+            else
+            {
+                _interruptOccurred = true;
             }
 
             if (clockCycles % 6 == 0)

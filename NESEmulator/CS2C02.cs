@@ -291,9 +291,12 @@ namespace NESEmulator
 
                         if (_scanline == 241)
                         {
+                            //Console.WriteLine($"PPU Status read [_scanline={_scanline}][_cycle={_cycle}]");
+
                             // Special case 1: Reading one PPU clock before reads it as clear and never sets the flag or generates NMI for that frame.
                             if (_cycle == 0)
                             {
+                                _frameSuppressNMI = true;
                                 _frameSuppressVBL = true;
                                 data.SetBit(7, false);
                             }
@@ -1224,6 +1227,10 @@ namespace NESEmulator
                 _status.VerticalBlank = true;
                 checkAndRaiseNMI();
             }
+            else
+            {
+                //Console.WriteLine("VBL suppressed");
+            }
         }
 
         private void checkAndRaiseNMI()
@@ -1233,7 +1240,12 @@ namespace NESEmulator
             // with the PPU knowing it won't produce visible artifacts.
             if (_control.EnableNMI && _status.VerticalBlank && !_frameSuppressNMI)
             {
+                //Console.WriteLine($"NMI raised [_scanline={_scanline}][_cycle={_cycle}]");
                 this.RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.NMI));
+            }
+            else
+            {
+                //Console.WriteLine($"No NMI [EnableNMI={_control.EnableNMI}] [VerticalBlank={_status.VerticalBlank}] [_frameSuppressNMI={_frameSuppressNMI}]");
             }
         }
 
