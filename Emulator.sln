@@ -8,8 +8,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EmulatorTests", "EmulatorTe
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NESEmulatorApp", "NESEmulatorApp\NESEmulatorApp.csproj", "{BE2B9F85-0B5C-44B6-B84C-0CEE7BDE20EA}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EmulatorApp", "EmulatorApp\EmulatorApp.csproj", "{BE0CF804-1E66-4A23-A551-2B42204464CC}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AudioTest", "AudioTest\AudioTest.csproj", "{A9FE854A-E49B-4647-9899-9074D4BB3420}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{B86DECD8-385B-47A9-AFF1-0A6459DC089D}"
