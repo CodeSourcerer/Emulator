@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using csPixelGameEngineCore;
+using log4net;
 using NESEmulator.Util;
 
 namespace NESEmulator
@@ -10,6 +11,8 @@ namespace NESEmulator
     /// </summary>
     public class CS2C02 : InterruptingBusDevice
     {
+        private static readonly ILog Log = LogManager.GetLogger(typeof(CS2C02));
+
         private const ushort ADDR_PPU_MIN   = 0x2000;
         private const ushort ADDR_PPU_MAX   = 0x3FFF;
         private const ushort ADDR_PALETTE   = 0x3F00;
@@ -33,8 +36,7 @@ namespace NESEmulator
 
         private ulong _currentClockCycle;
 
-        // PPU has it's own bus
-        private NESBus _ppuBus;
+        private NESBus _nesBus;
 
         private PPUStatus _status;
         private PPUMask _mask;
@@ -236,6 +238,11 @@ namespace NESEmulator
 
         #region Bus Communications
 
+        public void ConnectBus(NESBus bus)
+        {
+            _nesBus = bus;
+        }
+
         public void Reset()
         {
             _fineX                  = 0;
@@ -307,6 +314,11 @@ namespace NESEmulator
                             }
                         }
 
+                        if (_status.VerticalBlank)
+                        {
+                            Log.Debug($"[{_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] VBL cleared from status read");
+                        }
+
                         // Clear the vertical blanking flag
                         _status.VerticalBlank = false;
 
@@ -370,6 +382,10 @@ namespace NESEmulator
                         if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
 
                         _mask.reg = data;
+                        if (!_mask.RenderBackground)
+                            Log.Debug($"[{_currentClockCycle / 3}] Background rendering disabled");
+                        if (!_mask.RenderSprites)
+                            Log.Debug($"[{_currentClockCycle / 3}] Sprite rendering disabled");
                         break;
                     case 0x0002:    // Status
                         break;
@@ -849,12 +865,6 @@ namespace NESEmulator
                 _cycle = 0;
                 _scanline++;
                 _currSprite = 0;
-                //if (_scanline >= 262)
-                //{
-                //    _scanline = 0;
-                //    _currSprite = 0;
-                //    FrameComplete = true;
-                //}
                 _cycleOpItr = _cycleOperations[_scanline].GetEnumerator();
                 _cycleOpItr.MoveNext();
             }
@@ -1033,19 +1043,30 @@ namespace NESEmulator
 
         private void skipCycle()
         {
+            fetchNextBGTileId();
             // This only happens on odd frames, so do nothing on even frames
             // Also only happens when rendering is turned on.
-            if (_frameCounter % 2 == 0 && (_mask.RenderBackground || _mask.RenderSprites))
+            if (_frameCounter % 2 == 0 && !(_mask.RenderBackground && _mask.RenderSprites))
             {
-                fetchNextBGTileId();
+                if (!(_mask.RenderBackground && _mask.RenderSprites))
+                {
+                    Log.Debug("Rendering off, no skipping cycle.");
+                }
                 return;
             }
+
             advanceFrame();
 
-            _cycleOpItr = _cycleOperations[_scanline].GetEnumerator();
-            _cycleOpItr.MoveNext();
+            //_cycleOpItr = _cycleOperations[_scanline].GetEnumerator();
+            //_cycleOpItr.MoveNext();
 
             fetchNextBGTileId();
+        }
+
+        private void finalCycle()
+        {
+            fetchNextBGTileId();
+            advanceFrame();
         }
 
         private void advanceFrame()
@@ -1054,9 +1075,11 @@ namespace NESEmulator
             _cycle = 0;
             _scanline = 0;
             _currSprite = 0;
-            _frameSuppressVBL = false;
-            _frameSuppressNMI = false;
+            //_frameSuppressVBL = false;
+            //_frameSuppressNMI = false;
             FrameComplete = true;
+            _cycleOpItr = _cycleOperations[_scanline].GetEnumerator();
+            _cycleOpItr.MoveNext();
         }
 
         private void noOp()
@@ -1224,6 +1247,7 @@ namespace NESEmulator
             // Effectively end of frame, so set vertical blank flag
             if (!_frameSuppressVBL)
             {
+                //Log.Debug($"[{_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] VBL Start");
                 _status.VerticalBlank = true;
                 checkAndRaiseNMI();
             }
@@ -1241,7 +1265,8 @@ namespace NESEmulator
             if (_control.EnableNMI && _status.VerticalBlank && !_frameSuppressNMI)
             {
                 //Console.WriteLine($"NMI raised [_scanline={_scanline}][_cycle={_cycle}]");
-                this.RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.NMI));
+                //this.RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.NMI));
+                _nesBus.CPU.SignalNMI();
             }
             else
             {
@@ -1251,8 +1276,11 @@ namespace NESEmulator
 
         private void clearVerticalBlank()
         {
+            //Log.Debug($"[{_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] End of VBL");
             // Effectively start of new frame, so clear vertical blank flag
             _status.VerticalBlank = false;
+            _frameSuppressVBL = false;
+            _frameSuppressNMI = false;
 
             // Clear sprite overflow flag
             _status.SpriteOverflow = false;
@@ -1529,8 +1557,8 @@ namespace NESEmulator
             _cycleOperations[scanline][1] = new PPUCycleNode(1, clearVerticalBlank);
 
             // Replace last cycle with the skip
-             _cycleOperations[scanline][_cycleOperations[scanline].Count - 1] = new PPUCycleNode(339, skipCycle);
-            _cycleOperations[scanline][_cycleOperations[scanline].Count - 1] = new PPUCycleNode(340, advanceFrame);
+            _cycleOperations[scanline][_cycleOperations[scanline].Count - 1] = new PPUCycleNode(339, skipCycle);
+            _cycleOperations[scanline][_cycleOperations[scanline].Count - 1] = new PPUCycleNode(340, finalCycle);
 
             // SPECIAL CASE: Do Y address xfer every cycle from 280-304
             // Find the index of the "no-op" at cycle 258 and jamb these in right after

@@ -56,9 +56,9 @@ namespace NESEmulatorApp
             //window.KeyDown += Window_KeyDown;
             var renderer = serviceProvider.GetService<IRenderer>();
             pge = new PixelGameEngine(renderer, serviceProvider.GetService<IPlatform>(), appName);
-            pge.Construct(SCREEN_WIDTH, SCREEN_HEIGHT, 3, 3, false, false);
+            pge.Construct(SCREEN_WIDTH, SCREEN_HEIGHT, 2, 2, false, false);
             pge.OnCreate += pge_OnCreate;
-            pge.OnFrameUpdate += pge_OnUpdate;
+            pge.OnFrameUpdate = pge_OnUpdate;
             pge.OnDestroy += pge_OnDestroy;
             pge.Platform.KeyDown += OnKeyDown;
         }
@@ -97,6 +97,7 @@ namespace NESEmulatorApp
             //string romfile = "tests\\3.Forward_Branch.nes";
             //string romfile = "tests\\ppu_vbl_nmi.nes";
             string romfile = "tests\\cpu_interrupts.nes";
+            //string romfile = "tests\\3-nmi_and_irq.nes";
 
             if (args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]))
                 romfile = args[0];

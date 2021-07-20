@@ -116,6 +116,10 @@ namespace NESEmulator
             ExternalMemoryReader.CyclesToComplete = 4;
         }
 
+        public void SignalNMI() => _nmiPending = true;
+        public void SignalIRQ() => _irqPending = true;
+        public void ClearIRQ() => _irqPending = false;
+
         public override void HandleInterrupt(object sender, InterruptEventArgs e)
         {
             //if (!(sender is CS2A03) && !(sender is CS2C02 && e.Interrupt == InterruptType.NMI))
@@ -124,7 +128,6 @@ namespace NESEmulator
             {
                 case InterruptType.NMI:
                     _nmiPending = true;
-                    //NMI();
                     break;
 
                 case InterruptType.IRQ:
@@ -286,6 +289,7 @@ namespace NESEmulator
         {
             if (_nmiPending)
             {
+                Log.Debug($"[{clock_count}] Invoking NMI");
                 NMI();
                 return true;
             }

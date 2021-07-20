@@ -181,8 +181,9 @@ namespace NESEmulator
                 if (!_frameCounter.IsInterruptCycle())
                 {
                     _frameCounter.FrameInterrupt = false;
-                    // Might not need this...
-                    RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.CLEAR_IRQ));
+                    //RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.CLEAR_IRQ));
+                    // Interrupt is ack'd this way, so we can stop pestering the CPU now.
+                    _bus.CPU.ClearIRQ();
                 }
                 Log.Debug("Status register read");
             }
@@ -297,7 +298,8 @@ namespace NESEmulator
         /// </summary>
         public void IRQ()
         {
-            RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.IRQ));
+            //RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.IRQ));
+            _bus.CPU.SignalIRQ();
         }
 
         public bool DMAInProgress() => ((CS6502)_bus?.GetDevice(BusDeviceType.CPU)).DMATransfer;

@@ -31,7 +31,9 @@ namespace NESEmulator
             Controller = new NESController();
             _busDeviceList = new List<BusDevice>(new BusDevice[] { CPU, RAM, PPU, Controller, APU });
             
+            // Ugly hack, but events are just too slow.
             CPU.ConnectBus(this);
+            PPU.ConnectBus(this);
             APU.ConnectBus(this);
 
             wireBusDeviceEvents();
