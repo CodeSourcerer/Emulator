@@ -71,7 +71,7 @@ namespace NESEmulator.APU
             SequenceAction[] sequenceActions = null;
             if (this.Mode == SequenceMode.FourStep)
             {
-                if (_clockCounter > FOURSTEP_FINAL)
+                if (_clockCounter >= FOURSTEP_FINAL)
                     _clockCounter = 0;
 
                 if (this._fourStepSequence.ContainsKey(_clockCounter))
