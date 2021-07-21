@@ -29,6 +29,8 @@ namespace NESEmulator.Channels
                 {
                     if (_bytesRemaining == 0)
                         restartSample();
+                    else
+                        Log.Debug($"DMC Enabled before sample finished. DMC Sample will restart after {_bytesRemaining} bytes are processed.");
                 }
             }
         }
@@ -134,10 +136,10 @@ namespace NESEmulator.Channels
             }
             else
             {
-                _interruptOccurred = true;
+                _interruptOccurred = false;
             }
 
-            if (clockCycles % 6 == 0)
+            if (clockCycles % 3 == 0)
             {
                 _dmcTimer.Clock();
             }
@@ -159,24 +161,29 @@ namespace NESEmulator.Channels
                     RateIndex    = (byte)(data & 0x0F);
                     _dmcTimer.CounterReload = _rateTableNTSC[RateIndex];
                     if (!IRQEnable)
+                    {
                         InterruptFlag = false;
-                    //Log.Debug($"DMC Channel written: [IRQEnable={IRQEnable}] [Loop={Loop}] [RateIndex={RateIndex:X2}]");
+                        _apu.ClearIRQ();
+                        Log.Debug("DMC IRQ Disabled");
+                    }
+                    Log.Debug($"DMC Channel written: [IRQEnable={IRQEnable}] [Loop={Loop}] [RateIndex={RateIndex:X2}]");
                     break;
 
                 case ADDR_DIRECTLOAD:
                     Output = (byte)(data & 0x7F);
-                    //Log.Debug($"DMC Channel written: [DirectLoad={Output}]");
+                    Log.Debug($"DMC Channel written: [DirectLoad={Output}]");
                     break;
 
                 case ADDR_SAMPLEADDR:
                     SampleAddress = (ushort)(0xC000 | (data << 6));
-                    //Log.Debug($"DMC Channel written: [SampleAddress={SampleAddress:X2}]");
+                    Log.Debug($"DMC Channel written: [SampleAddress={SampleAddress:X4}]");
                     break;
 
                 case ADDR_SAMPLELENGTH:
                     SampleLength = (ushort)((data << 4) + 1);
-                    _bytesRemaining = SampleLength;
-                    //Log.Debug($"DMC Chennel written: [SampleLength={SampleLength:X2}]");
+                    //if (_bytesRemaining == 0)
+                    //    _bytesRemaining = SampleLength;
+                    Log.Debug($"DMC Chennel written: [SampleLength={SampleLength}]");
                     break;
             }
         }
@@ -185,7 +192,18 @@ namespace NESEmulator.Channels
         {
             if (_bytesRemaining > 0)
             {
-                _apu.InitiateDMCSampleFetch(4, _samplePtr);
+                if (SampleLength == 1)
+                {
+                    Log.Debug("DMC Using previous sample loaded");
+                    _shifter = _sampleBuffer = _apu.GetMemoryReader().Buffer; // use last value
+                    _bitsRemaining = 8;
+                    _silence = false;
+                }
+                else
+                {
+                    Log.Debug("DMC Fetching sample byte");
+                    _apu.InitiateDMCSampleFetch(4, _samplePtr);
+                }
                 if (++_samplePtr == 0x0000)
                 {
                     _samplePtr = 0x8000;
@@ -193,14 +211,20 @@ namespace NESEmulator.Channels
                 }
                 if (--_bytesRemaining == 0)
                 {
+                    Log.Debug("End of DMC Sample");
                     if (Loop)
                         restartSample();
                     else if (IRQEnable)
+                    {
                         InterruptFlag = true;
+                        Log.Debug("End of Sample: DMC InterruptFlag set");
+                    }
                 }
             }
             else
+            {
                 _sampleBuffer = 0;
+            }
         }
 
         private void restartSample()

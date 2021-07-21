@@ -192,7 +192,7 @@ namespace NESEmulator
                               (_triangleChannel.IsPlaying ? 1 : 0) << 2 |
                               (_pulseChannel2.IsPlaying ? 1 : 0) << 1 |
                               (_pulseChannel1.IsPlaying ? 1 : 0));
-                Log.Debug($"Status register read [data={data:X2}] [D={_dmcChannel.InterruptFlag}, F={_frameCounter.FrameInterrupt}, D={_dmcChannel.Enabled}, N={_noiseChannel.IsPlaying}, T={_triangleChannel.IsPlaying}, 2={_pulseChannel2.IsPlaying}, 1={_pulseChannel1.IsPlaying}]");
+                Log.Debug($"Status register read [data={data:X2}] [I={_dmcChannel.InterruptFlag}, F={_frameCounter.FrameInterrupt}, D={_dmcChannel.Enabled}, N={_noiseChannel.IsPlaying}, T={_triangleChannel.IsPlaying}, 2={_pulseChannel2.IsPlaying}, 1={_pulseChannel1.IsPlaying}]");
                 // "If an interrupt flag was set at the same moment of the read, it will read back as 1 but it will not be cleared."
                 if (!_frameCounter.IsInterruptCycle())
                 {
@@ -262,7 +262,12 @@ namespace NESEmulator
                 _triangleChannel.Enabled = data.TestBit(2);
                 _noiseChannel.Enabled = data.TestBit(3);
                 _dmcChannel.Enabled = data.TestBit(4);
-                _dmcChannel.InterruptFlag = false;
+                if (_dmcChannel.InterruptFlag)
+                {
+                    _dmcChannel.InterruptFlag = false;
+                    _bus.CPU.ClearIRQ();
+                    Log.Debug("DMC IRQ Cleared");
+                }
                 Log.Debug($"Status written [data={data}] [1={_pulseChannel1.Enabled},2={_pulseChannel2.Enabled},T={_triangleChannel.Enabled},N={_noiseChannel.Enabled},D={_dmcChannel.Enabled}]");
             }
             else if (addr == ADDR_FRAME_COUNTER)
@@ -313,6 +318,11 @@ namespace NESEmulator
         {
             //RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.IRQ));
             _bus.CPU.SignalIRQ();
+        }
+
+        public void ClearIRQ()
+        {
+            _bus.CPU.ClearIRQ();
         }
 
         public bool DMAInProgress() => ((CS6502)_bus?.GetDevice(BusDeviceType.CPU)).DMATransfer;
