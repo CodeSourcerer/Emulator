@@ -20,7 +20,7 @@ namespace NESEmulator.Channels
         public short Output { get; private set; }
         public bool Enabled
         {
-            get => _bytesRemaining == 0;
+            get => _bytesRemaining > 0;
             set
             {
                 if (!value)
@@ -103,12 +103,12 @@ namespace NESEmulator.Channels
             --_bitsRemaining;
         }
 
-        public void ClockHalfFrame()
+        public void ClockHalfFrame(ulong cpuCycle)
         {
             
         }
 
-        public void ClockQuarterFrame()
+        public void ClockQuarterFrame(ulong cpuCycle)
         {
             
         }

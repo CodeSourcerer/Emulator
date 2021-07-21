@@ -83,8 +83,11 @@ namespace NESEmulator
             // Clock frame counter every CPU cycle
             if ((clockCounter % 3) == 0)
             {
-                ++_cpuClockCounter;
-                if (_cpuClockCounter < 29780) return;
+                if (_cpuClockCounter < 29780)
+                {
+                    ++_cpuClockCounter;
+                    return;
+                }
 
                 // Check if we need to do our special case frame counter write handling
                 if (_frameCounterWritten)
@@ -109,10 +112,17 @@ namespace NESEmulator
                         _frameInterruptOccurred = true;
                     }
                 }
+                else if (!_frameCounter.FrameInterrupt && _frameInterruptOccurred)
+                {
+                    _bus.CPU.ClearIRQ();
+                    _frameInterruptOccurred = false;
+                }
                 else
                 {
                     _frameInterruptOccurred = false;
                 }
+
+                ++_cpuClockCounter;
             }
 
             // Clock all audio channels, letting them determine whether or not to actually do something or not
@@ -175,8 +185,14 @@ namespace NESEmulator
             else if (addr == ADDR_STATUS)
             {
                 dataRead = true;
-                data = (byte)((_dmcChannel.InterruptFlag ? 0 : 1) << 7 |
-                              (_frameCounter.FrameInterrupt ? 0 : 1) << 6);
+                data = (byte)((_dmcChannel.InterruptFlag ? 1 : 0) << 7 |
+                              (_frameCounter.FrameInterrupt ? 1 : 0) << 6 |
+                              (_dmcChannel.Enabled ? 1 : 0) << 4 |
+                              (_noiseChannel.IsPlaying ? 1 : 0) << 3 |
+                              (_triangleChannel.IsPlaying ? 1 : 0) << 2 |
+                              (_pulseChannel2.IsPlaying ? 1 : 0) << 1 |
+                              (_pulseChannel1.IsPlaying ? 1 : 0));
+                Log.Debug($"Status register read [data={data:X2}] [D={_dmcChannel.InterruptFlag}, F={_frameCounter.FrameInterrupt}, D={_dmcChannel.Enabled}, N={_noiseChannel.IsPlaying}, T={_triangleChannel.IsPlaying}, 2={_pulseChannel2.IsPlaying}, 1={_pulseChannel1.IsPlaying}]");
                 // "If an interrupt flag was set at the same moment of the read, it will read back as 1 but it will not be cleared."
                 if (!_frameCounter.IsInterruptCycle())
                 {
@@ -184,8 +200,8 @@ namespace NESEmulator
                     //RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.CLEAR_IRQ));
                     // Interrupt is ack'd this way, so we can stop pestering the CPU now.
                     _bus.CPU.ClearIRQ();
+                    Log.Debug("APU Status Read - IRQ Cleared");
                 }
-                Log.Debug("Status register read");
             }
             else if (addr == ADDR_FRAME_COUNTER)
             {
@@ -212,25 +228,25 @@ namespace NESEmulator
             {
                 _pulseChannel1.Write(addr, data);
                 dataWritten = true;
-                //Log.Debug($"Pulse channel 1 address written [addr={addr:X2}] [data={data:X2}]");
+                Log.Debug($"Pulse channel 1 address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr >= ADDR_PULSE2_LO && addr <= ADDR_PULSE2_HI)
             {
                 _pulseChannel2.Write(addr, data);
                 dataWritten = true;
-                //Log.Debug($"Pulse channel 2 address written [addr={addr:X2}] [data={data:X2}]");
+                Log.Debug($"Pulse channel 2 address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr >= ADDR_TRI_LO && addr <= ADDR_TRI_HI)
             {
                 dataWritten = true;
                 _triangleChannel.Write(addr, data);
-                //Log.Debug($"Triangle channel address written [addr={addr:X2}] [data={data:X2}]");
+                Log.Debug($"Triangle channel address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr >= ADDR_NOISE_LO && addr <= ADDR_NOISE_HI)
             {
                 dataWritten = true;
                 _noiseChannel.Write(addr, data);
-                //Log.Debug($"Noise channel address written [addr={addr:X2}] [data={data:X2}]");
+                Log.Debug($"Noise channel address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr >= ADDR_DMC_LO && addr <= ADDR_DMC_HI)
             {
@@ -247,26 +263,23 @@ namespace NESEmulator
                 _noiseChannel.Enabled = data.TestBit(3);
                 _dmcChannel.Enabled = data.TestBit(4);
                 _dmcChannel.InterruptFlag = false;
+                Log.Debug($"Status written [data={data}] [1={_pulseChannel1.Enabled},2={_pulseChannel2.Enabled},T={_triangleChannel.Enabled},N={_noiseChannel.Enabled},D={_dmcChannel.Enabled}]");
             }
             else if (addr == ADDR_FRAME_COUNTER)
             {
                 dataWritten = true;
                 _frameCounterData = data;
                 _frameCounterWritten = true;
-                _frameCounterCycleWait = (byte)(((_cpuClockCounter & 0x1) == 0) ? 4 : 3);
-                _frameCounter.Reset();
+                _frameCounterCycleWait = (byte)(((_cpuClockCounter & 0x1) == 0) ? 3 : 4);
+                //_frameCounter.Reset();
                 _frameCounter.InterruptInhibit = data.TestBit(6);
-                //if (_frameCounter.InterruptInhibit)
-                //    _frameCounter.FrameInterrupt = false;
+                if (_frameCounter.InterruptInhibit && _frameCounter.FrameInterrupt)
+                {
+                    _frameCounter.FrameInterrupt = false;
+                    _bus.CPU.ClearIRQ();
+                    Log.Debug("Interrupt Inhibit set  - Cleared IRQ");
+                }
 
-                if (data.TestBit(7) == false)
-                {
-                    _frameCounter.Mode = SequenceMode.FourStep;
-                }
-                else
-                {
-                    _frameCounter.Mode = SequenceMode.FiveStep;
-                }
                 Log.Debug($"Pending frame counter write in {_frameCounterCycleWait} cycles [data={data:X2}]");
             }
 
@@ -344,9 +357,12 @@ namespace NESEmulator
         {
             _frameCounter.Reset();
             _frameCounter.InterruptInhibit = _frameCounterData.TestBit(6);
-            //if (_frameCounter.InterruptInhibit)
-            //    _frameCounter.FrameInterrupt = false;
-
+            if (_frameCounter.InterruptInhibit && _frameCounter.FrameInterrupt)
+            {
+                _frameCounter.FrameInterrupt = false;
+                _bus.CPU.ClearIRQ();
+                Log.Debug("I enabled - IRQ Cleared");
+            }
             _frameCounter.Mode = (_frameCounterData.TestBit(7) ? SequenceMode.FiveStep : SequenceMode.FourStep);
 
             Log.Debug($"Frame counter written [data={_frameCounterData:X2}] [I={_frameCounter.InterruptInhibit}] [Mode={_frameCounter.Mode}]");

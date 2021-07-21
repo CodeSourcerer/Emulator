@@ -8,7 +8,7 @@ namespace NESEmulator.Mappers
 {
     public class Mapper_004 : Mapper, IScanlineCounterMapper
     {
-        private static readonly ILog Log = LogManager.GetLogger(typeof(Mapper_004));
+        private static new readonly ILog Log = LogManager.GetLogger(typeof(Mapper_004));
 
         public override bool HasBusConflicts { get => false; }
 
@@ -300,6 +300,7 @@ namespace NESEmulator.Mappers
             if (_irqCounter == 0)
             {
                 _irqCounter = _irqReload;
+                cartridge.Mapper_InvokeInterrupt(this, new InterruptEventArgs(InterruptType.CLEAR_IRQ));
                 //Log.Debug("IRQCounter reloaded");
             }
             else

@@ -85,6 +85,7 @@ namespace NESEmulatorApp
             //string romfile = "tests\\smb_2.nes";
             //string romfile = "tests\\smb2.nes";
             //string romfile = "tests\\smb3.nes";
+            //string romfile = "tests\\Abadox.nes";
             //string romfile = "tests\\burgertime.nes";
             //string romfile = "tests\\ice_climber.nes";
             //string romfile = "tests\\pacman-namco.nes";
@@ -96,7 +97,8 @@ namespace NESEmulatorApp
             //string romfile = "tests\\2.Backward_Branch.nes";
             //string romfile = "tests\\3.Forward_Branch.nes";
             //string romfile = "tests\\ppu_vbl_nmi.nes";
-            string romfile = "tests\\cpu_interrupts.nes";
+            //string romfile = "tests\\cpu_interrupts.nes";
+            string romfile = "tests\\apu_test.nes";
             //string romfile = "tests\\3-nmi_and_irq.nes";
 
             if (args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]))

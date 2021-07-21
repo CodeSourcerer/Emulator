@@ -29,11 +29,13 @@ namespace NESEmulator.Channels
         private int _dutyCycleIndex;
         public short Output { get; private set; }
 
+        private bool _enabled;
         public bool Enabled
         {
             set
             {
-                if (!value)
+                _enabled = value;
+                if (!_enabled)
                 {
                     _lengthCounter.ClearLength();
                     Output = 0;
@@ -41,9 +43,11 @@ namespace NESEmulator.Channels
             }
             get
             {
-                return _lengthCounter.Length > 0;
+                return _enabled; //_lengthCounter.Length > 0;
             }
         }
+
+        public bool IsPlaying { get => _lengthCounter.Length > 0; }
 
         public PulseChannel(int channel)
         {
@@ -97,10 +101,11 @@ namespace NESEmulator.Channels
         /// <remarks>
         /// This is where we update the length counter and sweep unit.
         /// </remarks>
-        public void ClockHalfFrame()
+        public void ClockHalfFrame(ulong cpuCycle)
         {
             _sweepUnit.Clock();
             _lengthCounter.Clock();
+            //Log.Debug($"[{cpuCycle}] Pulse Channel {ChannelNum} HalfFrame [Length={_lengthCounter.Length}]");
         }
 
         /// <summary>
@@ -109,7 +114,7 @@ namespace NESEmulator.Channels
         /// <remarks>
         /// This is where we update envelopes
         /// </remarks>
-        public void ClockQuarterFrame()
+        public void ClockQuarterFrame(ulong cpuCycle)
         {
             _volumeEnvelope.Clock();
         }
@@ -127,7 +132,7 @@ namespace NESEmulator.Channels
                 _dutyCycle = DUTY_CYCLE[data >> 6];
                 _volumeEnvelope.ConstantVolume = data.TestBit(4);
                 _volumeEnvelope.Volume = (byte)(data & 0x0F);
-                //Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Duty={data >> 6}] [Halt={_lengthCounter.Halt}] [ConstantVolume={_volumeEnvelope.ConstantVolume}] [Volume/Period={_volumeEnvelope.Volume}]");
+                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Duty={data >> 6}] [Halt={_lengthCounter.Halt}] [ConstantVolume={_volumeEnvelope.ConstantVolume}] [Volume/Period={_volumeEnvelope.Volume}]");
             }
             else if (addr == 0x4001 || addr == 0x4005)
             {
@@ -147,14 +152,16 @@ namespace NESEmulator.Channels
             // Pulse channel 1 & 2 length counter load and timer high bits
             else if (addr == 0x4003 || addr == 0x4007)
             {
-                _lengthCounter.LoadLength((byte)(data >> 3));
+                if (Enabled)
+                    _lengthCounter.LoadLength((byte)(data >> 3));
+
                 _sequencer.CounterReload &= 0x00FF; // Clear data in high byte, preserving data in low byte
                 _sequencer.CounterReload |= (ushort)((data & 0x07) << 8) + 1;
 
                 _dutyCycleIndex = 0;
                 _volumeEnvelope.Start = true;
                 _sweepUnit.MuteChannel = false;
-                //Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [LinearLength={_lengthCounter.Length}] [TimerReload={_sequencer.TimerReload}]");
+                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [LinearLength={_lengthCounter.Length}] [CounterReload={_sequencer.CounterReload}]");
             }
         }
 

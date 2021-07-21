@@ -221,33 +221,34 @@ namespace NESEmulator
         /// </remarks>
         public void IRQ()
         {
-            //if (getFlag(FLAGS6502.I) == 0 || _irqDisablePending)
+            //if (_startCountingIRQs)
             //{
-                //if (_startCountingIRQs)
-                //{
-                //    _irqCount++;
-                //    Log.Debug($"IRQCount = {_irqCount}");
-                //}
-
-                // Push the PC to the stack. It is 16-bits, so requires 2 pushes
-                push((byte)((pc >> 8) & 0x00FF));
-                push((byte)(pc & 0x00FF));
-
-                // Then push status register to the stack
-                setFlag(FLAGS6502.B, false);
-                setFlag(FLAGS6502.U, true);
-                push((byte)status);
-                setFlag(FLAGS6502.I, true);
-
-                // Read new PC location from fixed address
-                addr_abs = ADDR_IRQ;
-                ushort lo = read(addr_abs);
-                ushort hi = read((ushort)(addr_abs + 1));
-                pc = (ushort)((hi << 8) | lo);
-
-                // IRQ cycles
-                cycles = 7;
+            //    _irqCount++;
+            //    Log.Debug($"IRQCount = {_irqCount}");
             //}
+
+            // Push the PC to the stack. It is 16-bits, so requires 2 pushes
+            push((byte)((pc >> 8) & 0x00FF));
+            push((byte)(pc & 0x00FF));
+
+            // Then push status register to the stack
+            setFlag(FLAGS6502.B, false);
+            setFlag(FLAGS6502.U, true);
+            push((byte)status);
+            setFlag(FLAGS6502.I, true);
+
+            // Read new PC location from fixed address
+            addr_abs = ADDR_IRQ;
+            ushort lo = read(addr_abs);
+            ushort hi = read((ushort)(addr_abs + 1));
+            // NOTE: It is my understanding that on the original hardware, the vector address
+            // can in the middle of this instruction get hijacked by NMIs and point the PC to the
+            // NMI handler. We do not do cycle-by-cycle emulation currently, so this cannot happen
+            // at this time. It can possibly be done with our method with a little refactoring though....
+            pc = (ushort)((hi << 8) | lo);
+
+            // IRQ cycles
+            cycles = 7;
         }
 
         /// <summary>
@@ -285,38 +286,37 @@ namespace NESEmulator
         /// <summary>
         /// Who knew interrupting code could be so complicated?
         /// </summary>
-        private bool pollForIRQ()
+        /// <param name="midInstructionCycle">
+        /// True if we are calling this function in the middle of an instruction, false if beginning.
+        /// This is important because we do not want to alter intermediate states between instructions.
+        /// </param>
+        private bool pollForIRQ(bool midInstructionCycle = false)
         {
-            if (_nmiPending)
-            {
-                Log.Debug($"[{clock_count}] Invoking NMI");
-                NMI();
-                return true;
-            }
-
             // OMG!! I know you don't want to be interrupted, Mr. CPU - but I JUST asked for an IRQ!!
             if (getFlag(FLAGS6502.I) == 1 && _irqPending && _irqDisablePending)
             {
-                _irqDisablePending = false;
+                if (!midInstructionCycle)
+                    _irqDisablePending = false;
                 // Fine - this is the LAST ONE. After this, I'm cutting you off!
-                IRQ();
+                //IRQ();
                 return true;
             }
             else if (getFlag(FLAGS6502.I) == 0)
             {
                 if (_irqPending && _irqEnableLatency == 0)
                 {
-                    IRQ();
+                    //IRQ();
                     return true;
                 }
 
-                if (_irqEnableLatency > 0)
+                if (!midInstructionCycle && _irqEnableLatency > 0)
                     --_irqEnableLatency;
 
                 return false;
             }
 
-            _irqDisablePending = false;
+            if (!midInstructionCycle)
+                _irqDisablePending = false;
 
             return false;
         }
@@ -351,11 +351,29 @@ namespace NESEmulator
             }
             else
             {
+                //if (_nmiPending && pollForIRQ(true) && cycles < 5)
+                //{
+                //    // An NMI has hijacked the IRQ/BRK vector. Set PC to NMI vector.
+                //    addr_abs = ADDR_NMI;
+                //    ushort lo = read(addr_abs);
+                //    ushort hi = read((ushort)(addr_abs + 1));
+                //    pc = (ushort)((hi << 8) | lo);
+                //    Log.Debug($"[{clock_count}] IRQ/BRK has been hijacked by NMI!");
+                //}
+
                 if (cycles == 0)
                 {
-                    if (!pollForIRQ())
+                    if (_nmiPending)
                     {
-
+                        Log.Debug($"[{clock_count}] Invoking NMI");
+                        NMI();
+                    }
+                    else if (pollForIRQ())
+                    {
+                        IRQ();
+                    }
+                    else
+                    {
                         //var (addr, sInst) = Disassemble(pc);
                         //Log.Debug($"[{clock_count}] {sInst}");
 

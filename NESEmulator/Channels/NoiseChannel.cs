@@ -14,11 +14,13 @@ namespace NESEmulator.Channels
 
         public short Output { get; private set; }
 
+        private bool _enabled;
         public bool Enabled
         {
             set
             {
-                if (!value)
+                _enabled = value;
+                if (!_enabled)
                 {
                     _lengthCounter.ClearLength();
                     Output = 0;
@@ -26,10 +28,11 @@ namespace NESEmulator.Channels
             }
             get
             {
-                return _lengthCounter.Length > 0;
+                return _enabled; // _lengthCounter.Length > 0;
             }
         }
 
+        public bool IsPlaying { get => _lengthCounter.Length > 0; }
         public ushort ShiftRegister { get; set; }
         public bool ShiftMode { get; set; }
 
@@ -78,7 +81,7 @@ namespace NESEmulator.Channels
         /// <remarks>
         /// This is where we update the length counter.
         /// </remarks>
-        public void ClockHalfFrame()
+        public void ClockHalfFrame(ulong cpuCycle)
         {
             _lengthCounter.Clock();
         }
@@ -89,7 +92,7 @@ namespace NESEmulator.Channels
         /// <remarks>
         /// This is where we update the volume envelope.
         /// </remarks>
-        public void ClockQuarterFrame()
+        public void ClockQuarterFrame(ulong cpuCycle)
         {
             _volumeEnvelope.Clock();
         }
@@ -116,7 +119,8 @@ namespace NESEmulator.Channels
             }
             else if (addr == 0x400F)
             {
-                _lengthCounter.LoadLength((byte)(data >> 3));
+                if (Enabled)
+                    _lengthCounter.LoadLength((byte)(data >> 3));
                 _volumeEnvelope.Start = true;
                 //Log.Debug($"Noise channel written. [Length={_lengthCounter.Length}]");
             }

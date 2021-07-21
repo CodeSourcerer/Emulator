@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-
+using log4net;
 using NESEmulator.Util;
 
 namespace NESEmulator.APU
@@ -12,6 +12,8 @@ namespace NESEmulator.APU
 
     public class APUFrameCounter
     {
+        private static ILog Log = LogManager.GetLogger(typeof(APUFrameCounter));
+
         public bool InterruptInhibit { get; set; }
 
         public bool FrameInterrupt;
@@ -23,10 +25,14 @@ namespace NESEmulator.APU
             set
             {
                 _mode = value;
-                foreach(var channel in _audioChannels)
+                // Immediately clock all channels if entering 5-step sequence mode
+                if (_mode == SequenceMode.FiveStep)
                 {
-                    channel.ClockQuarterFrame();
-                    channel.ClockHalfFrame();
+                    foreach (var channel in _audioChannels)
+                    {
+                        channel.ClockQuarterFrame(_cpuCycle);
+                        channel.ClockHalfFrame(_cpuCycle);
+                    }
                 }
             }
         }
@@ -43,7 +49,8 @@ namespace NESEmulator.APU
         private Dictionary<ulong, SequenceAction[]> _fourStepSequence;
         private Dictionary<ulong, SequenceAction[]> _fiveStepSequence;
         private IEnumerable<Channel> _audioChannels;
-        private ulong _clockCounter;
+        private ulong _clockCounter = 0;
+        private ulong _cpuCycle;
         private CS2A03 _apu;
 
         public APUFrameCounter(IEnumerable<Channel> audioChannels, CS2A03 connectedAPU)
@@ -59,18 +66,18 @@ namespace NESEmulator.APU
         /// <param name="cpuCycle">CPU cycle count</param>
         public void Clock(ulong cpuCycle)
         {
-            _clockCounter++;
+            _cpuCycle = cpuCycle;
 
             SequenceAction[] sequenceActions = null;
             if (this.Mode == SequenceMode.FourStep)
             {
+                if (_clockCounter > FOURSTEP_FINAL)
+                    _clockCounter = 0;
+
                 if (this._fourStepSequence.ContainsKey(_clockCounter))
                 {
                     sequenceActions = this._fourStepSequence[_clockCounter];
                 }
-
-                if (_clockCounter >= FOURSTEP_FINAL)
-                    _clockCounter = 0;
             }
             else
             {
@@ -93,19 +100,24 @@ namespace NESEmulator.APU
                         switch (action)
                         {
                             case SequenceAction.QuarterFrame:
-                                channel.ClockQuarterFrame();
+                                channel.ClockQuarterFrame(cpuCycle);
                                 break;
                             case SequenceAction.HalfFrame:
-                                channel.ClockHalfFrame();
+                                //Log.Debug($"[_clockCounter={_clockCounter}] Half Frame");
+                                channel.ClockHalfFrame(cpuCycle);
                                 break;
                             case SequenceAction.Interrupt:
                                 if (!InterruptInhibit)
+                                {
                                     FrameInterrupt = true;
+                                    //Log.Debug($"[_clockCounter={_clockCounter}] Frame Interrupt");
+                                }
                                 break;
                         }
                     }
                 }
             }
+            _clockCounter++;
         }
 
         public bool IsInterruptCycle()
@@ -129,8 +141,8 @@ namespace NESEmulator.APU
             this._fourStepSequence.Add(STEP1, new SequenceAction[] { SequenceAction.QuarterFrame });
             this._fourStepSequence.Add(STEP2, new SequenceAction[] { SequenceAction.QuarterFrame, SequenceAction.HalfFrame });
             this._fourStepSequence.Add(STEP3, new SequenceAction[] { SequenceAction.QuarterFrame });
-            //this._fourStepSequence.Add(FOURSTEP_STEP4, new SequenceAction[] { SequenceAction.Interrupt });
-            this._fourStepSequence.Add(FOURSTEP_STEP4 + 1, new SequenceAction[] { SequenceAction.QuarterFrame, SequenceAction.HalfFrame });
+            this._fourStepSequence.Add(FOURSTEP_STEP4, new SequenceAction[] { SequenceAction.Interrupt });
+            this._fourStepSequence.Add(FOURSTEP_STEP4 + 1, new SequenceAction[] { SequenceAction.QuarterFrame, SequenceAction.HalfFrame, SequenceAction.Interrupt });
             this._fourStepSequence.Add(FOURSTEP_FINAL, new SequenceAction[] { SequenceAction.Interrupt });
             
             this._fiveStepSequence = new Dictionary<ulong, SequenceAction[]>(10);

@@ -28,18 +28,21 @@ namespace NESEmulator.Channels
         private int _sequencePtr;
 
         public short Output { get; private set; }
+        public bool _enabled;
         public bool Enabled
         {
             set
             {
-                if (!value)
+                _enabled = value;
+                if (!_enabled)
                     _lengthCounter.ClearLength();
             }
             get
             {
-                return _lengthCounter.Length > 0;
+                return _enabled; //_lengthCounter.Length > 0;
             }
         }
+        public bool IsPlaying { get => _lengthCounter.Length > 0; }
 
         public bool ChannelMuted { get; private set; }
 
@@ -83,7 +86,7 @@ namespace NESEmulator.Channels
         /// <remarks>
         /// This is where we update the length counter.
         /// </remarks>
-        public void ClockHalfFrame()
+        public void ClockHalfFrame(ulong cpuCycle)
         {
             if (!_linearControlFlag) //_lengthCounter.Halt) // also control flag
                 _linearCounterReloadFlag = false;
@@ -97,7 +100,7 @@ namespace NESEmulator.Channels
         /// <remarks>
         /// This is where we update envelopes and the linear counter
         /// </remarks>
-        public void ClockQuarterFrame()
+        public void ClockQuarterFrame(ulong cpuCycle)
         {
             if (_linearCounterReloadFlag)
             {
@@ -139,7 +142,8 @@ namespace NESEmulator.Channels
                     _sequencer.TimerReload |= data;
                     break;
                 case ADDR_TIMERHI_LENCOUNTERLOAD:
-                    _lengthCounter.LoadLength((byte)(data >> 3));
+                    if (Enabled)
+                        _lengthCounter.LoadLength((byte)(data >> 3));
                     _sequencer.TimerReload &= 0x00FF; // Clear data in high byte, preserving data in low byte
                     _sequencer.TimerReload |= (ushort)((data & 0x07) << 8);
                     _linearCounterReloadFlag = true;
