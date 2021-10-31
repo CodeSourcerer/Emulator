@@ -83,11 +83,11 @@ namespace NESEmulator
             // Clock frame counter every CPU cycle
             if ((clockCounter % 3) == 0)
             {
-                if (_cpuClockCounter < 29780)
-                {
-                    ++_cpuClockCounter;
-                    return;
-                }
+                //if (_cpuClockCounter < 29780) // I don't know why I had this, but it breaks the APU len_table test
+                //{
+                //    ++_cpuClockCounter;
+                //    return;
+                //}
 
                 // Check if we need to do our special case frame counter write handling
                 if (_frameCounterWritten)
@@ -163,24 +163,24 @@ namespace NESEmulator
             if (addr >= ADDR_PULSE1_LO && addr <= ADDR_PULSE2_HI)
             {
                 dataRead = true;
-                Log.Debug($"Pulse channel address read [addr={addr:X2}]");
+                Log.Debug($"[{_cpuClockCounter}] Pulse channel address read [addr={addr:X2}]");
             }
             else if (addr >= ADDR_TRI_LO && addr <= ADDR_TRI_HI)
             {
                 dataRead = true;
                 data = _triangleChannel.Read(addr);
-                Log.Debug($"Triangle channel address read [addr={addr:X2}]");
+                Log.Debug($"[{_cpuClockCounter}] Triangle channel address read [addr={addr:X2}]");
             }
             else if (addr >= ADDR_NOISE_LO && addr <= ADDR_NOISE_HI)
             {
                 dataRead = true;
-                Log.Debug($"Noise channel address read [addr={addr:X2}]");
+                Log.Debug($"[{_cpuClockCounter}] Noise channel address read [addr={addr:X2}]");
             }
             else if (addr >= ADDR_DMC_LO && addr <= ADDR_DMC_HI)
             {
                 dataRead = true;
                 data = _dmcChannel.Read(addr);
-                Log.Debug($"DMC channel address read [addr={addr:X2}]");
+                Log.Debug($"[{_cpuClockCounter}] DMC channel address read [addr={addr:X2}]");
             }
             else if (addr == ADDR_STATUS)
             {
@@ -192,7 +192,7 @@ namespace NESEmulator
                               (_triangleChannel.IsPlaying ? 1 : 0) << 2 |
                               (_pulseChannel2.IsPlaying ? 1 : 0) << 1 |
                               (_pulseChannel1.IsPlaying ? 1 : 0));
-                Log.Debug($"Status register read [data={data:X2}] [I={_dmcChannel.InterruptFlag}, F={_frameCounter.FrameInterrupt}, D={_dmcChannel.Enabled}, N={_noiseChannel.IsPlaying}, T={_triangleChannel.IsPlaying}, 2={_pulseChannel2.IsPlaying}, 1={_pulseChannel1.IsPlaying}]");
+                Log.Debug($"[{_cpuClockCounter}] Status register read [data={data:X2}] [I={_dmcChannel.InterruptFlag}, F={_frameCounter.FrameInterrupt}, D={_dmcChannel.Enabled}, N={_noiseChannel.IsPlaying}, T={_triangleChannel.IsPlaying}, 2={_pulseChannel2.IsPlaying}, 1={_pulseChannel1.IsPlaying}]");
                 // "If an interrupt flag was set at the same moment of the read, it will read back as 1 but it will not be cleared."
                 if (!_frameCounter.IsInterruptCycle())
                 {
@@ -200,13 +200,13 @@ namespace NESEmulator
                     //RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.CLEAR_IRQ));
                     // Interrupt is ack'd this way, so we can stop pestering the CPU now.
                     _bus.CPU.ClearIRQ();
-                    Log.Debug("APU Status Read - IRQ Cleared");
+                    //Log.Debug("APU Status Read - IRQ Cleared");
                 }
             }
             else if (addr == ADDR_FRAME_COUNTER)
             {
                 dataRead = true;
-                Log.Debug("Frame counter read");
+                Log.Debug($"[{_cpuClockCounter}] Frame counter read");
             }
 
             return dataRead;
@@ -228,31 +228,31 @@ namespace NESEmulator
             {
                 _pulseChannel1.Write(addr, data);
                 dataWritten = true;
-                Log.Debug($"Pulse channel 1 address written [addr={addr:X2}] [data={data:X2}]");
+                //Log.Debug($"[{_cpuClockCounter}] Pulse channel 1 address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr >= ADDR_PULSE2_LO && addr <= ADDR_PULSE2_HI)
             {
                 _pulseChannel2.Write(addr, data);
                 dataWritten = true;
-                Log.Debug($"Pulse channel 2 address written [addr={addr:X2}] [data={data:X2}]");
+                //Log.Debug($"[{_cpuClockCounter}] Pulse channel 2 address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr >= ADDR_TRI_LO && addr <= ADDR_TRI_HI)
             {
                 dataWritten = true;
                 _triangleChannel.Write(addr, data);
-                Log.Debug($"Triangle channel address written [addr={addr:X2}] [data={data:X2}]");
+                Log.Debug($"[{_cpuClockCounter}] Triangle channel address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr >= ADDR_NOISE_LO && addr <= ADDR_NOISE_HI)
             {
                 dataWritten = true;
                 _noiseChannel.Write(addr, data);
-                Log.Debug($"Noise channel address written [addr={addr:X2}] [data={data:X2}]");
+                Log.Debug($"[{_cpuClockCounter}] Noise channel address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr >= ADDR_DMC_LO && addr <= ADDR_DMC_HI)
             {
                 dataWritten = true;
                 _dmcChannel.Write(addr, data);
-                //Log.Debug($"DMC channel address written [addr={addr:X2}] [data={data:X2}]");
+                //Log.Debug($"[{_cpuClockCounter}] DMC channel address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr == ADDR_STATUS)
             {
@@ -266,9 +266,9 @@ namespace NESEmulator
                 {
                     _dmcChannel.InterruptFlag = false;
                     _bus.CPU.ClearIRQ();
-                    Log.Debug("DMC IRQ Cleared");
+                    //Log.Debug("DMC IRQ Cleared");
                 }
-                Log.Debug($"Status written [data={data}] [1={_pulseChannel1.Enabled},2={_pulseChannel2.Enabled},T={_triangleChannel.Enabled},N={_noiseChannel.Enabled},D={_dmcChannel.Enabled}]");
+                Log.Debug($"[{_cpuClockCounter}] Status written [data={data}] [1={_pulseChannel1.Enabled},2={_pulseChannel2.Enabled},T={_triangleChannel.Enabled},N={_noiseChannel.Enabled},D={_dmcChannel.Enabled}]");
             }
             else if (addr == ADDR_FRAME_COUNTER)
             {
@@ -282,10 +282,10 @@ namespace NESEmulator
                 {
                     _frameCounter.FrameInterrupt = false;
                     _bus.CPU.ClearIRQ();
-                    Log.Debug("Interrupt Inhibit set  - Cleared IRQ");
+                    //Log.Debug("Interrupt Inhibit set  - Cleared IRQ");
                 }
 
-                Log.Debug($"Pending frame counter write in {_frameCounterCycleWait} cycles [data={data:X2}]");
+                Log.Debug($"[{_cpuClockCounter}] Pending frame counter write in {_frameCounterCycleWait} cycles [data={data:X2}]");
             }
 
             return dataWritten;
@@ -371,11 +371,11 @@ namespace NESEmulator
             {
                 _frameCounter.FrameInterrupt = false;
                 _bus.CPU.ClearIRQ();
-                Log.Debug("I enabled - IRQ Cleared");
+                //Log.Debug("I enabled - IRQ Cleared");
             }
             _frameCounter.Mode = (_frameCounterData.TestBit(7) ? SequenceMode.FiveStep : SequenceMode.FourStep);
 
-            Log.Debug($"Frame counter written [data={_frameCounterData:X2}] [I={_frameCounter.InterruptInhibit}] [Mode={_frameCounter.Mode}]");
+            Log.Debug($"[{_cpuClockCounter}] Frame counter written [data={_frameCounterData:X2}] [I={_frameCounter.InterruptInhibit}] [Mode={_frameCounter.Mode}]");
         }
     }
 }

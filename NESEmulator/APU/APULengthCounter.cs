@@ -35,24 +35,26 @@ namespace NESEmulator.APU
             buildLengthTable();
         }
 
-        private EventHandler _callback;
-        public APULengthCounter(EventHandler counterElapsedCallback)
+        private NesClockEventHandler _callback;
+        public APULengthCounter(NesClockEventHandler counterElapsedCallback)
         {
             _callback = counterElapsedCallback;
         }
 
-        public void Clock()
+        public void Clock(ulong clockCycle)
         {
             if (!Halt)
             {
                 if (Length == 0)
                 {
-                    _callback(this, EventArgs.Empty);
+                    //_callback(this, EventArgs.Empty);
                     //this.CounterElapsed?.Invoke(this, EventArgs.Empty);
                 }
                 else
                 {
                     --Length;
+                    if (Length == 0)
+                        _callback(this, new NesClockEventArgs(clockCycle));
                 }
             }
         }

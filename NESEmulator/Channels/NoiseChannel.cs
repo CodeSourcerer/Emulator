@@ -83,7 +83,7 @@ namespace NESEmulator.Channels
         /// </remarks>
         public void ClockHalfFrame(ulong cpuCycle)
         {
-            _lengthCounter.Clock();
+            _lengthCounter.Clock(cpuCycle);
         }
 
         /// <summary>

@@ -62,9 +62,9 @@ namespace NESEmulator.Channels
             _sweepUnit = new APUSweep(channel, _sequencer);
         }
 
-        private void lengthCounterElapsed(object sender, EventArgs e)
+        private void lengthCounterElapsed(object sender, NesClockEventArgs e)
         {
-
+            //Log.Debug($"[{e.ClockCycle}] Pulse Channel {ChannelNum} LengthCounter elapsed");
         }
 
         /// <summary>
@@ -104,7 +104,7 @@ namespace NESEmulator.Channels
         public void ClockHalfFrame(ulong cpuCycle)
         {
             _sweepUnit.Clock();
-            _lengthCounter.Clock();
+            _lengthCounter.Clock(cpuCycle);
             //Log.Debug($"[{cpuCycle}] Pulse Channel {ChannelNum} HalfFrame [Length={_lengthCounter.Length}]");
         }
 
@@ -132,7 +132,7 @@ namespace NESEmulator.Channels
                 _dutyCycle = DUTY_CYCLE[data >> 6];
                 _volumeEnvelope.ConstantVolume = data.TestBit(4);
                 _volumeEnvelope.Volume = (byte)(data & 0x0F);
-                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Duty={data >> 6}] [Halt={_lengthCounter.Halt}] [ConstantVolume={_volumeEnvelope.ConstantVolume}] [Volume/Period={_volumeEnvelope.Volume}]");
+                //Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [Duty={data >> 6}] [Halt={_lengthCounter.Halt}] [ConstantVolume={_volumeEnvelope.ConstantVolume}] [Volume/Period={_volumeEnvelope.Volume}]");
             }
             else if (addr == 0x4001 || addr == 0x4005)
             {
@@ -148,6 +148,7 @@ namespace NESEmulator.Channels
             {
                 _sequencer.CounterReload &= 0xFF00; // Preserve data in high byte, clearing data in low byte
                 _sequencer.CounterReload |= data;
+                //_sequencer.CounterReload = data;
             }
             // Pulse channel 1 & 2 length counter load and timer high bits
             else if (addr == 0x4003 || addr == 0x4007)
@@ -156,12 +157,12 @@ namespace NESEmulator.Channels
                     _lengthCounter.LoadLength((byte)(data >> 3));
 
                 _sequencer.CounterReload &= 0x00FF; // Clear data in high byte, preserving data in low byte
-                _sequencer.CounterReload |= (ushort)((data & 0x07) << 8) + 1;
+                _sequencer.CounterReload |= (ushort)((data & 0x07) << 8); // had + 1, I don't know why.
 
                 _dutyCycleIndex = 0;
                 _volumeEnvelope.Start = true;
                 _sweepUnit.MuteChannel = false;
-                Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [LinearLength={_lengthCounter.Length}] [CounterReload={_sequencer.CounterReload}]");
+                //Log.Debug($"Pulse channel {((addr & 0x04) >> 2) + 1} written. [LinearLength={_lengthCounter.Length}] [CounterReload={_sequencer.CounterReload}]");
             }
         }
 

@@ -91,7 +91,7 @@ namespace NESEmulator.Channels
             if (!_linearControlFlag) //_lengthCounter.Halt) // also control flag
                 _linearCounterReloadFlag = false;
             
-            _lengthCounter.Clock();
+            _lengthCounter.Clock(cpuCycle);
         }
 
         /// <summary>

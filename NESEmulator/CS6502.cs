@@ -137,7 +137,7 @@ namespace NESEmulator
 
                 case InterruptType.CLEAR_IRQ:
                     _irqPending = false;
-                    Log.Debug($"[{clock_count}] Clear IRQ signal received");
+                    //Log.Debug($"[{clock_count}] Clear IRQ signal received");
                     break;
             }
         }
@@ -247,6 +247,7 @@ namespace NESEmulator
             // at this time. It can possibly be done with our method with a little refactoring though....
             pc = (ushort)((hi << 8) | lo);
 
+            Log.Debug($"[{clock_count}] IRQ invoked - will enter handler at [{clock_count + 7}]");
             // IRQ cycles
             cycles = 7;
         }
@@ -365,7 +366,7 @@ namespace NESEmulator
                 {
                     if (_nmiPending)
                     {
-                        Log.Debug($"[{clock_count}] Invoking NMI");
+                        //Log.Debug($"[{clock_count}] Invoking NMI");
                         NMI();
                     }
                     else if (pollForIRQ())
@@ -1019,6 +1020,7 @@ namespace NESEmulator
             return 1;
         }
 
+        #region Bitwise Operators
         /// <summary>
         /// Instruction: Bitwise Logic AND
         /// </summary>
@@ -1111,6 +1113,70 @@ namespace NESEmulator
             testAndSet(FLAGS6502.N, a);
             return 1;
         }
+
+        /// <summary>
+        /// Instruction: Bitwise Logic OR
+        /// </summary>
+        /// <returns></returns>
+        /// <remarks>
+        /// Function:    A = A | M
+        /// Flags Out:   N, Z
+        /// </remarks>
+        private byte ORA()
+        {
+            fetch();
+            a |= fetched;
+            testAndSet(FLAGS6502.Z, a);
+            testAndSet(FLAGS6502.N, a);
+            return 1;
+        }
+
+        /// <summary>
+        /// Instruction: Rotate One bit Left
+        /// Function:    A or M = C <- (M << 1) <- C
+        /// Flags Out:   C, Z, N
+        /// </summary>
+        /// <returns></returns>
+        private byte ROL()
+        {
+            fetch();
+            temp = (ushort)((fetched << 1) | getFlag(FLAGS6502.C));
+            setFlag(FLAGS6502.C, (temp & 0xFF00) > 0);
+            testAndSet(FLAGS6502.Z, temp);
+            testAndSet(FLAGS6502.N, temp);
+            if (opcode_lookup[opcode].addr_mode == IMP)
+                a = (byte)(temp & 0x00FF);
+            else
+            {
+                write(addr_abs, fetched);   // write original value first
+                write(addr_abs, (byte)(temp & 0x00FF));
+            }
+            return 0;
+        }
+
+        /// <summary>
+        /// Instruction: Rotate One bit Right
+        /// Function:    A or M = C -> (M >> 1) -> C
+        /// Flags Out:   C, Z, N
+        /// </summary>
+        /// <returns></returns>
+        private byte ROR()
+        {
+            fetch();
+            temp = (ushort)((getFlag(FLAGS6502.C) << 7) | fetched >> 1);
+            setFlag(FLAGS6502.C, (fetched & 0x01) == 1);
+            testAndSet(FLAGS6502.Z, temp);
+            testAndSet(FLAGS6502.N, temp);
+            if (opcode_lookup[opcode].addr_mode == IMP)
+                a = (byte)(temp & 0x00FF);
+            else
+            {
+                write(addr_abs, fetched);   // write original value first
+                write(addr_abs, (byte)(temp & 0x00FF));
+            }
+            return 0;
+        }
+        #endregion // Bitwise Operators
 
         #region Branch instructions
 
@@ -1572,23 +1638,6 @@ namespace NESEmulator
         }
 
         /// <summary>
-        /// Instruction: Bitwise Logic OR
-        /// </summary>
-        /// <returns></returns>
-        /// <remarks>
-        /// Function:    A = A | M
-        /// Flags Out:   N, Z
-        /// </remarks>
-        private byte ORA()
-        {
-            fetch();
-            a |= fetched;
-            testAndSet(FLAGS6502.Z, a);
-            testAndSet(FLAGS6502.N, a);
-            return 1;
-        }
-
-        /// <summary>
         /// Instruction: Push Accumulator to Stack
         /// Function:    A -> stack
         /// </summary>
@@ -1648,59 +1697,13 @@ namespace NESEmulator
         }
 
         /// <summary>
-        /// Instruction: Rotate One bit Left
-        /// Function:    A or M = C <- (M << 1) <- C
-        /// Flags Out:   C, Z, N
-        /// </summary>
-        /// <returns></returns>
-        private byte ROL()
-        {
-            fetch();
-            temp = (ushort)((fetched << 1) | getFlag(FLAGS6502.C));
-            setFlag(FLAGS6502.C, (temp & 0xFF00) > 0);
-            testAndSet(FLAGS6502.Z, temp);
-            testAndSet(FLAGS6502.N, temp);
-            if (opcode_lookup[opcode].addr_mode == IMP)
-                a = (byte)(temp & 0x00FF);
-            else
-            {
-                write(addr_abs, fetched);   // write original value first
-                write(addr_abs, (byte)(temp & 0x00FF));
-            }
-            return 0;
-        }
-
-        /// <summary>
-        /// Instruction: Rotate One bit Right
-        /// Function:    A or M = C -> (M >> 1) -> C
-        /// Flags Out:   C, Z, N
-        /// </summary>
-        /// <returns></returns>
-        private byte ROR()
-        {
-            fetch();
-            temp = (ushort)((getFlag(FLAGS6502.C) << 7) | fetched >> 1);
-            setFlag(FLAGS6502.C, (fetched & 0x01) == 1);
-            testAndSet(FLAGS6502.Z, temp);
-            testAndSet(FLAGS6502.N, temp);
-            if (opcode_lookup[opcode].addr_mode == IMP)
-                a = (byte)(temp & 0x00FF);
-            else
-            {
-                write(addr_abs, fetched);   // write original value first
-                write(addr_abs, (byte)(temp & 0x00FF));
-            }
-            return 0;
-        }
-
-        /// <summary>
         /// Instruction: Enable Interrupts / Clear Interrupt Disable Flag
         /// Function:    I = 0
         /// </summary>
         /// <returns></returns>
         private byte CLI()
         {
-            Log.Debug($"[{clock_count}] CLI");
+            //Log.Debug($"[{clock_count}] CLI");
             _startCountingIRQs = true;
             _irqCount = 0;
             if (getFlag(FLAGS6502.I) == 1)
@@ -1722,7 +1725,6 @@ namespace NESEmulator
             if (getFlag(FLAGS6502.I) == 0)
             {
                 _irqDisablePending = true;
-                //                _irqDisableLatency = 1;
                 _startCountingIRQs = false;
             }
 

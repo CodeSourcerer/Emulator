@@ -131,7 +131,7 @@ namespace NESEmulator.Channels
                 {
                     _apu.IRQ();
                     _interruptOccurred = true;
-                    Log.Debug("DMC IRQ");
+                    //Log.Debug("DMC IRQ");
                 }
             }
             else
@@ -164,7 +164,7 @@ namespace NESEmulator.Channels
                     {
                         InterruptFlag = false;
                         _apu.ClearIRQ();
-                        Log.Debug("DMC IRQ Disabled");
+                        //Log.Debug("DMC IRQ Disabled");
                     }
                     Log.Debug($"DMC Channel written: [IRQEnable={IRQEnable}] [Loop={Loop}] [RateIndex={RateIndex:X2}]");
                     break;
@@ -201,7 +201,7 @@ namespace NESEmulator.Channels
                 }
                 else
                 {
-                    Log.Debug("DMC Fetching sample byte");
+                    //Log.Debug("DMC Fetching sample byte");
                     _apu.InitiateDMCSampleFetch(4, _samplePtr);
                 }
                 if (++_samplePtr == 0x0000)

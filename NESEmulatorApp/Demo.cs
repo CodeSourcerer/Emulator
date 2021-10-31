@@ -85,11 +85,13 @@ namespace NESEmulatorApp
             //string romfile = "tests\\smb_2.nes";
             //string romfile = "tests\\smb2.nes";
             //string romfile = "tests\\smb3.nes";
+            //string romfile = "tests\\capt_america.nes";
             //string romfile = "tests\\Abadox.nes";
             //string romfile = "tests\\burgertime.nes";
             //string romfile = "tests\\ice_climber.nes";
             //string romfile = "tests\\pacman-namco.nes";
             //string romfile = "tests\\ducktales.nes";
+            //string romfile = "tests\\zeldaII.nes";
 
             // Test roms
             //string romfile = "tests\\nestest.nes";
@@ -98,8 +100,26 @@ namespace NESEmulatorApp
             //string romfile = "tests\\3.Forward_Branch.nes";
             //string romfile = "tests\\ppu_vbl_nmi.nes";
             //string romfile = "tests\\cpu_interrupts.nes";
-            string romfile = "tests\\apu_test.nes";
+            //string romfile = "tests\\apu_test.nes";
+            // APU tests
+            //string romfile = "tests\\APU\\01.len_ctr.nes"; // passes
+            //string romfile = "tests\\APU\\02.len_table.nes"; // passes
+            //string romfile = "tests\\APU\\03.irq_flag.nes"; // passes
+            //string romfile = "tests\\APU\\04.clock_jitter.nes"; // passes
+            //string romfile = "tests\\APU\\05.len_timing_mode0.nes"; // passes
+            //string romfile = "tests\\APU\\06.len_timing_mode1.nes"; // passes
+            //string romfile = "tests\\APU\\07.irq_flag_timing.nes"; // passes
+            //string romfile = "tests\\APU\\08.irq_timing.nes"; // fails - $03 -- too late"
+            //string romfile = "tests\\APU\\10.len_halt_timing.nes"; // fails - "3) Length should be clocked when halted at 14915"
+            //string romfile = "tests\\APU\\11.len_reload_timing.nes"; // fails - "4) Reload during length clock when ctr = 0 should work normally"
+            // From mmc3_test_2
+            //string romfile = "tests\\mmc3_test_2\\1-clocking.nes";
+            // From cpu_interrupts_v2
+            //string romfile = "tests\\1-cli_latency.nes"; // passes
+            //string romfile = "tests\\2-nmi_and_brk.nes";  // fails
             //string romfile = "tests\\3-nmi_and_irq.nes";
+            //string romfile = "tests\\4-irq_and_dma.nes";
+            string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes";
 
             if (args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]))
                 romfile = args[0];

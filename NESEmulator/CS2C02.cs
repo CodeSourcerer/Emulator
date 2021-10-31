@@ -107,6 +107,9 @@ namespace NESEmulator
 
             _status = new PPUStatus();
             _mask   = new PPUMask();
+            // often set (ref: https://wiki.nesdev.org/w/index.php?title=PPU_power_up_state)
+            _status.VerticalBlank = true;
+            _status.SpriteOverflow = true;
 
             // Create PPU bus with its devices...
 
@@ -259,12 +262,12 @@ namespace NESEmulator
             _bg_shifterPatternHi    = 0;
             _bg_shifterAttribLo     = 0;
             _bg_shifterAttribHi     = 0;
-            _status.reg             = 0;
+            //_status.reg             = 0;
             _mask.reg               = 0;
             _control.reg            = 0;
-            _vram_addr.reg          = 0;
+            //_vram_addr.reg          = 0;
             _tram_addr.reg          = 0;
-            _OAMaddr                = 0;
+            //_OAMaddr                = 0;
             _cycleOpItr = _cycleOperations[_scanline].GetEnumerator();
             _cycleOpItr.MoveNext();
         }
@@ -1053,15 +1056,14 @@ namespace NESEmulator
             fetchNextBGTileId();
             // This only happens on odd frames, so do nothing on even frames
             // Also only happens when rendering is turned on.
-            if (_frameCounter % 2 == 0 && !(_mask.RenderBackground && _mask.RenderSprites))
+            if (_frameCounter % 2 == 0 || !(_mask.RenderBackground && _mask.RenderSprites))
             {
-                if (!(_mask.RenderBackground && _mask.RenderSprites))
-                {
-                    Log.Debug("Rendering off, no skipping cycle.");
-                }
+                //if (!(_mask.RenderBackground && _mask.RenderSprites))
+                //    Log.Debug($"[_frameCounter={_frameCounter}] Rendering off, no skipping cycle.");
+
                 return;
             }
-
+            Log.Debug($"[_frameCounter={_frameCounter}] Rendering on, odd frame - skipping cycle.");
             advanceFrame();
 
             //_cycleOpItr = _cycleOperations[_scanline].GetEnumerator();
@@ -1254,12 +1256,13 @@ namespace NESEmulator
             // Effectively end of frame, so set vertical blank flag
             if (!_frameSuppressVBL)
             {
-                //Log.Debug($"[{_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] VBL Start");
+                Log.Debug($"[{_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] [_frameCounter={_frameCounter}] VBL Start");
                 _status.VerticalBlank = true;
                 checkAndRaiseNMI();
             }
             else
             {
+                Log.Debug($"[{_currentClockCycle / 3}] [_frameCounter={_frameCounter}] VBL Suppressed.");
                 //Console.WriteLine("VBL suppressed");
             }
         }
@@ -1283,7 +1286,7 @@ namespace NESEmulator
 
         private void clearVerticalBlank()
         {
-            //Log.Debug($"[{_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] End of VBL");
+            Log.Debug($"[{_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] [_frameCounter={_frameCounter}] End of VBL");
             // Effectively start of new frame, so clear vertical blank flag
             _status.VerticalBlank = false;
             _frameSuppressVBL = false;
@@ -1564,7 +1567,7 @@ namespace NESEmulator
             _cycleOperations[scanline][1] = new PPUCycleNode(1, clearVerticalBlank);
 
             // Replace last cycle with the skip
-            _cycleOperations[scanline][_cycleOperations[scanline].Count - 1] = new PPUCycleNode(339, skipCycle);
+            _cycleOperations[scanline][_cycleOperations[scanline].Count - 2] = new PPUCycleNode(339, skipCycle);
             _cycleOperations[scanline][_cycleOperations[scanline].Count - 1] = new PPUCycleNode(340, finalCycle);
 
             // SPECIAL CASE: Do Y address xfer every cycle from 280-304
