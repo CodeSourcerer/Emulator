@@ -108,6 +108,10 @@ namespace NESEmulator
             build_lookup();
             ExternalMemoryReader = new MemoryReader();
             ExternalMemoryReader.MemoryReadRequest += ExternalMemoryReader_MemoryReadRequest;
+
+            // https://wiki.nesdev.org/w/index.php?title=CPU_power_up_state
+            // "P = $34"
+            status = FLAGS6502.I | FLAGS6502.B | FLAGS6502.U;
         }
 
         private void ExternalMemoryReader_MemoryReadRequest(object sender, EventArgs e)
@@ -161,9 +165,9 @@ namespace NESEmulator
         /// Reset CPU to known state
         /// </summary>
         /// <remarks>
-        /// This is hard-wired inside the CPU. The
-        /// registers are set to 0x00, the status register is cleared except for unused
-        /// bit which remains at 1. An absolute address is read from location 0xFFFC
+        /// This is hard-wired inside the CPU. The status register remains the same except for unused
+        /// bit which remains at 1, and interrupt inhibit which is set to 1 as well. An 
+        /// absolute address is read from location 0xFFFC
         /// which contains a second address that the program counter is set to. This 
         /// allows the programmer to jump to a known and programmable location in the
         /// memory to start executing from. Typically the programmer would set the value
@@ -188,7 +192,7 @@ namespace NESEmulator
             // Reset internal registers
             a = x = y = 0;
             sp = 0xFD;
-            status = 0x00 | FLAGS6502.U;
+            status |= (FLAGS6502.U | FLAGS6502.I);
 
             // Clear internal helper variables
             addr_rel = addr_abs = 0x0000;
