@@ -342,6 +342,11 @@ namespace NESEmulator
             if (clockCounter % 3 != 0)
                 return;
 
+            clock_count++;
+
+            // Read in another code-base that instructions don't start executing until after cpu cycles, so here we go.
+            if (clock_count <= 8) return;
+
             if (DMATransfer)
             {
                 doDMATransfer(clockCounter);
@@ -405,7 +410,7 @@ namespace NESEmulator
                     }
                 }
 
-                clock_count++;
+                //clock_count++;
 
                 cycles--;
             }

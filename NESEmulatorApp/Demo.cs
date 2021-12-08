@@ -91,7 +91,11 @@ namespace NESEmulatorApp
             //string romfile = "tests\\ice_climber.nes";
             //string romfile = "tests\\pacman-namco.nes";
             //string romfile = "tests\\ducktales.nes";
+            string romfile = "tests\\young_indy.nes";
+            // Mapper 1
+            //string romfile = "tests\\zelda.nes";
             //string romfile = "tests\\zeldaII.nes";
+            //string romfile = "tests\\megaman2.nes";
 
             // Test roms
             //string romfile = "tests\\nestest.nes";
@@ -119,7 +123,7 @@ namespace NESEmulatorApp
             //string romfile = "tests\\2-nmi_and_brk.nes";  // fails
             //string romfile = "tests\\3-nmi_and_irq.nes";
             //string romfile = "tests\\4-irq_and_dma.nes";
-            string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes";
+            //string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes";
 
             if (args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]))
                 romfile = args[0];

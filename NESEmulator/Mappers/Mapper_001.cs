@@ -37,7 +37,7 @@ namespace NESEmulator.Mappers
             : base(cartridge, prgBanks, chrBanks)
         {
             _shiftRegister = 0x10;
-            _controlRegister = 0x0C;
+            _controlRegister = 0x1C;
             _prgBank = 0;
         }
 
@@ -154,7 +154,7 @@ namespace NESEmulator.Mappers
         {
             Log.Debug($"Mapper 001 cartridge reset");
             _shiftRegister = 0x10;
-            _controlRegister = 0x0C;
+            _controlRegister = 0x1C;
             updatePRGBankOffsets();
             updateCHRBankOffsets();
         }
@@ -213,7 +213,7 @@ namespace NESEmulator.Mappers
                 updatePRGBankOffsets();
 
                 _prgRAMEnable = _shiftRegister.TestBit(4);
-                Log.Debug($"PRG bank written. [prgBank={_prgBank}]");
+                Log.Debug($"PRG bank written. [prgBank={_prgBank}] [RAM Enabled={_prgRAMEnable}]");
             }
         }
 

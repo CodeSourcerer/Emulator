@@ -317,11 +317,12 @@ namespace NESEmulator
                             }
                         }
 
+#if DEBUG_VBL
                         if (_status.VerticalBlank)
                         {
                             Log.Debug($"[{_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] VBL cleared from status read");
                         }
-
+#endif
                         // Clear the vertical blanking flag
                         _status.VerticalBlank = false;
 
@@ -597,7 +598,7 @@ namespace NESEmulator
             }
         }
 
-        #endregion // Bus Communications
+#endregion // Bus Communications
 
         public void ConnectCartridge(Cartridge cartridge)
         {
@@ -609,6 +610,7 @@ namespace NESEmulator
         public void Clock(ulong clockCounter)
         {
             _currentClockCycle = clockCounter;
+
             // As we progress through scanlines and cycles, the PPU is effectively
             // a state machine going through the motions of fetching background 
             // information and sprite information, compositing them into a pixel
@@ -864,7 +866,7 @@ namespace NESEmulator
             // will map the address onto the seperate small RAM attached to the PPU bus.
         }
 
-        #region Scanline/Cycle operations
+#region Scanline/Cycle operations
 
         private void advanceCycle()
         {
@@ -1063,7 +1065,7 @@ namespace NESEmulator
 
                 return;
             }
-            Log.Debug($"[_frameCounter={_frameCounter}] Rendering on, odd frame - skipping cycle.");
+            //Log.Debug($"[_frameCounter={_frameCounter}] Rendering on, odd frame - skipping cycle.");
             advanceFrame();
 
             //_cycleOpItr = _cycleOperations[_scanline].GetEnumerator();
@@ -1256,13 +1258,17 @@ namespace NESEmulator
             // Effectively end of frame, so set vertical blank flag
             if (!_frameSuppressVBL)
             {
+#if DEBUG_VBL
                 Log.Debug($"[{_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] [_frameCounter={_frameCounter}] VBL Start");
+#endif
                 _status.VerticalBlank = true;
                 checkAndRaiseNMI();
             }
             else
             {
+#if DEBUG_VBL
                 Log.Debug($"[{_currentClockCycle / 3}] [_frameCounter={_frameCounter}] VBL Suppressed.");
+#endif
                 //Console.WriteLine("VBL suppressed");
             }
         }
@@ -1286,7 +1292,9 @@ namespace NESEmulator
 
         private void clearVerticalBlank()
         {
+#if DEBUG_VBL
             Log.Debug($"[{_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] [_frameCounter={_frameCounter}] End of VBL");
+#endif
             // Effectively start of new frame, so clear vertical blank flag
             _status.VerticalBlank = false;
             _frameSuppressVBL = false;
@@ -1424,7 +1432,7 @@ namespace NESEmulator
             return sprite_pattern_addr_lo;
         }
 
-        #endregion // Scanline/Cycle operations
+#endregion // Scanline/Cycle operations
 
         private void buildPalette()
         {
