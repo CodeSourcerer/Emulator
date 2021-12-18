@@ -63,5 +63,13 @@ namespace NESEmulator
             get => reg.TestBit(7);
             set => reg = reg.SetBit(7, value);
         }
+
+        public static explicit operator PPUControl(byte v)
+        {
+            return new PPUControl()
+            {
+                reg = v
+            };
+        }
     }
 }

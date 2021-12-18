@@ -308,6 +308,9 @@ namespace NESEmulator
                             {
                                 _frameSuppressNMI = true;
                                 _frameSuppressVBL = true;
+#if DEBUG_VBL
+                                Log.Debug($"[{_currentClockCycle / 3}] NMI/VBL supressed");
+#endif
                                 data.SetBit(7, false);
                             }
                             // Special case 2: Reading on the same PPU clock or one later reads it as set, clears it, and suppresses the NMI for that frame.
@@ -321,6 +324,10 @@ namespace NESEmulator
                         if (_status.VerticalBlank)
                         {
                             Log.Debug($"[{_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] VBL cleared from status read");
+                        }
+                        else
+                        {
+                            Log.Debug($"[{_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] Status read, VBL was not set");
                         }
 #endif
                         // Clear the vertical blanking flag
@@ -377,6 +384,14 @@ namespace NESEmulator
                     case 0x0000:    // Control
                         if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
 
+#if DEBUG_VBL
+                        if (((PPUControl)data).EnableNMI != _control.EnableNMI)
+                        {
+                            // Reversed, because this is about to change
+                            string nmiEnabled = _control.EnableNMI ? "Disabled" : "Enabled";
+                            Log.Debug($"[{_currentClockCycle / 3}] {nmiEnabled} NMI");
+                        }
+#endif
                         _control.reg = data;
                         _tram_addr.NameTableX = _control.NameTableX;
                         _tram_addr.NameTableY = _control.NameTableY;
@@ -1269,7 +1284,6 @@ namespace NESEmulator
 #if DEBUG_VBL
                 Log.Debug($"[{_currentClockCycle / 3}] [_frameCounter={_frameCounter}] VBL Suppressed.");
 #endif
-                //Console.WriteLine("VBL suppressed");
             }
         }
 

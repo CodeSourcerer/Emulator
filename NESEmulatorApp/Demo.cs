@@ -91,7 +91,7 @@ namespace NESEmulatorApp
             //string romfile = "tests\\ice_climber.nes";
             //string romfile = "tests\\pacman-namco.nes";
             //string romfile = "tests\\ducktales.nes";
-            string romfile = "tests\\young_indy.nes";
+            //string romfile = "tests\\young_indy.nes";
             // Mapper 1
             //string romfile = "tests\\zelda.nes";
             //string romfile = "tests\\zeldaII.nes";
@@ -102,7 +102,9 @@ namespace NESEmulatorApp
             //string romfile = "tests\\1.Branch_Basics.nes";
             //string romfile = "tests\\2.Backward_Branch.nes";
             //string romfile = "tests\\3.Forward_Branch.nes";
-            //string romfile = "tests\\ppu_vbl_nmi.nes";
+            string romfile = "tests\\instr_timing\\1-instr_timing.nes";
+            //string romfile = "tests\\ppu_vbl_nmi.nes"; // displays white screen
+            //string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes";
             //string romfile = "tests\\cpu_interrupts.nes";
             //string romfile = "tests\\apu_test.nes";
             // APU tests
