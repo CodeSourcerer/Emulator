@@ -782,9 +782,13 @@ namespace NESEmulator
         /// </remarks>
         private byte ZPX()
         {
-            addr_abs = (ushort)(read(pc) + this.x);
+            addr_abs = read(pc);
             pc++;
-            addr_abs &= 0x00ff;
+            // The CPU performs a "dummy" read from the address here.
+            Log.Debug($"[{clock_count}] Dummy read from addr_abs at 0x{addr_abs:X4}, index = 0x{x:X2}");
+            read(addr_abs);
+            addr_abs += x;
+            addr_abs &= 0x00FF;
 
             return 0;
         }
@@ -798,9 +802,13 @@ namespace NESEmulator
         /// </remarks>
         private byte ZPY()
         {
-            addr_abs = (ushort)(read(pc) + this.y);
+            addr_abs = read(pc);
             pc++;
-            addr_abs &= 0x00ff;
+            // The CPU performs a "dummy" read from the address here.
+            Log.Debug($"[{clock_count}] Dummy read from addr_abs at 0x{addr_abs:X4}, index = 0x{y:X2}");
+            read(addr_abs);
+            addr_abs += y;
+            addr_abs &= 0x00FF;
 
             return 0;
         }
@@ -854,18 +862,26 @@ namespace NESEmulator
         /// </remarks>
         private byte ABX()
         {
-            ushort lo = read(pc);
+            byte lo = read(pc);
             pc++;
-            ushort hi = read(pc);
+            byte hi = read(pc);
             pc++;
 
             addr_abs = (ushort)((hi << 8) | lo);
+            ushort addr_eff = (ushort)((hi << 8) | (lo + x));
             addr_abs += x;
 
-            if ((addr_abs & 0xFF00) != (hi << 8))
+            if ((addr_abs & 0xFF00) != (hi << 8) || opcode_lookup[opcode].instr_type == CPUInstructionType.R_M_W)
+            {
+                // perform "dummy read"
+                Log.Debug($"[{clock_count}] {{ABX}} Dummy read from addr_eff at 0x{addr_eff:X4}. addr_abs = 0x{addr_abs:X4}, index = 0x{x:X2}");
+                read(addr_eff);
                 return 1;
+            }
             else
+            {
                 return 0;
+            }
         }
 
         /// <summary>
@@ -885,12 +901,20 @@ namespace NESEmulator
             pc++;
 
             addr_abs = (ushort)((hi << 8) | lo);
+            ushort addr_eff = (ushort)((hi << 8) | (lo + y));
             addr_abs += y;
 
             if ((addr_abs & 0xFF00) != (hi << 8))
+            {
+                // perform "dummy read"
+                Log.Debug($"[{clock_count}] Dummy read from addr_eff at 0x{addr_eff:X4}. addr_abs = 0x{addr_abs:X4}, index = 0x{y:X2}");
+                read(addr_eff);
                 return 1;
+            }
             else
+            {
                 return 0;
+            }
         }
 
         /// <summary>
@@ -941,11 +965,16 @@ namespace NESEmulator
         /// </remarks>
         private byte IZX()
         {
-            ushort t = read(pc);
+            ushort ptr = read(pc);
             pc++;
 
-            ushort lo = read((ushort)((ushort)(t + x) & 0x00FF));
-            ushort hi = read((ushort)((ushort)(t + x + 1) & 0x00FF));
+            // According to https://github.com/iliak/nes/blob/master/doc/6502_cpu.txt#L1191, it
+            // seems like the below should work but it causes dummy read tests to fail.
+            //ushort addr_eff = (ushort)((read(ptr) + x) & 0x00FF);
+            //ushort lo = read(addr_eff);
+            //ushort hi = read((ushort)((addr_eff + 1) & 0x00FF));
+            ushort lo = read((ushort)((ushort)(ptr + x) & 0x00FF));
+            ushort hi = read((ushort)((ushort)(ptr + x + 1) & 0x00FF));
 
             addr_abs = (ushort)((hi << 8) | lo);
 
@@ -963,19 +992,27 @@ namespace NESEmulator
         /// </remarks>
         private byte IZY()
         {
-            ushort t = read(pc);
+            ushort ptr = read(pc);
             pc++;
 
-            ushort lo = read((ushort)(t & 0x00FF));
-            ushort hi = read((ushort)((ushort)(t + 1) & 0x00FF));
+            ushort lo = read(ptr);
+            ushort hi = read((ushort)((ushort)(ptr + 1) & 0x00FF));
 
             addr_abs = (ushort)((hi << 8) | lo);
+            ushort addr_eff = (ushort)((hi << 8) | (lo + y));
             addr_abs += y;
 
             if ((addr_abs & 0xFF00) != (hi << 8))
+            {
+                // perform "dummy read"
+                Log.Debug($"[{clock_count}] {{IZY}} Dummy read from addr_eff at 0x{addr_eff:X4}. addr_abs = 0x{addr_abs:X4}, index = 0x{y:X2}");
+                read(addr_eff);
                 return 1;
+            }
             else
+            {
                 return 0;
+            }
         }
 
 #endregion // Addressing Modes
@@ -1966,262 +2003,262 @@ namespace NESEmulator
         private void build_lookup()
         {
             this.opcode_lookup = new List<Instruction>() {
-                new Instruction() { name = "BRK", operation = BRK, addr_mode = IMM, cycles = 7 },
-                new Instruction() { name = "ORA", operation = ORA, addr_mode = IZX, cycles = 6 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 8 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = ZP0, cycles = 3 },
-                new Instruction() { name = "ORA", operation = ORA, addr_mode = ZP0, cycles = 3 },
-                new Instruction() { name = "ASL", operation = ASL, addr_mode = ZP0, cycles = 5 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 5 },
-                new Instruction() { name = "PHP", operation = PHP, addr_mode = IMP, cycles = 3 },
-                new Instruction() { name = "ORA", operation = ORA, addr_mode = IMM, cycles = 2 },
-                new Instruction() { name = "ASL", operation = ASL, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = ABS, cycles = 4 },
-                new Instruction() { name = "ORA", operation = ORA, addr_mode = ABS, cycles = 4 },
-                new Instruction() { name = "ASL", operation = ASL, addr_mode = ABS, cycles = 6 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 6 },
-                new Instruction() { name = "BPL", operation = BPL, addr_mode = REL, cycles = 2 }, // 0x10
-                new Instruction() { name = "ORA", operation = ORA, addr_mode = IZY, cycles = 5 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 8 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = ZPX, cycles = 4 },
-                new Instruction() { name = "ORA", operation = ORA, addr_mode = ZPX, cycles = 4 },
-                new Instruction() { name = "ASL", operation = ASL, addr_mode = ZPX, cycles = 6 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 6 },
-                new Instruction() { name = "CLC", operation = CLC, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "ORA", operation = ORA, addr_mode = ABY, cycles = 4 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 7 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = ABX, cycles = 4 }, // 0x1C
-                new Instruction() { name = "ORA", operation = ORA, addr_mode = ABX, cycles = 4 },
-                new Instruction() { name = "ASL", operation = ASL, addr_mode = ABX, cycles = 7 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 7 },
-                new Instruction() { name = "JSR", operation = JSR, addr_mode = ABS, cycles = 6 }, // 0x20
-                new Instruction() { name = "AND", operation = AND, addr_mode = IZX, cycles = 6 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 8 },
-                new Instruction() { name = "BIT", operation = BIT, addr_mode = ZP0, cycles = 3 },
-                new Instruction() { name = "AND", operation = AND, addr_mode = ZP0, cycles = 3 },
-                new Instruction() { name = "ROL", operation = ROL, addr_mode = ZP0, cycles = 5 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 5 },
-                new Instruction() { name = "PLP", operation = PLP, addr_mode = IMP, cycles = 4 },
-                new Instruction() { name = "AND", operation = AND, addr_mode = IMM, cycles = 2 },
-                new Instruction() { name = "ROL", operation = ROL, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "BIT", operation = BIT, addr_mode = ABS, cycles = 4 },
-                new Instruction() { name = "AND", operation = AND, addr_mode = ABS, cycles = 4 },
-                new Instruction() { name = "ROL", operation = ROL, addr_mode = ABS, cycles = 6 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 6 },
-                new Instruction() { name = "BMI", operation = BMI, addr_mode = REL, cycles = 2 }, // 0x30
-                new Instruction() { name = "AND", operation = AND, addr_mode = IZY, cycles = 5 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 8 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = ZPX, cycles = 4 }, // 0x34
-                new Instruction() { name = "AND", operation = AND, addr_mode = ZPX, cycles = 4 },
-                new Instruction() { name = "ROL", operation = ROL, addr_mode = ZPX, cycles = 6 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 6 },
-                new Instruction() { name = "SEC", operation = SEC, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "AND", operation = AND, addr_mode = ABY, cycles = 4 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 7 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = ABX, cycles = 4 }, // 0x3C
-                new Instruction() { name = "AND", operation = AND, addr_mode = ABX, cycles = 4 },
-                new Instruction() { name = "ROL", operation = ROL, addr_mode = ABX, cycles = 7 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 7 },
-                new Instruction() { name = "RTI", operation = RTI, addr_mode = IMP, cycles = 6 }, // 0x40
-                new Instruction() { name = "EOR", operation = EOR, addr_mode = IZX, cycles = 6 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 8 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = ZP0, cycles = 3 }, // 0x44
-                new Instruction() { name = "EOR", operation = EOR, addr_mode = ZP0, cycles = 3 },
-                new Instruction() { name = "LSR", operation = LSR, addr_mode = ZP0, cycles = 5 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 5 },
-                new Instruction() { name = "PHA", operation = PHA, addr_mode = IMP, cycles = 3 },
-                new Instruction() { name = "EOR", operation = EOR, addr_mode = IMM, cycles = 2 },
-                new Instruction() { name = "LSR", operation = LSR, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "JMP", operation = JMP, addr_mode = ABS, cycles = 3 },
-                new Instruction() { name = "EOR", operation = EOR, addr_mode = ABS, cycles = 4 },
-                new Instruction() { name = "LSR", operation = LSR, addr_mode = ABS, cycles = 6 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 6 },
-                new Instruction() { name = "BVC", operation = BVC, addr_mode = REL, cycles = 2 }, // 0x50
-                new Instruction() { name = "EOR", operation = EOR, addr_mode = IZY, cycles = 5 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 8 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = ZPX, cycles = 4 }, // 0x54
-                new Instruction() { name = "EOR", operation = EOR, addr_mode = ZPX, cycles = 4 },
-                new Instruction() { name = "LSR", operation = LSR, addr_mode = ZPX, cycles = 6 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 6 },
-                new Instruction() { name = "CLI", operation = CLI, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "EOR", operation = EOR, addr_mode = ABY, cycles = 4 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 7 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = ABX, cycles = 4 }, // 0x5C
-                new Instruction() { name = "EOR", operation = EOR, addr_mode = ABX, cycles = 4 },
-                new Instruction() { name = "LSR", operation = LSR, addr_mode = ABX, cycles = 7 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 7 },
-                new Instruction() { name = "RTS", operation = RTS, addr_mode = IMP, cycles = 6 }, // 0x60
-                new Instruction() { name = "ADC", operation = ADC, addr_mode = IZX, cycles = 6 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 8 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = ZP0, cycles = 3 }, // 0x64
-                new Instruction() { name = "ADC", operation = ADC, addr_mode = ZP0, cycles = 3 },
-                new Instruction() { name = "ROR", operation = ROR, addr_mode = ZP0, cycles = 5 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 5 },
-                new Instruction() { name = "PLA", operation = PLA, addr_mode = IMP, cycles = 4 },
-                new Instruction() { name = "ADC", operation = ADC, addr_mode = IMM, cycles = 2 },
-                new Instruction() { name = "ROR", operation = ROR, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "JMP", operation = JMP, addr_mode = IND, cycles = 5 },
-                new Instruction() { name = "ADC", operation = ADC, addr_mode = ABS, cycles = 4 },
-                new Instruction() { name = "ROR", operation = ROR, addr_mode = ABS, cycles = 6 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 6 },
-                new Instruction() { name = "BVS", operation = BVS, addr_mode = REL, cycles = 2 }, // 0x70
-                new Instruction() { name = "ADC", operation = ADC, addr_mode = IZY, cycles = 5 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 8 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = ZPX, cycles = 4 }, // 0x74
-                new Instruction() { name = "ADC", operation = ADC, addr_mode = ZPX, cycles = 4 },
-                new Instruction() { name = "ROR", operation = ROR, addr_mode = ZPX, cycles = 6 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 6 },
-                new Instruction() { name = "SEI", operation = SEI, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "ADC", operation = ADC, addr_mode = ABY, cycles = 4 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 7 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = ABX, cycles = 4 }, // 0x7C
-                new Instruction() { name = "ADC", operation = ADC, addr_mode = ABX, cycles = 4 },
-                new Instruction() { name = "ROR", operation = ROR, addr_mode = ABX, cycles = 7 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 7 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = IMM, cycles = 2 }, // 0x80
-                new Instruction() { name = "STA", operation = STA, addr_mode = IZX, cycles = 6 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = IMM, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 6 },
-                new Instruction() { name = "STY", operation = STY, addr_mode = ZP0, cycles = 3 },
-                new Instruction() { name = "STA", operation = STA, addr_mode = ZP0, cycles = 3 },
-                new Instruction() { name = "STX", operation = STX, addr_mode = ZP0, cycles = 3 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 3 },
-                new Instruction() { name = "DEY", operation = DEY, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = IMM, cycles = 2 }, // 0x89
-                new Instruction() { name = "TXA", operation = TXA, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "STY", operation = STY, addr_mode = ABS, cycles = 4 },
-                new Instruction() { name = "STA", operation = STA, addr_mode = ABS, cycles = 4 },
-                new Instruction() { name = "STX", operation = STX, addr_mode = ABS, cycles = 4 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 4 },
-                new Instruction() { name = "BCC", operation = BCC, addr_mode = REL, cycles = 2 }, // 0x90
-                new Instruction() { name = "STA", operation = STA, addr_mode = IZY, cycles = 6 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 6 },
-                new Instruction() { name = "STY", operation = STY, addr_mode = ZPX, cycles = 4 },
-                new Instruction() { name = "STA", operation = STA, addr_mode = ZPX, cycles = 4 },
-                new Instruction() { name = "STX", operation = STX, addr_mode = ZPY, cycles = 4 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 4 },
-                new Instruction() { name = "TYA", operation = TYA, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "STA", operation = STA, addr_mode = ABY, cycles = 5 },
-                new Instruction() { name = "TXS", operation = TXS, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 5 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = IMP, cycles = 5 },
-                new Instruction() { name = "STA", operation = STA, addr_mode = ABX, cycles = 5 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 5 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 5 },
-                new Instruction() { name = "LDY", operation = LDY, addr_mode = IMM, cycles = 2 }, // 0xA0
-                new Instruction() { name = "LDA", operation = LDA, addr_mode = IZX, cycles = 6 },
-                new Instruction() { name = "LDX", operation = LDX, addr_mode = IMM, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 6 },
-                new Instruction() { name = "LDY", operation = LDY, addr_mode = ZP0, cycles = 3 },
-                new Instruction() { name = "LDA", operation = LDA, addr_mode = ZP0, cycles = 3 },
-                new Instruction() { name = "LDX", operation = LDX, addr_mode = ZP0, cycles = 3 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 3 },
-                new Instruction() { name = "TAY", operation = TAY, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "LDA", operation = LDA, addr_mode = IMM, cycles = 2 },
-                new Instruction() { name = "TAX", operation = TAX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "LDY", operation = LDY, addr_mode = ABS, cycles = 4 },
-                new Instruction() { name = "LDA", operation = LDA, addr_mode = ABS, cycles = 4 },
-                new Instruction() { name = "LDX", operation = LDX, addr_mode = ABS, cycles = 4 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 4 },
-                new Instruction() { name = "BCS", operation = BCS, addr_mode = REL, cycles = 2 }, // 0xB0
-                new Instruction() { name = "LDA", operation = LDA, addr_mode = IZY, cycles = 5 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 5 },
-                new Instruction() { name = "LDY", operation = LDY, addr_mode = ZPX, cycles = 4 },
-                new Instruction() { name = "LDA", operation = LDA, addr_mode = ZPX, cycles = 4 },
-                new Instruction() { name = "LDX", operation = LDX, addr_mode = ZPY, cycles = 4 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 4 },
-                new Instruction() { name = "CLV", operation = CLV, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "LDA", operation = LDA, addr_mode = ABY, cycles = 4 },
-                new Instruction() { name = "TSX", operation = TSX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 4 },
-                new Instruction() { name = "LDY", operation = LDY, addr_mode = ABX, cycles = 4 },
-                new Instruction() { name = "LDA", operation = LDA, addr_mode = ABX, cycles = 4 },
-                new Instruction() { name = "LDX", operation = LDX, addr_mode = ABY, cycles = 4 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 4 },
-                new Instruction() { name = "CPY", operation = CPY, addr_mode = IMM, cycles = 2 }, // 0xC0
-                new Instruction() { name = "CMP", operation = CMP, addr_mode = IZX, cycles = 6 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = IMM, cycles = 2 }, // 0xC2
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 8 },
-                new Instruction() { name = "CPY", operation = CPY, addr_mode = ZP0, cycles = 3 },
-                new Instruction() { name = "CMP", operation = CMP, addr_mode = ZP0, cycles = 3 },
-                new Instruction() { name = "DEC", operation = DEC, addr_mode = ZP0, cycles = 5 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 5 },
-                new Instruction() { name = "INY", operation = INY, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "CMP", operation = CMP, addr_mode = IMM, cycles = 2 },
-                new Instruction() { name = "DEX", operation = DEX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "CPY", operation = CPY, addr_mode = ABS, cycles = 4 },
-                new Instruction() { name = "CMP", operation = CMP, addr_mode = ABS, cycles = 4 },
-                new Instruction() { name = "DEC", operation = DEC, addr_mode = ABS, cycles = 6 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 6 }, // 0xCF
-                new Instruction() { name = "BNE", operation = BNE, addr_mode = REL, cycles = 2 },
-                new Instruction() { name = "CMP", operation = CMP, addr_mode = IZY, cycles = 5 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 8 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = ZPX, cycles = 4 }, // 0xD4
-                new Instruction() { name = "CMP", operation = CMP, addr_mode = ZPX, cycles = 4 },
-                new Instruction() { name = "DEC", operation = DEC, addr_mode = ZPX, cycles = 6 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 6 },
-                new Instruction() { name = "CLD", operation = CLD, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "CMP", operation = CMP, addr_mode = ABY, cycles = 4 },
-                new Instruction() { name = "NOP", operation = NOP, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 7 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = ABX, cycles = 4 }, // 0xDC
-                new Instruction() { name = "CMP", operation = CMP, addr_mode = ABX, cycles = 4 },
-                new Instruction() { name = "DEC", operation = DEC, addr_mode = ABX, cycles = 7 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 7 },
-                new Instruction() { name = "CPX", operation = CPX, addr_mode = IMM, cycles = 2 }, // 0xE0
-                new Instruction() { name = "SBC", operation = SBC, addr_mode = IZX, cycles = 6 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = IMM, cycles = 2 }, // 0xE2
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 8 },
-                new Instruction() { name = "CPX", operation = CPX, addr_mode = ZP0, cycles = 3 },
-                new Instruction() { name = "SBC", operation = SBC, addr_mode = ZP0, cycles = 3 },
-                new Instruction() { name = "INC", operation = INC, addr_mode = ZP0, cycles = 5 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 5 },
-                new Instruction() { name = "INX", operation = INX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "SBC", operation = SBC, addr_mode = IMM, cycles = 2 },
-                new Instruction() { name = "NOP", operation = NOP, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = SBC, addr_mode = IMM, cycles = 2 }, // 0xEB
-                new Instruction() { name = "CPX", operation = CPX, addr_mode = ABS, cycles = 4 },
-                new Instruction() { name = "SBC", operation = SBC, addr_mode = ABS, cycles = 4 },
-                new Instruction() { name = "INC", operation = INC, addr_mode = ABS, cycles = 6 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 6 },
-                new Instruction() { name = "BEQ", operation = BEQ, addr_mode = REL, cycles = 2 }, // 0xF0
-                new Instruction() { name = "SBC", operation = SBC, addr_mode = IZY, cycles = 5 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 8 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = ZPX, cycles = 4 }, // 0xF4
-                new Instruction() { name = "SBC", operation = SBC, addr_mode = ZPX, cycles = 4 },
-                new Instruction() { name = "INC", operation = INC, addr_mode = ZPX, cycles = 6 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 6 },
-                new Instruction() { name = "SED", operation = SED, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "SBC", operation = SBC, addr_mode = ABY, cycles = 4 },
-                new Instruction() { name = "NOP", operation = NOP, addr_mode = IMP, cycles = 2 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 7 },
-                new Instruction() { name = "???", operation = NOP, addr_mode = ABX, cycles = 4 }, // 0xFC
-                new Instruction() { name = "SBC", operation = SBC, addr_mode = ABX, cycles = 4 },
-                new Instruction() { name = "INC", operation = INC, addr_mode = ABX, cycles = 7 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, cycles = 7 }
+                new Instruction() { name = "BRK", operation = BRK, addr_mode = IMM, instr_type = CPUInstructionType.Special, cycles = 7 },
+                new Instruction() { name = "ORA", operation = ORA, addr_mode = IZX, instr_type = CPUInstructionType.Read,    cycles = 6 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 8 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = ZP0, instr_type = CPUInstructionType.Read,    cycles = 3 },
+                new Instruction() { name = "ORA", operation = ORA, addr_mode = ZP0, instr_type = CPUInstructionType.Read,    cycles = 3 },
+                new Instruction() { name = "ASL", operation = ASL, addr_mode = ZP0, instr_type = CPUInstructionType.R_M_W,   cycles = 5 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 5 },
+                new Instruction() { name = "PHP", operation = PHP, addr_mode = IMP, instr_type = CPUInstructionType.R_W,     cycles = 3 },
+                new Instruction() { name = "ORA", operation = ORA, addr_mode = IMM, instr_type = CPUInstructionType.Read,    cycles = 2 },
+                new Instruction() { name = "ASL", operation = ASL, addr_mode = IMP, instr_type = CPUInstructionType.R_M_W,   cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "ORA", operation = ORA, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "ASL", operation = ASL, addr_mode = ABS, instr_type = CPUInstructionType.R_M_W,   cycles = 6 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
+                new Instruction() { name = "BPL", operation = BPL, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 2 }, // 0x10
+                new Instruction() { name = "ORA", operation = ORA, addr_mode = IZY, instr_type = CPUInstructionType.Read,    cycles = 5 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 8 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = ZPX, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "ORA", operation = ORA, addr_mode = ZPX, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "ASL", operation = ASL, addr_mode = ZPX, instr_type = CPUInstructionType.R_M_W,   cycles = 6 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
+                new Instruction() { name = "CLC", operation = CLC, addr_mode = IMP, instr_type = CPUInstructionType.Read,    cycles = 2 },
+                new Instruction() { name = "ORA", operation = ORA, addr_mode = ABY, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = IMP, instr_type = CPUInstructionType.Read,    cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 7 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = ABX, instr_type = CPUInstructionType.Read,    cycles = 4 }, // 0x1C
+                new Instruction() { name = "ORA", operation = ORA, addr_mode = ABX, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "ASL", operation = ASL, addr_mode = ABX, instr_type = CPUInstructionType.R_M_W,   cycles = 7 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 7 },
+                new Instruction() { name = "JSR", operation = JSR, addr_mode = ABS, instr_type = CPUInstructionType.Branch,  cycles = 6 }, // 0x20
+                new Instruction() { name = "AND", operation = AND, addr_mode = IZX, instr_type = CPUInstructionType.Read,    cycles = 6 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 8 },
+                new Instruction() { name = "BIT", operation = BIT, addr_mode = ZP0, instr_type = CPUInstructionType.Read,    cycles = 3 },
+                new Instruction() { name = "AND", operation = AND, addr_mode = ZP0, instr_type = CPUInstructionType.Read,    cycles = 3 },
+                new Instruction() { name = "ROL", operation = ROL, addr_mode = ZP0, instr_type = CPUInstructionType.R_M_W,   cycles = 5 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 5 },
+                new Instruction() { name = "PLP", operation = PLP, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 4 },
+                new Instruction() { name = "AND", operation = AND, addr_mode = IMM, instr_type = CPUInstructionType.Read,    cycles = 2 },
+                new Instruction() { name = "ROL", operation = ROL, addr_mode = IMP, instr_type = CPUInstructionType.R_M_W,   cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "BIT", operation = BIT, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "AND", operation = AND, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "ROL", operation = ROL, addr_mode = ABS, instr_type = CPUInstructionType.R_M_W,   cycles = 6 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
+                new Instruction() { name = "BMI", operation = BMI, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 2 }, // 0x30
+                new Instruction() { name = "AND", operation = AND, addr_mode = IZY, instr_type = CPUInstructionType.Read,    cycles = 5 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 8 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = ZPX, instr_type = CPUInstructionType.Read,    cycles = 4 }, // 0x34
+                new Instruction() { name = "AND", operation = AND, addr_mode = ZPX, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "ROL", operation = ROL, addr_mode = ZPX, instr_type = CPUInstructionType.R_M_W,   cycles = 6 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
+                new Instruction() { name = "SEC", operation = SEC, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "AND", operation = AND, addr_mode = ABY, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = IMP, instr_type = CPUInstructionType.Read,    cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 7 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = ABX, instr_type = CPUInstructionType.Read,    cycles = 4 }, // 0x3C
+                new Instruction() { name = "AND", operation = AND, addr_mode = ABX, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "ROL", operation = ROL, addr_mode = ABX, instr_type = CPUInstructionType.R_M_W,   cycles = 7 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 7 },
+                new Instruction() { name = "RTI", operation = RTI, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 }, // 0x40
+                new Instruction() { name = "EOR", operation = EOR, addr_mode = IZX, instr_type = CPUInstructionType.Read,    cycles = 6 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 8 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = ZP0, instr_type = CPUInstructionType.Read,    cycles = 3 }, // 0x44
+                new Instruction() { name = "EOR", operation = EOR, addr_mode = ZP0, instr_type = CPUInstructionType.Read,    cycles = 3 },
+                new Instruction() { name = "LSR", operation = LSR, addr_mode = ZP0, instr_type = CPUInstructionType.R_M_W,   cycles = 5 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 5 },
+                new Instruction() { name = "PHA", operation = PHA, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 3 },
+                new Instruction() { name = "EOR", operation = EOR, addr_mode = IMM, instr_type = CPUInstructionType.Read,    cycles = 2 },
+                new Instruction() { name = "LSR", operation = LSR, addr_mode = IMP, instr_type = CPUInstructionType.R_M_W,   cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "JMP", operation = JMP, addr_mode = ABS, instr_type = CPUInstructionType.Branch,  cycles = 3 },
+                new Instruction() { name = "EOR", operation = EOR, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "LSR", operation = LSR, addr_mode = ABS, instr_type = CPUInstructionType.R_M_W,   cycles = 6 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
+                new Instruction() { name = "BVC", operation = BVC, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 2 }, // 0x50
+                new Instruction() { name = "EOR", operation = EOR, addr_mode = IZY, instr_type = CPUInstructionType.Read,    cycles = 5 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 8 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = ZPX, instr_type = CPUInstructionType.Read,    cycles = 4 }, // 0x54
+                new Instruction() { name = "EOR", operation = EOR, addr_mode = ZPX, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "LSR", operation = LSR, addr_mode = ZPX, instr_type = CPUInstructionType.R_M_W,   cycles = 6 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
+                new Instruction() { name = "CLI", operation = CLI, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "EOR", operation = EOR, addr_mode = ABY, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = IMP, instr_type = CPUInstructionType.Read,    cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 7 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = ABX, instr_type = CPUInstructionType.Read,    cycles = 4 }, // 0x5C
+                new Instruction() { name = "EOR", operation = EOR, addr_mode = ABX, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "LSR", operation = LSR, addr_mode = ABX, instr_type = CPUInstructionType.R_M_W,   cycles = 7 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 7 },
+                new Instruction() { name = "RTS", operation = RTS, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 }, // 0x60
+                new Instruction() { name = "ADC", operation = ADC, addr_mode = IZX, instr_type = CPUInstructionType.Read,    cycles = 6 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 8 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = ZP0, instr_type = CPUInstructionType.Read,    cycles = 3 }, // 0x64
+                new Instruction() { name = "ADC", operation = ADC, addr_mode = ZP0, instr_type = CPUInstructionType.Read,    cycles = 3 },
+                new Instruction() { name = "ROR", operation = ROR, addr_mode = ZP0, instr_type = CPUInstructionType.R_M_W,   cycles = 5 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 5 },
+                new Instruction() { name = "PLA", operation = PLA, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 4 },
+                new Instruction() { name = "ADC", operation = ADC, addr_mode = IMM, instr_type = CPUInstructionType.Read,    cycles = 2 },
+                new Instruction() { name = "ROR", operation = ROR, addr_mode = IMP, instr_type = CPUInstructionType.R_M_W,   cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "JMP", operation = JMP, addr_mode = IND, instr_type = CPUInstructionType.Branch,  cycles = 5 },
+                new Instruction() { name = "ADC", operation = ADC, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "ROR", operation = ROR, addr_mode = ABS, instr_type = CPUInstructionType.R_M_W,   cycles = 6 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
+                new Instruction() { name = "BVS", operation = BVS, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 2 }, // 0x70
+                new Instruction() { name = "ADC", operation = ADC, addr_mode = IZY, instr_type = CPUInstructionType.Read,    cycles = 5 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 8 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = ZPX, instr_type = CPUInstructionType.Read,    cycles = 4 }, // 0x74
+                new Instruction() { name = "ADC", operation = ADC, addr_mode = ZPX, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "ROR", operation = ROR, addr_mode = ZPX, instr_type = CPUInstructionType.R_M_W,   cycles = 6 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
+                new Instruction() { name = "SEI", operation = SEI, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "ADC", operation = ADC, addr_mode = ABY, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = IMP, instr_type = CPUInstructionType.Read,    cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 7 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = ABX, instr_type = CPUInstructionType.Read,    cycles = 4 }, // 0x7C
+                new Instruction() { name = "ADC", operation = ADC, addr_mode = ABX, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "ROR", operation = ROR, addr_mode = ABX, instr_type = CPUInstructionType.R_M_W,   cycles = 7 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 7 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = IMM, instr_type = CPUInstructionType.Read,    cycles = 2 }, // 0x80
+                new Instruction() { name = "STA", operation = STA, addr_mode = IZX, instr_type = CPUInstructionType.Write,   cycles = 6 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = IMM, instr_type = CPUInstructionType.Read,    cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
+                new Instruction() { name = "STY", operation = STY, addr_mode = ZP0, instr_type = CPUInstructionType.Write,   cycles = 3 },
+                new Instruction() { name = "STA", operation = STA, addr_mode = ZP0, instr_type = CPUInstructionType.Write,   cycles = 3 },
+                new Instruction() { name = "STX", operation = STX, addr_mode = ZP0, instr_type = CPUInstructionType.Write,   cycles = 3 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 3 },
+                new Instruction() { name = "DEY", operation = DEY, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = IMM, instr_type = CPUInstructionType.Read,    cycles = 2 }, // 0x89
+                new Instruction() { name = "TXA", operation = TXA, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "STY", operation = STY, addr_mode = ABS, instr_type = CPUInstructionType.Write,   cycles = 4 },
+                new Instruction() { name = "STA", operation = STA, addr_mode = ABS, instr_type = CPUInstructionType.Write,   cycles = 4 },
+                new Instruction() { name = "STX", operation = STX, addr_mode = ABS, instr_type = CPUInstructionType.Write,   cycles = 4 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 4 },
+                new Instruction() { name = "BCC", operation = BCC, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 2 }, // 0x90
+                new Instruction() { name = "STA", operation = STA, addr_mode = IZY, instr_type = CPUInstructionType.Write,   cycles = 6 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
+                new Instruction() { name = "STY", operation = STY, addr_mode = ZPX, instr_type = CPUInstructionType.Write,   cycles = 4 },
+                new Instruction() { name = "STA", operation = STA, addr_mode = ZPX, instr_type = CPUInstructionType.Write,   cycles = 4 },
+                new Instruction() { name = "STX", operation = STX, addr_mode = ZPY, instr_type = CPUInstructionType.Write,   cycles = 4 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 4 },
+                new Instruction() { name = "TYA", operation = TYA, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "STA", operation = STA, addr_mode = ABY, instr_type = CPUInstructionType.Write,   cycles = 5 },
+                new Instruction() { name = "TXS", operation = TXS, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 5 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = IMP, instr_type = CPUInstructionType.Read,    cycles = 5 },
+                new Instruction() { name = "STA", operation = STA, addr_mode = ABX, instr_type = CPUInstructionType.Write,   cycles = 5 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 5 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 5 },
+                new Instruction() { name = "LDY", operation = LDY, addr_mode = IMM, instr_type = CPUInstructionType.Read,    cycles = 2 }, // 0xA0
+                new Instruction() { name = "LDA", operation = LDA, addr_mode = IZX, instr_type = CPUInstructionType.Read,    cycles = 6 },
+                new Instruction() { name = "LDX", operation = LDX, addr_mode = IMM, instr_type = CPUInstructionType.Read,    cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
+                new Instruction() { name = "LDY", operation = LDY, addr_mode = ZP0, instr_type = CPUInstructionType.Read,    cycles = 3 },
+                new Instruction() { name = "LDA", operation = LDA, addr_mode = ZP0, instr_type = CPUInstructionType.Read,    cycles = 3 },
+                new Instruction() { name = "LDX", operation = LDX, addr_mode = ZP0, instr_type = CPUInstructionType.Read,    cycles = 3 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 3 },
+                new Instruction() { name = "TAY", operation = TAY, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "LDA", operation = LDA, addr_mode = IMM, instr_type = CPUInstructionType.Read,    cycles = 2 },
+                new Instruction() { name = "TAX", operation = TAX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "LDY", operation = LDY, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "LDA", operation = LDA, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "LDX", operation = LDX, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 4 },
+                new Instruction() { name = "BCS", operation = BCS, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 2 }, // 0xB0
+                new Instruction() { name = "LDA", operation = LDA, addr_mode = IZY, instr_type = CPUInstructionType.Read,    cycles = 5 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 5 },
+                new Instruction() { name = "LDY", operation = LDY, addr_mode = ZPX, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "LDA", operation = LDA, addr_mode = ZPX, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "LDX", operation = LDX, addr_mode = ZPY, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 4 },
+                new Instruction() { name = "CLV", operation = CLV, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "LDA", operation = LDA, addr_mode = ABY, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "TSX", operation = TSX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 4 },
+                new Instruction() { name = "LDY", operation = LDY, addr_mode = ABX, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "LDA", operation = LDA, addr_mode = ABX, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "LDX", operation = LDX, addr_mode = ABY, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 4 },
+                new Instruction() { name = "CPY", operation = CPY, addr_mode = IMM, instr_type = CPUInstructionType.Read,    cycles = 2 }, // 0xC0
+                new Instruction() { name = "CMP", operation = CMP, addr_mode = IZX, instr_type = CPUInstructionType.Read,    cycles = 6 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = IMM, instr_type = CPUInstructionType.Read,    cycles = 2 }, // 0xC2
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 8 },
+                new Instruction() { name = "CPY", operation = CPY, addr_mode = ZP0, instr_type = CPUInstructionType.Read,    cycles = 3 },
+                new Instruction() { name = "CMP", operation = CMP, addr_mode = ZP0, instr_type = CPUInstructionType.Read,    cycles = 3 },
+                new Instruction() { name = "DEC", operation = DEC, addr_mode = ZP0, instr_type = CPUInstructionType.R_M_W,   cycles = 5 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 5 },
+                new Instruction() { name = "INY", operation = INY, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "CMP", operation = CMP, addr_mode = IMM, instr_type = CPUInstructionType.Read,    cycles = 2 },
+                new Instruction() { name = "DEX", operation = DEX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "CPY", operation = CPY, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "CMP", operation = CMP, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "DEC", operation = DEC, addr_mode = ABS, instr_type = CPUInstructionType.R_M_W,   cycles = 6 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 }, // 0xCF
+                new Instruction() { name = "BNE", operation = BNE, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 2 },
+                new Instruction() { name = "CMP", operation = CMP, addr_mode = IZY, instr_type = CPUInstructionType.Read,    cycles = 5 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 8 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = ZPX, instr_type = CPUInstructionType.Read,    cycles = 4 }, // 0xD4
+                new Instruction() { name = "CMP", operation = CMP, addr_mode = ZPX, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "DEC", operation = DEC, addr_mode = ZPX, instr_type = CPUInstructionType.R_M_W,   cycles = 6 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
+                new Instruction() { name = "CLD", operation = CLD, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "CMP", operation = CMP, addr_mode = ABY, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "NOP", operation = NOP, addr_mode = IMP, instr_type = CPUInstructionType.Read,    cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 7 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = ABX, instr_type = CPUInstructionType.Read,    cycles = 4 }, // 0xDC
+                new Instruction() { name = "CMP", operation = CMP, addr_mode = ABX, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "DEC", operation = DEC, addr_mode = ABX, instr_type = CPUInstructionType.R_M_W,   cycles = 7 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 7 },
+                new Instruction() { name = "CPX", operation = CPX, addr_mode = IMM, instr_type = CPUInstructionType.Read,    cycles = 2 }, // 0xE0
+                new Instruction() { name = "SBC", operation = SBC, addr_mode = IZX, instr_type = CPUInstructionType.Read,    cycles = 6 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = IMM, instr_type = CPUInstructionType.Read,    cycles = 2 }, // 0xE2
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 8 },
+                new Instruction() { name = "CPX", operation = CPX, addr_mode = ZP0, instr_type = CPUInstructionType.Read,    cycles = 3 },
+                new Instruction() { name = "SBC", operation = SBC, addr_mode = ZP0, instr_type = CPUInstructionType.Read,    cycles = 3 },
+                new Instruction() { name = "INC", operation = INC, addr_mode = ZP0, instr_type = CPUInstructionType.R_M_W,   cycles = 5 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 5 },
+                new Instruction() { name = "INX", operation = INX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "SBC", operation = SBC, addr_mode = IMM, instr_type = CPUInstructionType.Read,    cycles = 2 },
+                new Instruction() { name = "NOP", operation = NOP, addr_mode = IMP, instr_type = CPUInstructionType.Read,    cycles = 2 },
+                new Instruction() { name = "???", operation = SBC, addr_mode = IMM, instr_type = CPUInstructionType.Read,    cycles = 2 }, // 0xEB
+                new Instruction() { name = "CPX", operation = CPX, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "SBC", operation = SBC, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "INC", operation = INC, addr_mode = ABS, instr_type = CPUInstructionType.R_M_W,   cycles = 6 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
+                new Instruction() { name = "BEQ", operation = BEQ, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 2 }, // 0xF0
+                new Instruction() { name = "SBC", operation = SBC, addr_mode = IZY, instr_type = CPUInstructionType.Read,    cycles = 5 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 8 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = ZPX, instr_type = CPUInstructionType.Read,    cycles = 4 }, // 0xF4
+                new Instruction() { name = "SBC", operation = SBC, addr_mode = ZPX, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "INC", operation = INC, addr_mode = ZPX, instr_type = CPUInstructionType.R_M_W,   cycles = 6 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
+                new Instruction() { name = "SED", operation = SED, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
+                new Instruction() { name = "SBC", operation = SBC, addr_mode = ABY, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "NOP", operation = NOP, addr_mode = IMP, instr_type = CPUInstructionType.Read,    cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 7 },
+                new Instruction() { name = "???", operation = NOP, addr_mode = ABX, instr_type = CPUInstructionType.Read,    cycles = 4 }, // 0xFC
+                new Instruction() { name = "SBC", operation = SBC, addr_mode = ABX, instr_type = CPUInstructionType.Read,    cycles = 4 },
+                new Instruction() { name = "INC", operation = INC, addr_mode = ABX, instr_type = CPUInstructionType.R_M_W,   cycles = 7 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 7 }
             };
         }
 

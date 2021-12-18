@@ -99,6 +99,7 @@ namespace NESEmulatorApp
 
             // Test roms
             //string romfile = "tests\\nestest.nes";
+            //string romfile = "tests\\instr_test_v5\\official_only.nes";
             //string romfile = "tests\\1.Branch_Basics.nes";
             //string romfile = "tests\\2.Backward_Branch.nes";
             //string romfile = "tests\\3.Forward_Branch.nes";
@@ -106,7 +107,7 @@ namespace NESEmulatorApp
             //string romfile = "tests\\instr_timing\\2-branch_timing.nes"; // passes
             //string romfile = "tests\\instr_misc\\01-abs_x_wrap.nes"; // passes
             //string romfile = "tests\\instr_misc\\02-branch_wrap.nes"; // passes
-            string romfile = "tests\\instr_misc\\03-dummy_reads.nes"; // fails
+            //string romfile = "tests\\instr_misc\\03-dummy_reads.nes"; // passes
             //string romfile = "tests\\ppu_vbl_nmi.nes"; // displays white screen
             //string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes";
             //string romfile = "tests\\cpu_interrupts.nes";

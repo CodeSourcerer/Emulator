@@ -35,5 +35,10 @@ namespace NESEmulator
         /// Cycle count for instruction
         /// </summary>
         public byte cycles;
+
+        /// <summary>
+        /// Instruction type
+        /// </summary>
+        public CPUInstructionType instr_type;
     }
 }
