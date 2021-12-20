@@ -1397,17 +1397,20 @@ namespace NESEmulator
         /// <returns></returns>
         private byte BRK()
         {
-            pc++;
+            // dummy read
+            read(pc);
 
-            setFlag(FLAGS6502.I, true);
             push((byte)((pc >> 8) & 0x00FF));
             push((byte)(pc & 0x00FF));
 
             setFlag(FLAGS6502.B, true);
             push((byte)status);
             setFlag(FLAGS6502.B, false);
+            setFlag(FLAGS6502.I, true);
 
-            pc = (ushort)(read(0xFFFE) | (read(0xFFFF) << 8));
+            byte lo = read(ADDR_IRQ);
+            byte hi = read(ADDR_IRQ + 1);
+            pc = (ushort)((hi << 8) | lo);
             return 0;
         }
 
@@ -1672,7 +1675,7 @@ namespace NESEmulator
         /// </remarks>
         private byte NOP()
         {
-            Log.Debug($"[{clock_count}] NOP Opcode: 0x{opcode:X2}");
+            //Log.Debug($"[{clock_count}] NOP Opcode: 0x{opcode:X2}");
             switch (opcode)
             {
                 case 0x1C:
