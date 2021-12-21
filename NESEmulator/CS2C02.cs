@@ -106,6 +106,9 @@ namespace NESEmulator
             _random = new Random();
 
             _status = new PPUStatus();
+            // https://wiki.nesdev.org/w/index.php?title=PPU_power_up_state
+            _status.reg.SetBit(7, true); // VBL set
+            _status.reg.SetBit(5, true); // sprite overflow set
             _mask   = new PPUMask();
             // often set (ref: https://wiki.nesdev.org/w/index.php?title=PPU_power_up_state)
             _status.VerticalBlank = true;

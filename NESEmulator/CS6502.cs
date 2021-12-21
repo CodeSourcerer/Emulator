@@ -273,8 +273,10 @@ namespace NESEmulator
             // Then push status register to the stack
             setFlag(FLAGS6502.B, false);
             setFlag(FLAGS6502.U, true);
-            setFlag(FLAGS6502.I, true);
             push((byte)status);
+            // "IRQ will be executed only when the I flag is clear.IRQ and BRK both set the I flag, whereas the NMI does not
+            // affect its state. (https://www.nesdev.org/6502_cpu.txt)
+            //setFlag(FLAGS6502.I, true);
 
             // Read new PC location from fixed address
             addr_abs = ADDR_NMI;
@@ -285,7 +287,7 @@ namespace NESEmulator
             _nmiPending = false;
 
             // NMI cycles
-            cycles = 8;
+            cycles = 7;
         }
 
         /// <summary>

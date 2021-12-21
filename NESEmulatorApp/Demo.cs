@@ -99,7 +99,7 @@ namespace NESEmulatorApp
 
             // Test roms
             //string romfile = "tests\\nestest.nes";
-            string romfile = "tests\\instr_test_v5\\official_only.nes"; // passes
+            //string romfile = "tests\\instr_test_v5\\official_only.nes"; // passes
             //string romfile = "tests\\1.Branch_Basics.nes";
             //string romfile = "tests\\2.Backward_Branch.nes";
             //string romfile = "tests\\3.Forward_Branch.nes";
@@ -110,8 +110,7 @@ namespace NESEmulatorApp
             //string romfile = "tests\\instr_misc\\03-dummy_reads.nes"; // passes
             //string romfile = "tests\\instr_misc\\04-dummy_reads_apu.nes";
             //string romfile = "tests\\ppu_vbl_nmi.nes"; // displays white screen
-            //string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes";
-            //string romfile = "tests\\cpu_interrupts.nes";
+            //string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes"; // failed #7 - vbl period too short
             //string romfile = "tests\\apu_test.nes";
             // APU tests
             //string romfile = "tests\\APU\\01.len_ctr.nes"; // passes
@@ -127,10 +126,12 @@ namespace NESEmulatorApp
             // From mmc3_test_2
             //string romfile = "tests\\mmc3_test_2\\1-clocking.nes";
             // From cpu_interrupts_v2
-            //string romfile = "tests\\1-cli_latency.nes"; // passes
-            //string romfile = "tests\\2-nmi_and_brk.nes";  // fails
-            //string romfile = "tests\\3-nmi_and_irq.nes";
-            //string romfile = "tests\\4-irq_and_dma.nes";
+            //string romfile = "tests\\cpu_interrupts.nes"; // white screen
+            //string romfile = "tests\\cpu_interrupts_v2\\1-cli_latency.nes"; // passes
+            string romfile = "tests\\cpu_interrupts_v2\\2-nmi_and_brk.nes"; // fails
+            //string romfile = "tests\\cpu_interrupts_v2\\3-nmi_and_irq.nes";
+            //string romfile = "tests\\cpu_interrupts_v2\\4-irq_and_dma.nes";
+            //string romfile = "tests\\cpu_interrupts_v2\\5-branch_delays_irq.nes";
             //string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes";
 
             if (args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]))
