@@ -98,7 +98,7 @@ namespace NESEmulatorApp
             //string romfile = "tests\\megaman2.nes";
 
             // Test roms
-            //string romfile = "tests\\nestest.nes";
+            string romfile = "tests\\nestest.nes";
             //string romfile = "tests\\instr_test_v5\\official_only.nes"; // passes
             //string romfile = "tests\\1.Branch_Basics.nes";
             //string romfile = "tests\\2.Backward_Branch.nes";
@@ -128,7 +128,7 @@ namespace NESEmulatorApp
             // From cpu_interrupts_v2
             //string romfile = "tests\\cpu_interrupts.nes"; // white screen
             //string romfile = "tests\\cpu_interrupts_v2\\1-cli_latency.nes"; // passes
-            string romfile = "tests\\cpu_interrupts_v2\\2-nmi_and_brk.nes"; // fails
+            //string romfile = "tests\\cpu_interrupts_v2\\2-nmi_and_brk.nes"; // fails
             //string romfile = "tests\\cpu_interrupts_v2\\3-nmi_and_irq.nes";
             //string romfile = "tests\\cpu_interrupts_v2\\4-irq_and_dma.nes";
             //string romfile = "tests\\cpu_interrupts_v2\\5-branch_delays_irq.nes";
@@ -149,7 +149,7 @@ namespace NESEmulatorApp
             if (!cartridge.ImageValid)
                 throw new ApplicationException("Invalid ROM image");
             nesBus.InsertCartridge(cartridge);
-            nesBus.Reset();
+            nesBus.PowerOn();
 
             pge.Start();
         }
@@ -236,15 +236,28 @@ namespace NESEmulatorApp
                     nesBus.PPU.FrameComplete = false;
                     break;
 
+                case Key.Semicolon:
+                    // Advance to CPU clock cycle
+                    while (nesBus.SystemClockCycle % 3 != 0)
+                        nesBus.clock();
+
+                    // execute one CPU clock worth
+                    for (int i = 0; i < 3; i++)
+                    {
+                        nesBus.clock();
+                    }
+                    break;
+
                 case Key.C:
                     do
                     {
                         nesBus.clock();
-                    } while (!nesBus.CPU.isComplete());
+                    } while (nesBus.CPU.isComplete());
                     do
                     {
                         nesBus.clock();
-                    } while (nesBus.CPU.isComplete());
+                    } while (!nesBus.CPU.isComplete());
+
                     break;
             }
         }
@@ -287,8 +300,8 @@ namespace NESEmulatorApp
             // Draw Ram Page 0x00
             //DrawRam(2, 2, 0x0000, 16, 16);
             //DrawRam(2, 182, 0x0100, 16, 16);
-            //DrawCpu(516, 2);
-            //DrawCode(516, 72, 26);
+            DrawCpu(416, 2);
+            //DrawCode(416, 72, 26);
             //DrawOam(270, 140, 0, 32);
             //DrawOam(500, 140, 32, 32);
 
@@ -306,7 +319,7 @@ namespace NESEmulatorApp
         private void pge_OnCreate(object sender, EventArgs e)
         {
             // Extract disassembly
-            //mapAsm = cpu.Disassemble(0x0000, 0xFFFF);
+            mapAsm = nesBus.CPU.Disassemble(0x0000, 0xFFFF);
 
             //cpu.Reset();
 

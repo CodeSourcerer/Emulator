@@ -275,6 +275,12 @@ namespace NESEmulator
             _cycleOpItr.MoveNext();
         }
 
+        public void PowerOn()
+        {
+            _cycleOpItr = _cycleOperations[_scanline].GetEnumerator();
+            _cycleOpItr.MoveNext();
+        }
+
         public bool Read(ushort addr, out byte data)
         {
             bool dataRead = false;

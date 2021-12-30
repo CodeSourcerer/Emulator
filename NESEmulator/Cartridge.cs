@@ -126,6 +126,11 @@ namespace NESEmulator
                 mapper.reset();
         }
 
+        public void PowerOn()
+        {
+            if (mapper != null)
+                mapper.PowerOn();
+        }
         /// <summary>
         /// Attempt to read data from cartridge from PPU bus.
         /// </summary>

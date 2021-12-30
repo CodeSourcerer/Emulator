@@ -84,6 +84,12 @@ namespace NESEmulator.Mappers
             updateCHRBankOffsets();
         }
 
+        public override void PowerOn()
+        {
+            _chrBank = 0;
+            updateCHRBankOffsets();
+        }
+
         private void updateCHRBankOffsets()
         {
             _pCHRBank = (uint)(_chrBank * 0x2000);

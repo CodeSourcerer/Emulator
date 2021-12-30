@@ -7,12 +7,13 @@ using System.Threading.Tasks;
 namespace NESEmulator
 {
     public delegate byte OpCode();
-    public delegate byte AddressingMode();
+    public delegate bool AddressingMode();
+    public delegate ushort CycleOp(ushort data);
 
     /// <summary>
     /// Used to compile and store opcodes in the opcode translation table.
     /// </summary>
-    struct Instruction
+    class Instruction
     {
         /// <summary>
         /// Instruction pneumonic
@@ -40,5 +41,9 @@ namespace NESEmulator
         /// Instruction type
         /// </summary>
         public CPUInstructionType instr_type;
+
+        public Instruction()
+        {
+        }
     }
 }

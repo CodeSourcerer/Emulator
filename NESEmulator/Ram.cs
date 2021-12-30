@@ -45,6 +45,9 @@ namespace NESEmulator
         public void Reset()
         { }
 
+        public void PowerOn()
+        { }
+
         public void Clock(ulong clockCounter)
         { }
     }

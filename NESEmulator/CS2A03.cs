@@ -212,6 +212,12 @@ namespace NESEmulator
             return dataRead;
         }
 
+        public void PowerOn()
+        {
+            _frameCounter.InterruptInhibit = true;
+            Write(ADDR_STATUS, 0x00);
+        }
+
         public void Reset()
         {
             _apuClockCounter = 0;

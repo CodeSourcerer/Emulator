@@ -250,6 +250,17 @@ namespace NESEmulator.Mappers
             updateCHRBankOffsets();
         }
 
+        public override void PowerOn()
+        {
+            _bankSelect = 0;
+            _irqCounter = 0;
+            _irqReload = 0;
+            _irqEnable = false;
+
+            updatePRGBankOffsets();
+            updateCHRBankOffsets();
+        }
+
         private void updatePRGBankOffsets()
         {
             _pPRGBank[1] = (uint)((_register[7] & 0x3F) * 0x2000);

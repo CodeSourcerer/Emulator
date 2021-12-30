@@ -9,5 +9,6 @@ namespace NESEmulator
         bool Read(ushort addr, out byte data);
         void Reset();
         void Clock(ulong clockCounter);
+        void PowerOn();
     }
 }

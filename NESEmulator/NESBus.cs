@@ -21,6 +21,7 @@ namespace NESEmulator
         public CS2A03 APU { get; private set; }
         public Ram RAM { get; private set; }
         public NESController Controller { get; private set; }
+        public ulong SystemClockCycle { get => _systemClockCounter; }
 
         public NESBus()
         {
@@ -151,6 +152,13 @@ namespace NESEmulator
         public BusDevice GetDevice(BusDeviceType device)
         {
             return _busDeviceList.Find((bd) => bd.DeviceType == device);
+        }
+
+        public void PowerOn()
+        {
+            _busDeviceList.ForEach(device => device.PowerOn());
+
+            _systemClockCounter = 0;
         }
     }
 }

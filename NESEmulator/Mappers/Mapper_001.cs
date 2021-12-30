@@ -159,6 +159,14 @@ namespace NESEmulator.Mappers
             updateCHRBankOffsets();
         }
 
+        public override void PowerOn()
+        {
+            _shiftRegister = 0x10;
+            _controlRegister = 0x1C;
+            updatePRGBankOffsets();
+            updateCHRBankOffsets();
+        }
+
         /// <summary>
         /// This deals with either setting up the cartridge or setting CHR/ROM banks after
         /// loading the shift register.

@@ -79,6 +79,12 @@ namespace NESEmulator
             ControllerState[1] = (byte)NESButton.NO_PRESS;
         }
 
+        public void PowerOn()
+        {
+            ControllerState[0] = (byte)NESButton.NO_PRESS;
+            ControllerState[1] = (byte)NESButton.NO_PRESS;
+        }
+
         public void Press(Controller controller, NESButton button)
         {
             ControllerState[(int)controller] |= (byte)button;
