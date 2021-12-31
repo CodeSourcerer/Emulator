@@ -155,7 +155,7 @@ namespace NESEmulator
             }
         }
 
-        public bool Read(ushort addr, out byte data)
+        public bool Read(ushort addr, out byte data, bool readOnly = false)
         {
             bool dataRead = false;
             data = 0x00;
@@ -194,7 +194,7 @@ namespace NESEmulator
                               (_pulseChannel1.IsPlaying ? 1 : 0));
                 //Log.Debug($"[{_cpuClockCounter}] Status register read [data={data:X2}] [I={_dmcChannel.InterruptFlag}, F={_frameCounter.FrameInterrupt}, D={_dmcChannel.Enabled}, N={_noiseChannel.IsPlaying}, T={_triangleChannel.IsPlaying}, 2={_pulseChannel2.IsPlaying}, 1={_pulseChannel1.IsPlaying}]");
                 // "If an interrupt flag was set at the same moment of the read, it will read back as 1 but it will not be cleared."
-                if (!_frameCounter.IsInterruptCycle())
+                if (!_frameCounter.IsInterruptCycle() && !readOnly)
                 {
                     _frameCounter.FrameInterrupt = false;
                     //RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.CLEAR_IRQ));

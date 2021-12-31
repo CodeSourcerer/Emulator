@@ -281,7 +281,7 @@ namespace NESEmulator
             _cycleOpItr.MoveNext();
         }
 
-        public bool Read(ushort addr, out byte data)
+        public bool Read(ushort addr, out byte data, bool readOnly = false)
         {
             bool dataRead = false;
             data = 0;
@@ -308,7 +308,7 @@ namespace NESEmulator
                         // "may" use this noise as valid data (even though they probably shouldn't)
                         data = (byte)((_status.reg & 0xE0) | (_ppuDataBuffer & 0x1F));
 
-                        if (_scanline == 241)
+                        if (_scanline == 241 && !readOnly)
                         {
                             //Console.WriteLine($"PPU Status read [_scanline={_scanline}][_cycle={_cycle}]");
 
@@ -339,11 +339,14 @@ namespace NESEmulator
                             Log.Debug($"[{_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] Status read, VBL was not set");
                         }
 #endif
-                        // Clear the vertical blanking flag
-                        _status.VerticalBlank = false;
+                        if (!readOnly)
+                        {
+                            // Clear the vertical blanking flag
+                            _status.VerticalBlank = false;
 
-                        // Reset Loopy's Address latch flag
-                        _addressLatch = 0;
+                            // Reset Loopy's Address latch flag
+                            _addressLatch = 0;
+                        }
                         break;
                     case 0x0003:    // OAM Address
                         data = _OAMaddr;
@@ -360,7 +363,8 @@ namespace NESEmulator
                         // from the previous read request
                         data = _ppuDataBuffer;
                         // Then update buffer for next time
-                        _ppuDataBuffer = ppuRead(_vram_addr.reg);
+                        if (!readOnly)
+                            _ppuDataBuffer = ppuRead(_vram_addr.reg, readOnly);
 
                         // However, if the address was in the palette range, the data is not delayed, so it returns
                         // immediately
@@ -370,7 +374,8 @@ namespace NESEmulator
                         // All reads from the PPU data automatically increment the nametable address depending upon the
                         // mode set in the control register. If set to vertical mode, the increment is 32 so it skips
                         // one whole nametable row; in horizontal mode it just increments by 1, moving to the next column
-                        _vram_addr.reg += (ushort)(_control.IncrementMode ? 32 : 1);
+                        if (!readOnly)
+                            _vram_addr.reg += (ushort)(_control.IncrementMode ? 32 : 1);
                         break;
                 }
             }

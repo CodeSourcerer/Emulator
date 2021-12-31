@@ -68,11 +68,12 @@ namespace NESEmulator
         /// <param name="addr"></param>
         /// <param name="data"></param>
         /// <returns>true if byte read, false if address outside of range</returns>
-        public bool Read(ushort addr, out byte data)
+        public bool Read(ushort addr, out byte data, bool readOnly = false)
         {
             data = 0;
 
             uint mapped_addr;
+            // May need to add readOnly flag to Mapper interface?
             if (mapper.cpuMapRead(addr, out mapped_addr, ref data))
             {
                 if (mapped_addr != 0xFFFFFFFF)

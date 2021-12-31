@@ -264,7 +264,7 @@ namespace NESEmulatorApp
 
         private void pge_OnUpdate(object sender, FrameUpdateEventArgs frameUpdateArgs)
         {
-            pge.Clear(Pixel.BLUE);
+            pge.Clear(Pixel.DARK_BLUE);
 
             if (runEmulation)
             {

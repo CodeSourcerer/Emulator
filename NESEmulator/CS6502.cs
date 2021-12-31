@@ -219,8 +219,7 @@ namespace NESEmulator
             _nmiPending = false;
             _nmiPending = false;
 
-            // Reset takes time
-            _instCycleCount = 8; //cycles = 8;
+            clock_count = 0;
         }
 
         public override void PowerOn()
@@ -272,7 +271,7 @@ namespace NESEmulator
             {
                 // IRQ cycles
                 _instCycleCount = 7;
-                _irqServicing = true;
+                //_irqServicing = true;
                 instr_state.Clear();
             }
             else if (cycles == 2)
@@ -325,7 +324,7 @@ namespace NESEmulator
             {
                 // NMI cycles
                 _instCycleCount = 7;
-                _nmiServicing = true;
+                //_nmiServicing = true;
                 _nmiPending = false;
                 instr_state.Clear();
             }
@@ -449,19 +448,19 @@ namespace NESEmulator
                 if (cycles == _instCycleCount)
                 {
                     cycles = 0;
-                    if (_nmiServicing || _nmiPending)
+                    if (_nmiPending)
                     {
                         //Log.Debug($"[{clock_count}] Invoking NMI");
-                        NMI();
+                        _nmiServicing = true;
                     }
-                    else if (_irqServicing || pollForIRQ())
+                    else if (pollForIRQ())
                     {
-                        IRQ();
+                        _irqServicing = true;
                     }
                     else
                     {
-                        disassembled = Disassemble(pc);
-                        Log.Debug($"[{clock_count}] {disassembled.sInst}");
+                        //disassembled = Disassemble(pc);
+                        //Log.Debug($"[{clock_count}] {disassembled.sInst}");
 
                         // Read the next instruction byte. This 8-bit value is used to index the translation
                         // table to get the relevat information about how to implement the instruction
@@ -481,11 +480,21 @@ namespace NESEmulator
                     }
                 }
 
-                if (opcode_lookup[opcode].addr_mode())
+                if (_nmiServicing)
                 {
-                    opcode_lookup[opcode].operation();
+                    NMI();
                 }
-
+                else if (_irqServicing)
+                {
+                    IRQ();
+                }
+                else
+                {
+                    if (opcode_lookup[opcode].addr_mode())
+                    {
+                        opcode_lookup[opcode].operation();
+                    }
+                }
                 cycles++;
             }
         }
@@ -748,7 +757,7 @@ namespace NESEmulator
             return false;
         }
 
-        public override bool Read(ushort addr, out byte data)
+        public override bool Read(ushort addr, out byte data, bool readOnly = false)
         {
             // Ignore since we call BUS' Read(), which calls this.
             data = 0;
@@ -1048,12 +1057,14 @@ namespace NESEmulator
                 case 1:
                     addr_rel = unchecked((sbyte)read(pc));
                     pc++;
-                    break;
-                case 2:
-                    fetch();
                     instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                     isComplete = true;
                     break;
+                //case 2:
+                //    fetch();
+                //    instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                //    isComplete = true;
+                //    break;
                 default:
                     isComplete = true;
                     break;
@@ -1094,7 +1105,7 @@ namespace NESEmulator
                         break;
                     }
 
-                    byte hi = read(pc);
+                    ushort hi = read(pc);
                     pc++;
                     addr_abs = (ushort)((hi << 8) | (ushort)instr_state["lo"]);
                     if (opcode_lookup[opcode].instr_type == CPUInstructionType.Write ||
@@ -1167,9 +1178,11 @@ namespace NESEmulator
                         opcode_lookup[opcode].instr_type == CPUInstructionType.R_M_W ||
                         opcode_lookup[opcode].instr_type == CPUInstructionType.Write)
                     {
-                        // If page boundary crossed or if this is a write or read-modify-write instruction,
-                        // we need another cycle to read again
-                        _instCycleCount++;
+                        if (opcode_lookup[opcode].instr_type == CPUInstructionType.Read)
+                        {
+                            // If page boundary crossed, we need another cycle
+                            _instCycleCount++;
+                        }
                     }
                     else
                     {
@@ -1248,9 +1261,11 @@ namespace NESEmulator
                         opcode_lookup[opcode].instr_type == CPUInstructionType.R_M_W ||
                         opcode_lookup[opcode].instr_type == CPUInstructionType.Write)
                     {
-                        // If page boundary crossed or if this is a write or read-modify-write instruction,
-                        // we need another cycle
-                        _instCycleCount++;
+                        if (opcode_lookup[opcode].instr_type == CPUInstructionType.Read)
+                        {
+                            // If page boundary crossed, we need another cycle
+                            _instCycleCount++;
+                        }
                     }
                     else
                     {
@@ -1443,8 +1458,11 @@ namespace NESEmulator
                         opcode_lookup[opcode].instr_type == CPUInstructionType.R_M_W ||
                         opcode_lookup[opcode].instr_type == CPUInstructionType.Write)
                     {
-                        // Add a cycle to fix address and read again
-                        _instCycleCount++;
+                        if (opcode_lookup[opcode].instr_type == CPUInstructionType.Read)
+                        {
+                            // Add a cycle to fix address and read again
+                            _instCycleCount++;
+                        }
                         addr_abs += y;
                     }
                     else
@@ -3126,7 +3144,7 @@ namespace NESEmulator
                 new Instruction() { name = "ORA", operation = ORA, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
                 new Instruction() { name = "ASL", operation = ASL, addr_mode = ABS, instr_type = CPUInstructionType.R_M_W,   cycles = 6 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
-                new Instruction() { name = "BPL", operation = BPL, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 3 }, // 0x10
+                new Instruction() { name = "BPL", operation = BPL, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 2 }, // 0x10
                 new Instruction() { name = "ORA", operation = ORA, addr_mode = IZY, instr_type = CPUInstructionType.Read,    cycles = 5 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 8 },
@@ -3158,7 +3176,7 @@ namespace NESEmulator
                 new Instruction() { name = "AND", operation = AND, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
                 new Instruction() { name = "ROL", operation = ROL, addr_mode = ABS, instr_type = CPUInstructionType.R_M_W,   cycles = 6 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
-                new Instruction() { name = "BMI", operation = BMI, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 3 }, // 0x30
+                new Instruction() { name = "BMI", operation = BMI, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 2 }, // 0x30
                 new Instruction() { name = "AND", operation = AND, addr_mode = IZY, instr_type = CPUInstructionType.Read,    cycles = 5 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 8 },
@@ -3190,7 +3208,7 @@ namespace NESEmulator
                 new Instruction() { name = "EOR", operation = EOR, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
                 new Instruction() { name = "LSR", operation = LSR, addr_mode = ABS, instr_type = CPUInstructionType.R_M_W,   cycles = 6 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
-                new Instruction() { name = "BVC", operation = BVC, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 3 }, // 0x50
+                new Instruction() { name = "BVC", operation = BVC, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 2 }, // 0x50
                 new Instruction() { name = "EOR", operation = EOR, addr_mode = IZY, instr_type = CPUInstructionType.Read,    cycles = 5 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 8 },
@@ -3222,7 +3240,7 @@ namespace NESEmulator
                 new Instruction() { name = "ADC", operation = ADC, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
                 new Instruction() { name = "ROR", operation = ROR, addr_mode = ABS, instr_type = CPUInstructionType.R_M_W,   cycles = 6 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
-                new Instruction() { name = "BVS", operation = BVS, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 3 }, // 0x70
+                new Instruction() { name = "BVS", operation = BVS, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 2 }, // 0x70
                 new Instruction() { name = "ADC", operation = ADC, addr_mode = IZY, instr_type = CPUInstructionType.Read,    cycles = 5 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 8 },
@@ -3254,7 +3272,7 @@ namespace NESEmulator
                 new Instruction() { name = "STA", operation = STA, addr_mode = ABS, instr_type = CPUInstructionType.Write,   cycles = 4 },
                 new Instruction() { name = "STX", operation = STX, addr_mode = ABS, instr_type = CPUInstructionType.Write,   cycles = 4 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 4 },
-                new Instruction() { name = "BCC", operation = BCC, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 3 }, // 0x90
+                new Instruction() { name = "BCC", operation = BCC, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 2 }, // 0x90
                 new Instruction() { name = "STA", operation = STA, addr_mode = IZY, instr_type = CPUInstructionType.Write,   cycles = 6 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
@@ -3286,7 +3304,7 @@ namespace NESEmulator
                 new Instruction() { name = "LDA", operation = LDA, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
                 new Instruction() { name = "LDX", operation = LDX, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 4 },
-                new Instruction() { name = "BCS", operation = BCS, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 3 }, // 0xB0
+                new Instruction() { name = "BCS", operation = BCS, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 2 }, // 0xB0
                 new Instruction() { name = "LDA", operation = LDA, addr_mode = IZY, instr_type = CPUInstructionType.Read,    cycles = 5 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 5 },
@@ -3317,8 +3335,8 @@ namespace NESEmulator
                 new Instruction() { name = "CPY", operation = CPY, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
                 new Instruction() { name = "CMP", operation = CMP, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
                 new Instruction() { name = "DEC", operation = DEC, addr_mode = ABS, instr_type = CPUInstructionType.R_M_W,   cycles = 6 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 }, // 0xCF
-                new Instruction() { name = "BNE", operation = BNE, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 3 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
+                new Instruction() { name = "BNE", operation = BNE, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 2 }, // 0xD0
                 new Instruction() { name = "CMP", operation = CMP, addr_mode = IZY, instr_type = CPUInstructionType.Read,    cycles = 5 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 8 },
@@ -3350,7 +3368,7 @@ namespace NESEmulator
                 new Instruction() { name = "SBC", operation = SBC, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
                 new Instruction() { name = "INC", operation = INC, addr_mode = ABS, instr_type = CPUInstructionType.R_M_W,   cycles = 6 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
-                new Instruction() { name = "BEQ", operation = BEQ, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 3 }, // 0xF0
+                new Instruction() { name = "BEQ", operation = BEQ, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 2 }, // 0xF0
                 new Instruction() { name = "SBC", operation = SBC, addr_mode = IZY, instr_type = CPUInstructionType.Read,    cycles = 5 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 8 },
