@@ -1889,12 +1889,12 @@ namespace NESEmulator
                 // Fetch opcode of next instruction
                 //read(pc);
                 // "Fix PCH."
+                if ((addr_abs & 0xFF00) != (pc & 0xFF00))
+                {
+                    instr_state["need_extra2"] = 1;
+                    _instCycleCount++;
+                }
                 pc = addr_abs;
-                //if ((addr_abs & 0xFF00) != (pc & 0xFF00))
-                //{
-                //    instr_state["need_extra2"] = 1;
-                //    _instCycleCount++;
-                //}
             }
             //else if (cycles == opcodeStartCycle + 2)
             //{
@@ -1940,12 +1940,12 @@ namespace NESEmulator
                 // "Fetch opcode of next instruction"
                 //read(pc);
                 // "Fix PCH."
+                if ((addr_abs & 0xFF00) != (pc & 0xFF00))
+                {
+                    instr_state["need_extra2"] = 1;
+                    _instCycleCount++;
+                }
                 pc = addr_abs;
-                //if ((addr_abs & 0xFF00) != (pc & 0xFF00))
-                //{
-                //    instr_state["need_extra2"] = 1;
-                //    _instCycleCount++;
-                //}
             }
             //else if (cycles == opcodeStartCycle + 2)
             //{
@@ -1990,12 +1990,12 @@ namespace NESEmulator
                 // "Fetch opcode of next instruction"
                 //read(pc);
                 // "Fix PCH."
+                if ((addr_abs & 0xFF00) != (pc & 0xFF00))
+                {
+                    instr_state["need_extra2"] = 1;
+                    _instCycleCount++;
+                }
                 pc = addr_abs;
-                //if ((addr_abs & 0xFF00) != (pc & 0xFF00))
-                //{
-                //    instr_state["need_extra2"] = 1;
-                //    _instCycleCount++;
-                //}
             }
             //else if (cycles == opcodeStartCycle + 2)
             //{
@@ -2040,12 +2040,12 @@ namespace NESEmulator
                 // "Fetch opcode of next instruction"
                 //read(pc);
                 // "Fix PCH."
+                if ((addr_abs & 0xFF00) != (pc & 0xFF00))
+                {
+                    instr_state["need_extra2"] = 1;
+                    _instCycleCount++;
+                }
                 pc = addr_abs;
-                //if ((addr_abs & 0xFF00) != (pc & 0xFF00))
-                //{
-                //    instr_state["need_extra2"] = 1;
-                //    _instCycleCount++;
-                //}
             }
             //else if (cycles == opcodeStartCycle + 2)
             //{
@@ -2090,12 +2090,11 @@ namespace NESEmulator
                 // "Fetch opcode of next instruction"
                 //read(pc);
                 // "Fix PCH."
+                if ((addr_abs & 0xFF00) != (pc & 0xFF00))
+                {
+                    _instCycleCount++;
+                }
                 pc = addr_abs;
-                //if ((addr_abs & 0xFF00) != (pc & 0xFF00))
-                //{
-                //    instr_state["need_extra2"] = 1;
-                //    _instCycleCount++; //cycles++;
-                //}
             }
             //else if (cycles == opcodeStartCycle + 2)
             //{
@@ -2140,12 +2139,12 @@ namespace NESEmulator
                 // "Fetch opcode of next instruction"
                 //read(pc);
                 // "Fix PCH."
+                if ((addr_abs & 0xFF00) != (pc & 0xFF00))
+                {
+                    instr_state["need_extra2"] = 1;
+                    _instCycleCount++; //cycles++;
+                }
                 pc = addr_abs;
-                //if ((addr_abs & 0xFF00) != (pc & 0xFF00))
-                //{
-                //    instr_state["need_extra2"] = 1;
-                //    _instCycleCount++; //cycles++;
-                //}
             }
             //else if (cycles == opcodeStartCycle + 2)
             //{
@@ -2190,12 +2189,12 @@ namespace NESEmulator
                 // "Fetch opcode of next instruction"
                 //read(pc);
                 // "Fix PCH."
+                if ((addr_abs & 0xFF00) != (pc & 0xFF00))
+                {
+                    instr_state["need_extra2"] = 1;
+                    _instCycleCount++; //cycles++;
+                }
                 pc = addr_abs;
-                //if ((addr_abs & 0xFF00) != (pc & 0xFF00))
-                //{
-                //    instr_state["need_extra2"] = 1;
-                //    _instCycleCount++; //cycles++;
-                //}
             }
             //else if (cycles == opcodeStartCycle + 2)
             //{
@@ -2240,12 +2239,12 @@ namespace NESEmulator
                 // "Fetch opcode of next instruction"
                 //read(pc);
                 // "Fix PCH."
+                if ((addr_abs & 0xFF00) != (pc & 0xFF00))
+                {
+                    instr_state["need_extra2"] = 1;
+                    _instCycleCount++; //cycles++;
+                }
                 pc = addr_abs;
-                //if ((addr_abs & 0xFF00) != (pc & 0xFF00))
-                //{
-                //    instr_state["need_extra2"] = 1;
-                //    _instCycleCount++; //cycles++;
-                //}
             }
             //else if (cycles == opcodeStartCycle + 2)
             //{

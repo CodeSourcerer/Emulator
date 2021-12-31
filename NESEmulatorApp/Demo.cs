@@ -98,10 +98,10 @@ namespace NESEmulatorApp
             //string romfile = "tests\\megaman2.nes";
 
             // Test roms
-            string romfile = "tests\\nestest.nes";
+            //string romfile = "tests\\nestest.nes";
             //string romfile = "tests\\instr_test_v5\\official_only.nes"; // passes
-            //string romfile = "tests\\1.Branch_Basics.nes";
-            //string romfile = "tests\\2.Backward_Branch.nes";
+            //string romfile = "tests\\1.Branch_Basics.nes"; // passes
+            string romfile = "tests\\2.Backward_Branch.nes"; // passes
             //string romfile = "tests\\3.Forward_Branch.nes";
             //string romfile = "tests\\instr_timing\\1-instr_timing.nes"; // passes except for illegal opcodes
             //string romfile = "tests\\instr_timing\\2-branch_timing.nes"; // passes
@@ -300,7 +300,7 @@ namespace NESEmulatorApp
             // Draw Ram Page 0x00
             //DrawRam(2, 2, 0x0000, 16, 16);
             //DrawRam(2, 182, 0x0100, 16, 16);
-            DrawCpu(416, 2);
+            //DrawCpu(416, 2);
             //DrawCode(416, 72, 26);
             //DrawOam(270, 140, 0, 32);
             //DrawOam(500, 140, 32, 32);
