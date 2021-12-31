@@ -1453,13 +1453,14 @@ namespace NESEmulator
                     var addr_eff = (ushort)((ushort)instr_state["addr_eff_hi"] << 8 | (ushort)instr_state["addr_eff_lo"]);
                     fetched = read(addr_eff);
                     // did we cross a page boundary?
-                    instr_state["page_cross"] = addr_eff != (addr_abs + y);
+                    instr_state["page_cross"] = (addr_abs & 0xFF00) != ((addr_abs + y) & 0xFF00);
                     if ((bool)instr_state["page_cross"] ||
                         opcode_lookup[opcode].instr_type == CPUInstructionType.R_M_W ||
                         opcode_lookup[opcode].instr_type == CPUInstructionType.Write)
                     {
                         if (opcode_lookup[opcode].instr_type == CPUInstructionType.Read)
                         {
+                            Log.Debug("Adding cycle for page-crossed IZY instruction");
                             // Add a cycle to fix address and read again
                             _instCycleCount++;
                         }

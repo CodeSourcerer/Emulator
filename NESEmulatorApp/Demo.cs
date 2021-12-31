@@ -101,9 +101,9 @@ namespace NESEmulatorApp
             //string romfile = "tests\\nestest.nes";
             //string romfile = "tests\\instr_test_v5\\official_only.nes"; // passes
             //string romfile = "tests\\1.Branch_Basics.nes"; // passes
-            string romfile = "tests\\2.Backward_Branch.nes"; // passes
+            //string romfile = "tests\\2.Backward_Branch.nes"; // passes
             //string romfile = "tests\\3.Forward_Branch.nes";
-            //string romfile = "tests\\instr_timing\\1-instr_timing.nes"; // passes except for illegal opcodes
+            string romfile = "tests\\instr_timing\\1-instr_timing.nes"; // passes except for illegal opcodes
             //string romfile = "tests\\instr_timing\\2-branch_timing.nes"; // passes
             //string romfile = "tests\\instr_misc\\01-abs_x_wrap.nes"; // passes
             //string romfile = "tests\\instr_misc\\02-branch_wrap.nes"; // passes
