@@ -269,6 +269,12 @@ namespace NESEmulator
 
             if (cycles == 0)
             {
+                _irqVector = ADDR_IRQ;
+                if (_nmiPending)
+                {
+                    Log.Debug($"[{clock_count}] IRQ/BRK has been hijacked by NMI!");
+                    _irqVector = ADDR_NMI;
+                }
                 // IRQ cycles
                 _instCycleCount = 7;
                 //_irqServicing = true;
@@ -276,15 +282,30 @@ namespace NESEmulator
             }
             else if (cycles == 2)
             {
+                if (_nmiPending)
+                {
+                    Log.Debug($"[{clock_count}] IRQ/BRK has been hijacked by NMI!");
+                    _irqVector = ADDR_NMI;
+                }
                 // Push the PC to the stack. It is 16-bits, so requires 2 pushes
                 push((byte)((pc >> 8) & 0x00FF));
             }
             else if (cycles == 3)
             {
+                if (_nmiPending)
+                {
+                    Log.Debug($"[{clock_count}] IRQ/BRK has been hijacked by NMI!");
+                    _irqVector = ADDR_NMI;
+                }
                 push((byte)(pc & 0x00FF));
             }
             else if (cycles == 4)
             {
+                if (_nmiPending)
+                {
+                    Log.Debug($"[{clock_count}] IRQ/BRK has been hijacked by NMI!");
+                    _irqVector = ADDR_NMI;
+                }
                 // Then push status register to the stack
                 setFlag(FLAGS6502.B, false);
                 setFlag(FLAGS6502.U, true);
@@ -294,7 +315,7 @@ namespace NESEmulator
             else if (cycles == 5)
             {
                 // Read new PC location from fixed address
-                addr_abs = ADDR_IRQ;
+                addr_abs = _irqVector;
                 ushort lo = read(addr_abs);
                 instr_state["lo"] = lo;
             }
@@ -308,6 +329,16 @@ namespace NESEmulator
                 pc = (ushort)((hi << 8) | (ushort)instr_state["lo"]);
                 _irqServicing = false;
             }
+
+            //if (_nmiPending && pollForIRQ(true) && cycles < 5)
+            //{
+            //    // An NMI has hijacked the IRQ/BRK vector. Set PC to NMI vector.
+            //    addr_abs = ADDR_NMI;
+            //    ushort lo = read(addr_abs);
+            //    ushort hi = read((ushort)(addr_abs + 1));
+            //    pc = (ushort)((hi << 8) | lo);
+            //}
+
         }
 
         /// <summary>
@@ -434,16 +465,6 @@ namespace NESEmulator
             }
             else
             {
-                //if (_nmiPending && pollForIRQ(true) && cycles < 5)
-                //{
-                //    // An NMI has hijacked the IRQ/BRK vector. Set PC to NMI vector.
-                //    addr_abs = ADDR_NMI;
-                //    ushort lo = read(addr_abs);
-                //    ushort hi = read((ushort)(addr_abs + 1));
-                //    pc = (ushort)((hi << 8) | lo);
-                //    Log.Debug($"[{clock_count}] IRQ/BRK has been hijacked by NMI!");
-                //}
-
                 // Check if all cycles completed
                 if (cycles == _instCycleCount)
                 {
@@ -1403,7 +1424,8 @@ namespace NESEmulator
                     addr_abs = (ushort)((hi << 8) | (ushort)instr_state["addr_eff_lo"]);
                     break;
                 case 5:
-                    fetch();
+                    if (opcode_lookup[opcode].instr_type != CPUInstructionType.Write)
+                        fetch();
                     instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                     isComplete = true;
                     break;
@@ -1460,7 +1482,7 @@ namespace NESEmulator
                     {
                         if (opcode_lookup[opcode].instr_type == CPUInstructionType.Read)
                         {
-                            Log.Debug("Adding cycle for page-crossed IZY instruction");
+                            Log.Debug($"[{clock_count}] Adding cycle for page-crossed IZY instruction");
                             // Add a cycle to fix address and read again
                             _instCycleCount++;
                         }
@@ -1487,6 +1509,7 @@ namespace NESEmulator
                     {
                         if (opcode_lookup[opcode].instr_type != CPUInstructionType.Write)
                         {
+                            Log.Debug($"[{clock_count}] Reading after page-crossed IZY instruction");
                             fetched = read(addr_abs);
                         }
                         instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
@@ -1887,8 +1910,6 @@ namespace NESEmulator
                 {
                     Log.Error($"[{clock_count}] BCC error - extra cycle executed when not needed!");
                 }
-                // Fetch opcode of next instruction
-                //read(pc);
                 // "Fix PCH."
                 if ((addr_abs & 0xFF00) != (pc & 0xFF00))
                 {
@@ -1897,16 +1918,6 @@ namespace NESEmulator
                 }
                 pc = addr_abs;
             }
-            //else if (cycles == opcodeStartCycle + 2)
-            //{
-            //    // sanity check
-            //    if (!instr_state.ContainsKey("need_extra2"))
-            //    {
-            //        Log.Error($"[{clock_count}] BCC error - 2nd extra cycle executed when not needed!");
-            //    }
-            //    // Fetch opcode of next instruction, increment PC.
-            //    read(pc);
-            //}
 
             return 0;
         }
@@ -1938,8 +1949,6 @@ namespace NESEmulator
                 {
                     Log.Error($"[{clock_count}] BCS error - extra cycle executed when not needed!");
                 }
-                // "Fetch opcode of next instruction"
-                //read(pc);
                 // "Fix PCH."
                 if ((addr_abs & 0xFF00) != (pc & 0xFF00))
                 {
@@ -1948,16 +1957,6 @@ namespace NESEmulator
                 }
                 pc = addr_abs;
             }
-            //else if (cycles == opcodeStartCycle + 2)
-            //{
-            //    // sanity check
-            //    if (!instr_state.ContainsKey("need_extra2"))
-            //    {
-            //        Log.Error($"[{clock_count}] BCS error - 2nd extra cycle executed when not needed!");
-            //    }
-            //    // Fetch opcode of next instruction, increment PC.
-            //    read(pc);
-            //}
             return 0;
         }
 
@@ -1988,8 +1987,6 @@ namespace NESEmulator
                 {
                     Log.Error($"[{clock_count}] BEQ error - extra cycle executed when not needed!");
                 }
-                // "Fetch opcode of next instruction"
-                //read(pc);
                 // "Fix PCH."
                 if ((addr_abs & 0xFF00) != (pc & 0xFF00))
                 {
@@ -1998,16 +1995,6 @@ namespace NESEmulator
                 }
                 pc = addr_abs;
             }
-            //else if (cycles == opcodeStartCycle + 2)
-            //{
-            //    // sanity check
-            //    if (!instr_state.ContainsKey("need_extra2"))
-            //    {
-            //        Log.Error($"[{clock_count}] BEQ error - 2nd extra cycle executed when not needed!");
-            //    }
-            //    // Fetch opcode of next instruction, increment PC.
-            //    read(pc);
-            //}
             return 0;
         }
 
@@ -2038,8 +2025,6 @@ namespace NESEmulator
                 {
                     Log.Error($"[{clock_count}] BMI error - extra cycle executed when not needed!");
                 }
-                // "Fetch opcode of next instruction"
-                //read(pc);
                 // "Fix PCH."
                 if ((addr_abs & 0xFF00) != (pc & 0xFF00))
                 {
@@ -2048,16 +2033,6 @@ namespace NESEmulator
                 }
                 pc = addr_abs;
             }
-            //else if (cycles == opcodeStartCycle + 2)
-            //{
-            //    // sanity check
-            //    if (!instr_state.ContainsKey("need_extra2"))
-            //    {
-            //        Log.Error($"[{clock_count}] BMI error - 2nd extra cycle executed when not needed!");
-            //    }
-            //    // Fetch opcode of next instruction, increment PC.
-            //    read(pc);
-            //}
             return 0;
         }
 
@@ -2088,8 +2063,6 @@ namespace NESEmulator
                 {
                     Log.Error($"[{clock_count}] BNE error - extra cycle executed when not needed!");
                 }
-                // "Fetch opcode of next instruction"
-                //read(pc);
                 // "Fix PCH."
                 if ((addr_abs & 0xFF00) != (pc & 0xFF00))
                 {
@@ -2097,16 +2070,6 @@ namespace NESEmulator
                 }
                 pc = addr_abs;
             }
-            //else if (cycles == opcodeStartCycle + 2)
-            //{
-            //    // sanity check
-            //    if (!instr_state.ContainsKey("need_extra2"))
-            //    {
-            //        Log.Error($"[{clock_count}] BNE error - 2nd extra cycle executed when not needed!");
-            //    }
-            //    // Fetch opcode of next instruction, increment PC.
-            //    read(pc);
-            //}
             return 0;
         }
 
@@ -2137,26 +2100,14 @@ namespace NESEmulator
                 {
                     Log.Error($"[{clock_count}] BPL error - extra cycle executed when not needed!");
                 }
-                // "Fetch opcode of next instruction"
-                //read(pc);
                 // "Fix PCH."
                 if ((addr_abs & 0xFF00) != (pc & 0xFF00))
                 {
                     instr_state["need_extra2"] = 1;
-                    _instCycleCount++; //cycles++;
+                    _instCycleCount++;
                 }
                 pc = addr_abs;
             }
-            //else if (cycles == opcodeStartCycle + 2)
-            //{
-            //    // sanity check
-            //    if (!instr_state.ContainsKey("need_extra2"))
-            //    {
-            //        Log.Error($"[{clock_count}] BPL error - 2nd extra cycle executed when not needed!");
-            //    }
-            //    // Fetch opcode of next instruction, increment PC.
-            //    read(pc);
-            //}
             return 0;
         }
 
@@ -2187,26 +2138,14 @@ namespace NESEmulator
                 {
                     Log.Error($"[{clock_count}] BVC error - extra cycle executed when not needed!");
                 }
-                // "Fetch opcode of next instruction"
-                //read(pc);
                 // "Fix PCH."
                 if ((addr_abs & 0xFF00) != (pc & 0xFF00))
                 {
                     instr_state["need_extra2"] = 1;
-                    _instCycleCount++; //cycles++;
+                    _instCycleCount++;
                 }
                 pc = addr_abs;
             }
-            //else if (cycles == opcodeStartCycle + 2)
-            //{
-            //    // sanity check
-            //    if (!instr_state.ContainsKey("need_extra2"))
-            //    {
-            //        Log.Error($"[{clock_count}] BVC error - 2nd extra cycle executed when not needed!");
-            //    }
-            //    // Fetch opcode of next instruction, increment PC.
-            //    read(pc);
-            //}
             return 0;
         }
 
@@ -2237,26 +2176,14 @@ namespace NESEmulator
                 {
                     Log.Error($"[{clock_count}] BVS error - extra cycle executed when not needed!");
                 }
-                // "Fetch opcode of next instruction"
-                //read(pc);
                 // "Fix PCH."
                 if ((addr_abs & 0xFF00) != (pc & 0xFF00))
                 {
                     instr_state["need_extra2"] = 1;
-                    _instCycleCount++; //cycles++;
+                    _instCycleCount++;
                 }
                 pc = addr_abs;
             }
-            //else if (cycles == opcodeStartCycle + 2)
-            //{
-            //    // sanity check
-            //    if (!instr_state.ContainsKey("need_extra2"))
-            //    {
-            //        Log.Error($"[{clock_count}] BVS error - 2nd extra cycle executed when not needed!");
-            //    }
-            //    // Fetch opcode of next instruction, increment PC.
-            //    read(pc);
-            //}
             return 0;
         }
 
@@ -2271,14 +2198,32 @@ namespace NESEmulator
         {
             // Which cycle did the addressing mode operations end?
             byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
-
-            if (cycles == opcodeStartCycle + 1)
+            if (cycles == opcodeStartCycle)
+            {
+                _irqVector = ADDR_IRQ;
+                if (_nmiPending)
+                {
+                    Log.Debug($"[{clock_count}] IRQ/BRK has been hijacked by NMI!");
+                    _irqVector = ADDR_NMI;
+                }
+            }
+            else if (cycles == opcodeStartCycle + 1)
             {
                 push((byte)((pc >> 8) & 0x00FF));
+                if (_nmiPending)
+                {
+                    Log.Debug($"[{clock_count}] IRQ/BRK has been hijacked by NMI!");
+                    _irqVector = ADDR_NMI;
+                }
             }
             else if (cycles == opcodeStartCycle + 2)
             {
                 push((byte)(pc & 0x00FF));
+                if (_nmiPending)
+                {
+                    Log.Debug($"[{clock_count}] IRQ/BRK has been hijacked by NMI!");
+                    _irqVector = ADDR_NMI;
+                }
             }
             else if (cycles == opcodeStartCycle + 3)
             {
@@ -2289,12 +2234,8 @@ namespace NESEmulator
                 if (_nmiPending == true)
                 {
                     // NMI hijacked BRK
-                    Log.Debug($"[{clock_count}] NMI hijacked BRK");
+                    Log.Debug($"[{clock_count}] IRQ/BRK has been hijacked by NMI!");
                     _irqVector = ADDR_NMI;
-                }
-                else
-                {
-                    _irqVector = ADDR_IRQ;
                 }
             }
             else if (cycles == opcodeStartCycle + 4)
