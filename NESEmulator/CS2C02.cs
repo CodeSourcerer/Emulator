@@ -310,7 +310,7 @@ namespace NESEmulator
 
                         if (_scanline == 241 && !readOnly)
                         {
-                            //Console.WriteLine($"PPU Status read [_scanline={_scanline}][_cycle={_cycle}]");
+                            //Log.Debug($"PPU Status read [_scanline={_scanline}][_cycle={_cycle}]");
 
                             // Special case 1: Reading one PPU clock before reads it as clear and never sets the flag or generates NMI for that frame.
                             if (_cycle == 0)
@@ -318,7 +318,7 @@ namespace NESEmulator
                                 _frameSuppressNMI = true;
                                 _frameSuppressVBL = true;
 #if DEBUG_VBL
-                                Log.Debug($"[{_currentClockCycle / 3}] NMI/VBL supressed");
+                                Log.Debug($"[PPU: {_currentClockCycle}] NMI/VBL supressed");
 #endif
                                 data.SetBit(7, false);
                             }
@@ -332,11 +332,11 @@ namespace NESEmulator
 #if DEBUG_VBL
                         if (_status.VerticalBlank)
                         {
-                            Log.Debug($"[{_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] VBL cleared from status read");
+                            Log.Debug($"[PPU: {_currentClockCycle}] [_scanline={_scanline}] [_cycle={_cycle}] VBL cleared from status read");
                         }
                         else
                         {
-                            Log.Debug($"[{_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] Status read, VBL was not set");
+                            Log.Debug($"[PPU: {_currentClockCycle}] [_scanline={_scanline}] [_cycle={_cycle}] Status read, VBL was not set");
                         }
 #endif
                         if (!readOnly)
@@ -369,7 +369,13 @@ namespace NESEmulator
                         // However, if the address was in the palette range, the data is not delayed, so it returns
                         // immediately
                         if (_vram_addr.reg >= ADDR_PALETTE)
+                        {
                             data = _ppuDataBuffer;
+                            // "Reading the palettes still updates the internal buffer though, but the data placed in it is the mirrored nametable
+                            // data that would appear "underneath" the palette." https://wiki.nesdev.org/w/index.php?title=PPU_registers#PPUDATA
+                            // Palette RAM and VRAM map overlap, so reading from palette RAM still reads the contents of VRAM at this location
+                            _ppuDataBuffer = ppuRead(_vram_addr.reg, readOnly, true);
+                        }
 
                         // All reads from the PPU data automatically increment the nametable address depending upon the
                         // mode set in the control register. If set to vertical mode, the increment is 32 so it skips
@@ -485,69 +491,74 @@ namespace NESEmulator
         }
 
         // TODO: I think this should be a read from _ppuBus... will investigate later
-        private byte ppuRead(ushort addr, bool rdonly = false)
+        private byte ppuRead(ushort addr, bool rdonly = false, bool ignorePaletteRange = false)
         {
             byte data = 0;
             addr &= ADDR_PPU_MAX;
+            ushort tmpaddr = addr;
 
             // TODO: Eventually loop through ppuBus like we do with the NES bus, attempting to do reads until
             // one "hits"
 
-            if (_cartridge.ppuRead(addr, out data))
+            if (_cartridge.ppuRead(tmpaddr, out data))
             {
 
             }
-            else if (addr >= 0x0000 && addr <= 0x1FFF)  // Pattern (sprite) memory range
+            else
             {
-                // If the cartridge can't map the address, have a physical location ready here
-                data = _tblPattern[(addr & 0x1000) >> 12][addr & 0x0FFF];
-            }
-            else if (addr >= 0x2000 && addr <= 0x3EFF)  // Nametable memory (VRAM) range
-            {
-                addr &= 0x0FFF;
+                if (addr >= 0x0000 && addr <= 0x1FFF)  // Pattern (sprite) memory range
+                {
+                    // If the cartridge can't map the address, have a physical location ready here
+                    data = _tblPattern[(addr & 0x1000) >> 12][addr & 0x0FFF];
+                }
+                else if (addr >= 0x2000 && addr <= 0x3FFF)  // Nametable memory (VRAM) range
+                {
+                    tmpaddr &= 0x0FFF;
 
-                if (_cartridge.mirror == Cartridge.Mirror.VERTICAL)
-                {
-                    if (addr >= 0x0000 && addr <= 0x03FF)
-                        data = _tblName[0][addr & 0x03FF];
-                    else if (addr >= 0x0400 && addr <= 0x07FF)
-                        data = _tblName[1][addr & 0x03FF];
-                    else if (addr >= 0x0800 && addr <= 0x0BFF)
-                        data = _tblName[0][addr & 0x03FF];
-                    else if (addr >= 0x0C00 && addr <= 0x0FFF)
-                        data = _tblName[1][addr & 0x03FF];
+                    if (_cartridge.mirror == Cartridge.Mirror.VERTICAL)
+                    {
+                        if (tmpaddr >= 0x0000 && tmpaddr <= 0x03FF)
+                            data = _tblName[0][tmpaddr & 0x03FF];
+                        else if (tmpaddr >= 0x0400 && tmpaddr <= 0x07FF)
+                            data = _tblName[1][tmpaddr & 0x03FF];
+                        else if (tmpaddr >= 0x0800 && tmpaddr <= 0x0BFF)
+                            data = _tblName[0][tmpaddr & 0x03FF];
+                        else if (tmpaddr >= 0x0C00 && tmpaddr <= 0x0FFF)
+                            data = _tblName[1][tmpaddr & 0x03FF];
+                    }
+                    else if (_cartridge.mirror == Cartridge.Mirror.HORIZONTAL)
+                    {
+                        if (tmpaddr >= 0x0000 && tmpaddr <= 0x03FF)
+                            data = _tblName[0][addr & 0x03FF];
+                        else if (tmpaddr >= 0x0400 && tmpaddr <= 0x07FF)
+                            data = _tblName[0][tmpaddr & 0x03FF];
+                        else if (addr >= 0x0800 && tmpaddr <= 0x0BFF)
+                            data = _tblName[1][tmpaddr & 0x03FF];
+                        else if (tmpaddr >= 0x0C00 && tmpaddr <= 0x0FFF)
+                            data = _tblName[1][tmpaddr & 0x03FF];
+                    }
+                    else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_LO)
+                    {
+                        data = _tblName[0][tmpaddr & 0x03FF];
+                    }
+                    else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_HI)
+                    {
+                        data = _tblName[0][tmpaddr & 0x03FF + 0x0400];
+                    }
                 }
-                else if (_cartridge.mirror == Cartridge.Mirror.HORIZONTAL)
-                {
-                    if (addr >= 0x0000 && addr <= 0x03FF)
-                        data = _tblName[0][addr & 0x03FF];
-                    else if (addr >= 0x0400 && addr <= 0x07FF)
-                        data = _tblName[0][addr & 0x03FF];
-                    else if (addr >= 0x0800 && addr <= 0x0BFF)
-                        data = _tblName[1][addr & 0x03FF];
-                    else if (addr >= 0x0C00 && addr <= 0x0FFF)
-                        data = _tblName[1][addr & 0x03FF];
-                }
-                else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_LO)
-                {
-                    data = _tblName[0][addr & 0x03FF];
-                }
-                else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_HI)
-                {
-                    data = _tblName[0][addr & 0x03FF + 0x0400];
-                }
-            }
-            else if (addr >= 0x3F00 && addr <= 0x3FFF)  // Palette memory range
-            {
-                // Mask bottom 5 bits
-                addr &= 0x001F;
 
-                if (addr == 0x0010) addr = 0x0000;
-                if (addr == 0x0014) addr = 0x0004;
-                if (addr == 0x0018) addr = 0x0008;
-                if (addr == 0x001C) addr = 0x000C;
+                if (!ignorePaletteRange && (addr >= 0x3F00 && addr <= 0x3FFF))  // Palette memory range
+                {
+                    // Mask bottom 5 bits
+                    tmpaddr = (ushort)(addr & 0x001F);
 
-                data = (byte)(_palette[addr] & (_mask.GrayScale ? 0x30 : 0x3F));
+                    if (tmpaddr == 0x0010) tmpaddr = 0x0000;
+                    if (tmpaddr == 0x0014) tmpaddr = 0x0004;
+                    if (tmpaddr == 0x0018) tmpaddr = 0x0008;
+                    if (tmpaddr == 0x001C) tmpaddr = 0x000C;
+
+                    data = (byte)(_palette[tmpaddr] & (_mask.GrayScale ? 0x30 : 0x3F));
+                }
             }
 
             if ((addr & 0x1000) > 0)

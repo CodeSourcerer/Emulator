@@ -281,7 +281,7 @@ namespace NESEmulator
                 dataWritten = true;
                 _frameCounterData = data;
                 _frameCounterWritten = true;
-                _frameCounterCycleWait = (byte)(((_cpuClockCounter & 0x1) == 0) ? 3 : 4);
+                _frameCounterCycleWait = (byte)(((_cpuClockCounter % 6) == 0) ? 3 : 4);
                 //_frameCounter.Reset();
                 _frameCounter.InterruptInhibit = data.TestBit(6);
                 if (_frameCounter.InterruptInhibit && _frameCounter.FrameInterrupt)

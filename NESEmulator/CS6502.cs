@@ -457,11 +457,11 @@ namespace NESEmulator
 
             if (DMATransfer)
             {
-                doDMATransfer(clockCounter);
+                doDMATransfer(clock_count);
             }
             else if (_readerFetch)
             {
-                readerFetch(clockCounter);
+                readerFetch(clock_count);
             }
             else
             {
@@ -713,7 +713,8 @@ namespace NESEmulator
                 {
                     _dmaSync = true;
                     _dmaStartAddr = read(0x2003);
-                    _dmaAddr = _dmaStartAddr;
+                    // Starting DMA address always at 0xXX00 (XX = _dmaPage)
+                    _dmaAddr = 0;
                 }
             }
             else
@@ -721,14 +722,14 @@ namespace NESEmulator
                 if (clockCounter % 2 == 0)
                 {
                     _dmaData = read((ushort)(_dmaPage << 8 | _dmaAddr));
+                    _dmaAddr++;
                 }
                 else
                 {
-                    // So yeah, let's just break all encapsulation and grab that PPU. Kinda what the HW is doing, I suppose...
-                    ((NESBus)bus).PPU.OAM[_dmaAddr >> 2][_dmaAddr & 0x03] = _dmaData;
-                    _dmaAddr++;
+                    write(0x2004, _dmaData);
 
-                    if (_dmaAddr == _dmaStartAddr)
+                    // When we wrap back to 0, we are done.
+                    if (_dmaAddr == 0)
                     {
                         DMATransfer = false;
                         _dmaSync = false;
@@ -1081,11 +1082,6 @@ namespace NESEmulator
                     instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                     isComplete = true;
                     break;
-                //case 2:
-                //    fetch();
-                //    instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
-                //    isComplete = true;
-                //    break;
                 default:
                     isComplete = true;
                     break;
@@ -1482,7 +1478,7 @@ namespace NESEmulator
                     {
                         if (opcode_lookup[opcode].instr_type == CPUInstructionType.Read)
                         {
-                            Log.Debug($"[{clock_count}] Adding cycle for page-crossed IZY instruction");
+                            //Log.Debug($"[{clock_count}] Adding cycle for page-crossed IZY instruction");
                             // Add a cycle to fix address and read again
                             _instCycleCount++;
                         }
@@ -1509,7 +1505,7 @@ namespace NESEmulator
                     {
                         if (opcode_lookup[opcode].instr_type != CPUInstructionType.Write)
                         {
-                            Log.Debug($"[{clock_count}] Reading after page-crossed IZY instruction");
+                            //Log.Debug($"[{clock_count}] Reading after page-crossed IZY instruction");
                             fetched = read(addr_abs);
                         }
                         instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
