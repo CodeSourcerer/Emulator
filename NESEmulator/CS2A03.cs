@@ -163,24 +163,24 @@ namespace NESEmulator
             if (addr >= ADDR_PULSE1_LO && addr <= ADDR_PULSE2_HI)
             {
                 dataRead = true;
-                Log.Debug($"[{_cpuClockCounter}] Pulse channel address read [addr={addr:X2}]");
+                //Log.Debug($"[{_cpuClockCounter}] Pulse channel address read [addr={addr:X2}]");
             }
             else if (addr >= ADDR_TRI_LO && addr <= ADDR_TRI_HI)
             {
                 dataRead = true;
                 data = _triangleChannel.Read(addr);
-                Log.Debug($"[{_cpuClockCounter}] Triangle channel address read [addr={addr:X2}]");
+                //Log.Debug($"[{_cpuClockCounter}] Triangle channel address read [addr={addr:X2}]");
             }
             else if (addr >= ADDR_NOISE_LO && addr <= ADDR_NOISE_HI)
             {
                 dataRead = true;
-                Log.Debug($"[{_cpuClockCounter}] Noise channel address read [addr={addr:X2}]");
+                //Log.Debug($"[{_cpuClockCounter}] Noise channel address read [addr={addr:X2}]");
             }
             else if (addr >= ADDR_DMC_LO && addr <= ADDR_DMC_HI)
             {
                 dataRead = true;
                 data = _dmcChannel.Read(addr);
-                Log.Debug($"[{_cpuClockCounter}] DMC channel address read [addr={addr:X2}]");
+                //Log.Debug($"[{_cpuClockCounter}] DMC channel address read [addr={addr:X2}]");
             }
             else if (addr == ADDR_STATUS)
             {
@@ -206,7 +206,7 @@ namespace NESEmulator
             else if (addr == ADDR_FRAME_COUNTER)
             {
                 dataRead = true;
-                Log.Debug($"[{_cpuClockCounter}] Frame counter read");
+                //Log.Debug($"[{_cpuClockCounter}] Frame counter read");
             }
 
             return dataRead;
@@ -246,13 +246,13 @@ namespace NESEmulator
             {
                 dataWritten = true;
                 _triangleChannel.Write(addr, data);
-                Log.Debug($"[{_cpuClockCounter}] Triangle channel address written [addr={addr:X2}] [data={data:X2}]");
+                //Log.Debug($"[{_cpuClockCounter}] Triangle channel address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr >= ADDR_NOISE_LO && addr <= ADDR_NOISE_HI)
             {
                 dataWritten = true;
                 _noiseChannel.Write(addr, data);
-                Log.Debug($"[{_cpuClockCounter}] Noise channel address written [addr={addr:X2}] [data={data:X2}]");
+                //Log.Debug($"[{_cpuClockCounter}] Noise channel address written [addr={addr:X2}] [data={data:X2}]");
             }
             else if (addr >= ADDR_DMC_LO && addr <= ADDR_DMC_HI)
             {
@@ -274,7 +274,7 @@ namespace NESEmulator
                     _bus.CPU.ClearIRQ();
                     //Log.Debug("DMC IRQ Cleared");
                 }
-                Log.Debug($"[{_cpuClockCounter}] Status written [data={data}] [1={_pulseChannel1.Enabled},2={_pulseChannel2.Enabled},T={_triangleChannel.Enabled},N={_noiseChannel.Enabled},D={_dmcChannel.Enabled}]");
+                //Log.Debug($"[{_cpuClockCounter}] Status written [data={data}] [1={_pulseChannel1.Enabled},2={_pulseChannel2.Enabled},T={_triangleChannel.Enabled},N={_noiseChannel.Enabled},D={_dmcChannel.Enabled}]");
             }
             else if (addr == ADDR_FRAME_COUNTER)
             {
@@ -291,7 +291,7 @@ namespace NESEmulator
                     //Log.Debug("Interrupt Inhibit set  - Cleared IRQ");
                 }
 
-                Log.Debug($"[{_cpuClockCounter}] Pending frame counter write in {_frameCounterCycleWait} cycles [data={data:X2}]");
+                //Log.Debug($"[{_cpuClockCounter}] Pending frame counter write in {_frameCounterCycleWait} cycles [data={data:X2}]");
             }
 
             return dataWritten;
@@ -381,7 +381,7 @@ namespace NESEmulator
             }
             _frameCounter.Mode = (_frameCounterData.TestBit(7) ? SequenceMode.FiveStep : SequenceMode.FourStep);
 
-            Log.Debug($"[{_cpuClockCounter}] Frame counter written [data={_frameCounterData:X2}] [I={_frameCounter.InterruptInhibit}] [Mode={_frameCounter.Mode}]");
+            //Log.Debug($"[{_cpuClockCounter}] Frame counter written [data={_frameCounterData:X2}] [I={_frameCounter.InterruptInhibit}] [Mode={_frameCounter.Mode}]");
         }
     }
 }

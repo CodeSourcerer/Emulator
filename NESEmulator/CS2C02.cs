@@ -421,10 +421,10 @@ namespace NESEmulator
                         if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
 
                         _mask.reg = data;
-                        if (!_mask.RenderBackground)
-                            Log.Debug($"[{_currentClockCycle / 3}] Background rendering disabled");
-                        if (!_mask.RenderSprites)
-                            Log.Debug($"[{_currentClockCycle / 3}] Sprite rendering disabled");
+                        //if (!_mask.RenderBackground)
+                        //    Log.Debug($"[{_currentClockCycle / 3}] Background rendering disabled");
+                        //if (!_mask.RenderSprites)
+                        //    Log.Debug($"[{_currentClockCycle / 3}] Sprite rendering disabled");
                         break;
                     case 0x0002:    // Status
                         break;
@@ -674,11 +674,9 @@ namespace NESEmulator
                 // Foreground Rendering ===================================================
                 if (_scanline != 261)
                 {
-                    // Do secondary OAM clear and sprite evaluation at cycle 258 other crap is
-                    // messing with sprite shift registers before this time and the evaluation
-                    // overwrites the sprite data for this scanline. Need to possibly revisit this later...
-                    if (_cycle == 258)
-                    { 
+                    if (_cycle == 256)
+                    {
+                        // Clear secondary OAM (this happens on cycles 1-64)
                         resetSpriteDataForScanline();
 
                         // We've reached the end of a visible scanline. It is now time to determine which
@@ -742,8 +740,7 @@ namespace NESEmulator
             // yield the current background color in effect.
             if (_mask.RenderBackground)
             {
-                if ((_mask.RenderBackgroundLeft && _cycle < 9) ||
-                    _cycle >= 9)
+                if ((_mask.RenderBackgroundLeft && _cycle < 8) || _cycle >= 8)
                 {
                     // Handle Pixel Selection by selecting the relevant bit depending upon fine x scrolling. This
                     // has the effect of offsetting ALL background rendering by a set number of pixels, permitting
@@ -771,7 +768,7 @@ namespace NESEmulator
 
             if (_mask.RenderSprites)
             {
-                if ((_mask.RenderSpritesLeft && _cycle < 9) || _cycle >= 9)
+                if ((_mask.RenderSpritesLeft && _cycle < 8) || _cycle >= 8)
                 {
                     // Iterate through all sprites for this scanline. This is to maintain state priority.
                     // As soon as we find a non transparent pixel of a sprite, we can abort.
@@ -862,7 +859,7 @@ namespace NESEmulator
                 }
 
                 // Sprite 0 hit detection
-                if (_spriteZeroHitPossible && _spriteZeroBeingRendered)
+                if (_spriteZeroHitPossible && _spriteZeroBeingRendered && !_status.SpriteZeroHit)
                 {
                     // Sprite 0 is a collision between foreground and background so they must both be enabled
                     if (_mask.RenderBackground && _mask.RenderSprites)
@@ -871,12 +868,12 @@ namespace NESEmulator
                         // smooth inconsistencies when scrolling (since sprite's x coord must be >= 0)
                         if (!(_mask.RenderBackgroundLeft || _mask.RenderSpritesLeft))
                         {
-                            if (_cycle >= 9 && _cycle < 258)
+                            if (_cycle >= 8 && _cycle != 255 && _cycle < 258)
                             {
                                 _status.SpriteZeroHit = true;
                             }
                         }
-                        else if (_cycle >= 1 && _cycle < 258)
+                        else if (_cycle >= 2 && _cycle != 255 && _cycle < 258)
                         {
                             _status.SpriteZeroHit = true;
                         }
@@ -1076,7 +1073,8 @@ namespace NESEmulator
                 _bg_shifterAttribHi <<= 1;
             }
 
-            if (_mask.RenderSprites && _cycle >= 1 && _cycle < 258)
+            // Shifters for sprites don't start until cycle 2
+            if (_mask.RenderSprites && _cycle >= 2 && _cycle < 257)
             {
                 for (int i = 0; i < _spriteCurrCount; i++)
                 {
@@ -1283,7 +1281,7 @@ namespace NESEmulator
         {
             updateShifters();
 
-            incrementScrollX(); // scrolling down seems to also scroll right??
+            //incrementScrollX(); // scrolling down seems to also scroll right??
             incrementScrollY();
         }
 
