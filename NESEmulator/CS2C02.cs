@@ -674,7 +674,7 @@ namespace NESEmulator
                 // Foreground Rendering ===================================================
                 if (_scanline != 261)
                 {
-                    if (_cycle == 256)
+                    if (_cycle == 257)
                     {
                         // Clear secondary OAM (this happens on cycles 1-64)
                         resetSpriteDataForScanline();
@@ -740,7 +740,7 @@ namespace NESEmulator
             // yield the current background color in effect.
             if (_mask.RenderBackground)
             {
-                if ((_mask.RenderBackgroundLeft && _cycle < 8) || _cycle >= 8)
+                if (_mask.RenderBackgroundLeft || _cycle >= 9)
                 {
                     // Handle Pixel Selection by selecting the relevant bit depending upon fine x scrolling. This
                     // has the effect of offsetting ALL background rendering by a set number of pixels, permitting
@@ -768,7 +768,7 @@ namespace NESEmulator
 
             if (_mask.RenderSprites)
             {
-                if ((_mask.RenderSpritesLeft && _cycle < 8) || _cycle >= 8)
+                if (_mask.RenderSpritesLeft || _cycle >= 9)
                 {
                     // Iterate through all sprites for this scanline. This is to maintain state priority.
                     // As soon as we find a non transparent pixel of a sprite, we can abort.
@@ -816,8 +816,8 @@ namespace NESEmulator
             // Now we have a background pixel and a foreground pixel. They need to be combined. It is possible for the sprites
             // to go behind background tiles that are not "transparent", yet another neat trick of the PPU that adds complexity
 
-            byte pixel   = 0x00;    // The FINAL FINAL pixel
-            byte palette = 0x00;    // The FINAL FINAL palette
+            byte pixel   = 0x00;    // The FINAL pixel
+            byte palette = 0x00;    // The FINAL palette
 
             if (bg_pixel == 0 && fg_pixel == 0)
             {
@@ -866,14 +866,16 @@ namespace NESEmulator
                     {
                         // The left edge of the screen has specific switches to control its appearance. This is used to
                         // smooth inconsistencies when scrolling (since sprite's x coord must be >= 0)
-                        if (!(_mask.RenderBackgroundLeft || _mask.RenderSpritesLeft))
+                        if (!(_mask.RenderBackgroundLeft && _mask.RenderSpritesLeft))
                         {
-                            if (_cycle >= 8 && _cycle != 255 && _cycle < 258)
+                            //if (_cycle >= 9 && _cycle != 255 && _cycle < 258)
+                            if (_cycle >= 9 && _cycle < 255)
                             {
                                 _status.SpriteZeroHit = true;
                             }
                         }
-                        else if (_cycle >= 2 && _cycle != 255 && _cycle < 258)
+                        //else if (_cycle >= 2 && _cycle != 255 && _cycle < 258)
+                        else if (_cycle >= 2 && _cycle < 255)
                         {
                             _status.SpriteZeroHit = true;
                         }
