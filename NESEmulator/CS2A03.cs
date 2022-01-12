@@ -92,7 +92,7 @@ namespace NESEmulator
                 // Check if we need to do our special case frame counter write handling
                 if (_frameCounterWritten)
                 {
-                    if (--_frameCounterCycleWait == 0)
+                    if (_frameCounterCycleWait-- == 0)
                     {
                         updateFrameCounter();
                         _frameCounterWritten = false;
@@ -110,6 +110,9 @@ namespace NESEmulator
                     {
                         IRQ();
                         _frameInterruptOccurred = true;
+#if DEBUG_FRAME_COUNTER
+                        Log.Debug($"[{_cpuClockCounter}] Frame counter raised interrupt");
+#endif
                     }
                 }
                 else if (!_frameCounter.FrameInterrupt && _frameInterruptOccurred)
@@ -192,7 +195,7 @@ namespace NESEmulator
                               (_triangleChannel.IsPlaying ? 1 : 0) << 2 |
                               (_pulseChannel2.IsPlaying ? 1 : 0) << 1 |
                               (_pulseChannel1.IsPlaying ? 1 : 0));
-                //Log.Debug($"[{_cpuClockCounter}] Status register read [data={data:X2}] [I={_dmcChannel.InterruptFlag}, F={_frameCounter.FrameInterrupt}, D={_dmcChannel.Enabled}, N={_noiseChannel.IsPlaying}, T={_triangleChannel.IsPlaying}, 2={_pulseChannel2.IsPlaying}, 1={_pulseChannel1.IsPlaying}]");
+                Log.Debug($"[{_cpuClockCounter}] Status register read [data={data:X2}] [I={_dmcChannel.InterruptFlag}, F={_frameCounter.FrameInterrupt}, D={_dmcChannel.Enabled}, N={_noiseChannel.IsPlaying}, T={_triangleChannel.IsPlaying}, 2={_pulseChannel2.IsPlaying}, 1={_pulseChannel1.IsPlaying}]");
                 // "If an interrupt flag was set at the same moment of the read, it will read back as 1 but it will not be cleared."
                 if (!_frameCounter.IsInterruptCycle() && !readOnly)
                 {
@@ -200,7 +203,9 @@ namespace NESEmulator
                     //RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.CLEAR_IRQ));
                     // Interrupt is ack'd this way, so we can stop pestering the CPU now.
                     _bus.CPU.ClearIRQ();
-                    //Log.Debug("APU Status Read - IRQ Cleared");
+#if DEBUG_FRAME_COUNTER
+                    Log.Debug($"[{_cpuClockCounter}] APU Status Read - IRQ Cleared");
+#endif
                 }
             }
             else if (addr == ADDR_FRAME_COUNTER)
@@ -281,17 +286,20 @@ namespace NESEmulator
                 dataWritten = true;
                 _frameCounterData = data;
                 _frameCounterWritten = true;
-                _frameCounterCycleWait = (byte)(((_cpuClockCounter % 6) == 0) ? 3 : 4);
+                _frameCounterCycleWait = (byte)(((_cpuClockCounter % 6) == 0) ? 3 : 2);
                 //_frameCounter.Reset();
                 _frameCounter.InterruptInhibit = data.TestBit(6);
                 if (_frameCounter.InterruptInhibit && _frameCounter.FrameInterrupt)
                 {
                     _frameCounter.FrameInterrupt = false;
                     _bus.CPU.ClearIRQ();
-                    //Log.Debug("Interrupt Inhibit set  - Cleared IRQ");
+#if DEBUG_FRAME_COUNTER
+                    Log.Debug($"[{_cpuClockCounter}] Interrupt Inhibit set  - Cleared IRQ");
+#endif
                 }
-
-                //Log.Debug($"[{_cpuClockCounter}] Pending frame counter write in {_frameCounterCycleWait} cycles [data={data:X2}]");
+#if DEBUG_FRAME_COUNTER
+                Log.Debug($"[{_cpuClockCounter}] Pending frame counter write in {_frameCounterCycleWait} cycles [data={data:X2}]");
+#endif
             }
 
             return dataWritten;
@@ -377,11 +385,13 @@ namespace NESEmulator
             {
                 _frameCounter.FrameInterrupt = false;
                 _bus.CPU.ClearIRQ();
-                //Log.Debug("I enabled - IRQ Cleared");
+                Log.Debug($"[{_cpuClockCounter}] I enabled - IRQ Cleared");
             }
             _frameCounter.Mode = (_frameCounterData.TestBit(7) ? SequenceMode.FiveStep : SequenceMode.FourStep);
 
-            //Log.Debug($"[{_cpuClockCounter}] Frame counter written [data={_frameCounterData:X2}] [I={_frameCounter.InterruptInhibit}] [Mode={_frameCounter.Mode}]");
+#if DEBUG_FRAME_COUNTER
+            Log.Debug($"[{_cpuClockCounter}] Frame counter written [data={_frameCounterData:X2}] [I={_frameCounter.InterruptInhibit}] [Mode={_frameCounter.Mode}]");
+#endif
         }
     }
 }

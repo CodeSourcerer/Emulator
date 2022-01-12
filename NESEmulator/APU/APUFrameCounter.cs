@@ -71,9 +71,6 @@ namespace NESEmulator.APU
             SequenceAction[] sequenceActions = null;
             if (this.Mode == SequenceMode.FourStep)
             {
-                if (_clockCounter >= FOURSTEP_FINAL)
-                    _clockCounter = 0;
-
                 if (this._fourStepSequence.ContainsKey(_clockCounter))
                 {
                     sequenceActions = this._fourStepSequence[_clockCounter];
@@ -86,8 +83,8 @@ namespace NESEmulator.APU
                     sequenceActions = this._fiveStepSequence[_clockCounter];
                 }
 
-                if (_clockCounter >= FIVESTEP_FINAL)
-                    _clockCounter = 0;
+                //if (_clockCounter >= FIVESTEP_FINAL)
+                //    _clockCounter = 0;
             }
 
             if (sequenceActions != null)
@@ -110,14 +107,25 @@ namespace NESEmulator.APU
                                 if (!InterruptInhibit)
                                 {
                                     FrameInterrupt = true;
-                                    //Log.Debug($"[_clockCounter={_clockCounter}] Frame Interrupt");
+#if DEBUG_FRAME_COUNTER
+                                    Log.Debug($"[_clockCounter={_clockCounter}] Set Frame Interrupt");
+#endif
                                 }
                                 break;
                         }
                     }
                 }
             }
+
             _clockCounter++;
+            if (Mode == SequenceMode.FourStep && (_clockCounter - 1) == FOURSTEP_FINAL)
+            {
+                _clockCounter = 1;
+            }
+            else if (Mode == SequenceMode.FiveStep && (_clockCounter - 1) == FIVESTEP_FINAL)
+            {
+                _clockCounter = 1;
+            }
         }
 
         public bool IsInterruptCycle()
