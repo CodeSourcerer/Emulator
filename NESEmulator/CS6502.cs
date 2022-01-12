@@ -1270,7 +1270,7 @@ namespace NESEmulator
                     break;
                 case 3:
                     // read from effective address, before checking if we crossed page boundary
-                    Log.Debug($"[{clock_count}] ABY read effective address (cycle 3) [opcode={opcode:X2}] [addr_eff={(ushort)instr_state["addr_eff"]:X4}]"); 
+                    //Log.Debug($"[{clock_count}] ABY read effective address (cycle 3) [opcode={opcode:X2}] [addr_eff={(ushort)instr_state["addr_eff"]:X4}]"); 
                     fetched = read((ushort)instr_state["addr_eff"]);
                     // did we cross a page boundary?
                     addr_abs += y;
@@ -1305,7 +1305,7 @@ namespace NESEmulator
                     {
                         if (opcode_lookup[opcode].instr_type != CPUInstructionType.Write)
                         {
-                            Log.Debug($"[{clock_count}] ABY read after adjusting address (cycle 4) [opcode={opcode:X2}] [addr_abs={addr_abs:X4}]");
+                            //Log.Debug($"[{clock_count}] ABY read after adjusting address (cycle 4) [opcode={opcode:X2}] [addr_abs={addr_abs:X4}]");
                             // Read again from correct address
                             fetched = read(addr_abs);
                         }
@@ -1471,7 +1471,7 @@ namespace NESEmulator
                 case 4:
                     // Read from effective address
                     var addr_eff = (ushort)((ushort)instr_state["addr_eff_hi"] << 8 | (byte)instr_state["addr_eff_lo"]);
-                    Log.Debug($"[{clock_count}] IZY read effective address (cycle 4) [opcode={opcode:X2}] [addr_eff={addr_eff:X4}]");
+                    //Log.Debug($"[{clock_count}] IZY read effective address (cycle 4) [opcode={opcode:X2}] [addr_eff={addr_eff:X4}]");
                     fetched = read(addr_eff);
                     // did we cross a page boundary?
                     instr_state["page_cross"] = (addr_abs & 0xFF00) != ((addr_abs + y) & 0xFF00);
@@ -1508,7 +1508,7 @@ namespace NESEmulator
                     {
                         if (opcode_lookup[opcode].instr_type != CPUInstructionType.Write)
                         {
-                            Log.Debug($"[{clock_count}] Reading after page-crossed IZY instruction (cycle 5) [opcode={opcode:X2}] [addr_abs={addr_abs:X4}]");
+                            //Log.Debug($"[{clock_count}] Reading after page-crossed IZY instruction (cycle 5) [opcode={opcode:X2}] [addr_abs={addr_abs:X4}]");
                             fetched = read(addr_abs);
                         }
                         instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
