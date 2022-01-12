@@ -113,7 +113,7 @@ namespace NESEmulator.Mappers
                 if (_targetRegister == 0 || _targetRegister == 1)
                     _register[_targetRegister] &= 0xFE;
 
-                //Log.Debug($"Register[{_targetRegister}]={data:X2}");
+                Log.Debug($"Register[{_targetRegister}]={data:X2}");
                 updateCHRBankOffsets();
                 updatePRGBankOffsets();
                 return true;

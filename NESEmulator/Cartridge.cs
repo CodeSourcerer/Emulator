@@ -84,6 +84,7 @@ namespace NESEmulator
                 {
                     // Data came from cartridge RAM
                     data = PRGRAM[addr & 0x1FFF];
+                    //Log.Debug($"Read from PRG RAM [addr={addr:X4}] [data={data:X2}]");
                 }
                 return true;
             }
@@ -109,7 +110,7 @@ namespace NESEmulator
                     if (mapper.PRGRAMEnable)
                     {
                         PRGRAM[addr & 0x1FFF] = data;
-                        //Log.Debug($"Write to PRG RAM [addr={addr:X4}]");
+                        //Log.Debug($"Write to PRG RAM [addr={addr:X4}] [data={data:X2}]");
                     }
                 }
                 return true;
