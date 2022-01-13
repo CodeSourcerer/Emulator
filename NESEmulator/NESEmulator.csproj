@@ -5,7 +5,7 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <DefineConstants>TRACE;DEBUG;DEBUG_FRAME_COUNTER</DefineConstants>
+    <DefineConstants>TRACE;DEBUG;SPRITE_ZERO_DEBUG</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

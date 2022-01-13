@@ -81,7 +81,7 @@ namespace NESEmulator
 
         // Sprite rendering
         public ObjectAttributeEntry[] OAM = new ObjectAttributeEntry[64];
-        private ObjectAttributeEntry[] _secondaryOAM = new ObjectAttributeEntry[8];
+        public ObjectAttributeEntry[] SecondaryOAM = new ObjectAttributeEntry[8];
         private byte   _OAMaddr;
         private byte   _spriteCurrCount;
         private byte[] _spriteCurrShifterPatternLo = new byte[8];
@@ -402,7 +402,10 @@ namespace NESEmulator
                 switch (addr)
                 {
                     case 0x0000:    // Control
-                        if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
+                        // Writes to the following registers are ignored if earlier than ~29658 CPU clocks after reset: PPUCTRL, PPUMASK, PPUSCROLL, PPUADDR.
+                        // https://wiki.nesdev.org/w/index.php?title=PPU_power_up_state
+                        // TODO: This should only apply after a RESET - the way I wrote this was after power on. Oops.
+                        //if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
 
 #if DEBUG_VBL
                         if (((PPUControl)data).EnableNMI != _control.EnableNMI)
@@ -418,7 +421,10 @@ namespace NESEmulator
                         checkAndRaiseNMI();
                         break;
                     case 0x0001:    // Mask
-                        if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
+                        // Writes to the following registers are ignored if earlier than ~29658 CPU clocks after reset: PPUCTRL, PPUMASK, PPUSCROLL, PPUADDR.
+                        // https://wiki.nesdev.org/w/index.php?title=PPU_power_up_state
+                        // TODO: This should only apply after a RESET - the way I wrote this was after power on. Oops.
+                        //if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
 
                         _mask.reg = data;
                         //if (!_mask.RenderBackground)
@@ -436,7 +442,10 @@ namespace NESEmulator
                         _OAMaddr++;
                         break;
                     case 0x0005:    // Scroll
-                        if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
+                        // Writes to the following registers are ignored if earlier than ~29658 CPU clocks after reset: PPUCTRL, PPUMASK, PPUSCROLL, PPUADDR.
+                        // https://wiki.nesdev.org/w/index.php?title=PPU_power_up_state
+                        // TODO: This should only apply after a RESET - the way I wrote this was after power on. Oops.
+                        //if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
 
                         if (_addressLatch == 0)
                         {
@@ -456,7 +465,10 @@ namespace NESEmulator
                         }
                         break;
                     case 0x0006:    // PPU Address
-                        if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
+                        // Writes to the following registers are ignored if earlier than ~29658 CPU clocks after reset: PPUCTRL, PPUMASK, PPUSCROLL, PPUADDR.
+                        // https://wiki.nesdev.org/w/index.php?title=PPU_power_up_state
+                        // TODO: This should only apply after a RESET - the way I wrote this was after power on. Oops.
+                        //if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
 
                         if (_addressLatch == 0)
                         {
@@ -686,48 +698,48 @@ namespace NESEmulator
                     }
                 }
 
-                if (_cycle > 256 && _cycle <= 320)
-                {
-                    switch ((_cycle - 1) % 8)
-                    {
-                        case 0:
-                            // Garbage NT byte fetch
-                            fetchNextBGTileId();
-                            break;
-                        case 2:
-                            // Garbage AT byte fetch
-                            fetchNextBGTileAttrib();
-                            break;
-                        case 4:
-                            // Low sprite tile byte
+                //if (_cycle > 256 && _cycle <= 320)
+                //{
+                //    switch ((_cycle - 1) % 8)
+                //    {
+                //        case 0:
+                //            // Garbage NT byte fetch
+                //            fetchNextBGTileId();
+                //            break;
+                //        case 2:
+                //            // Garbage AT byte fetch
+                //            fetchNextBGTileAttrib();
+                //            break;
+                //        case 4:
+                //            // Low sprite tile byte
 
-                            // Determine the memory addresses that contain the byte of pattern data. We only need
-                            // the lo pattern address, because the hi pattern address is always offset by 8 from the
-                            // lo address.
-                            _spritePatternAddrLo = _control.SpriteSize ? loadNextSpr8x16TileLSB(_currSprite) :
-                                                                         loadNextSpr8x8TileLSB(_currSprite);
-                            _spritePatternBitsLo = ppuRead(_spritePatternAddrLo);
-                            // If the sprite is flipped horizontally, we need to flip the pattern bytes
-                            if ((_secondaryOAM[_currSprite].attribute & 0x40) != 0)
-                                _spritePatternBitsLo = _spritePatternBitsLo.Flip();
-                            // Now we can load the pattern into our sprite shift registers ready for rendering on the next scanline
-                            _spriteCurrShifterPatternLo[_currSprite] = _spritePatternBitsLo;
-                            break;
-                        case 6:
-                            // High sprite tile byte
+                //            // Determine the memory addresses that contain the byte of pattern data. We only need
+                //            // the lo pattern address, because the hi pattern address is always offset by 8 from the
+                //            // lo address.
+                //            _spritePatternAddrLo = _control.SpriteSize ? loadNextSpr8x16TileLSB(_currSprite) :
+                //                                                         loadNextSpr8x8TileLSB(_currSprite);
+                //            _spritePatternBitsLo = ppuRead(_spritePatternAddrLo);
+                //            // If the sprite is flipped horizontally, we need to flip the pattern bytes
+                //            if ((SecondaryOAM[_currSprite].attribute & 0x40) != 0)
+                //                _spritePatternBitsLo = _spritePatternBitsLo.Flip();
+                //            // Now we can load the pattern into our sprite shift registers ready for rendering on the next scanline
+                //            _spriteCurrShifterPatternLo[_currSprite] = _spritePatternBitsLo;
+                //            break;
+                //        case 6:
+                //            // High sprite tile byte
 
-                            // Hi bit plane equivalent is always offset by 8 bytes from lo bit plane
-                            _spritePatternBitsHi = ppuRead((ushort)(_spritePatternAddrLo + 8));
-                            // If the sprite is flipped horizontally, we need to flip the pattern bytes
-                            if ((_secondaryOAM[_currSprite].attribute & 0x40) != 0)
-                                _spritePatternBitsHi = _spritePatternBitsHi.Flip();
-                            // Now we can load the pattern into our sprite shift registers ready for rendering on the next scanline
-                            _spriteCurrShifterPatternHi[_currSprite] = _spritePatternBitsHi;
+                //            // Hi bit plane equivalent is always offset by 8 bytes from lo bit plane
+                //            _spritePatternBitsHi = ppuRead((ushort)(_spritePatternAddrLo + 8));
+                //            // If the sprite is flipped horizontally, we need to flip the pattern bytes
+                //            if ((SecondaryOAM[_currSprite].attribute & 0x40) != 0)
+                //                _spritePatternBitsHi = _spritePatternBitsHi.Flip();
+                //            // Now we can load the pattern into our sprite shift registers ready for rendering on the next scanline
+                //            _spriteCurrShifterPatternHi[_currSprite] = _spritePatternBitsHi;
 
-                            _currSprite++;
-                            break;
-                    }
-                }
+                //            _currSprite++;
+                //            break;
+                //    }
+                //}
 
                 if (_cycle == 340)
                 {
@@ -736,11 +748,11 @@ namespace NESEmulator
                         _spritePatternAddrLo = _control.SpriteSize ? loadNextSpr8x16TileLSB(currSpr) :
                                                                      loadNextSpr8x8TileLSB(currSpr);
                         _spritePatternBitsLo = ppuRead(_spritePatternAddrLo);
-                        if ((_secondaryOAM[currSpr].attribute & 0x40) != 0)
+                        if ((SecondaryOAM[currSpr].attribute & 0x40) != 0)
                             _spritePatternBitsLo = _spritePatternBitsLo.Flip();
                         _spriteCurrShifterPatternLo[currSpr] = _spritePatternBitsLo;
                         _spritePatternBitsHi = ppuRead((ushort)(_spritePatternAddrLo + 8));
-                        if ((_secondaryOAM[currSpr].attribute & 0x40) != 0)
+                        if ((SecondaryOAM[currSpr].attribute & 0x40) != 0)
                             _spritePatternBitsHi = _spritePatternBitsHi.Flip();
                         _spriteCurrShifterPatternHi[currSpr] = _spritePatternBitsHi;
                     }
@@ -795,7 +807,7 @@ namespace NESEmulator
                     for (byte i = 0; i < _spriteCurrCount; i++)
                     {
                         // Scanline cycle has "collided" with sprite, shifters taking over
-                        if (_secondaryOAM[i].x == 0)
+                        if (SecondaryOAM[i].x == 0)
                         {
                             // Note: Fine X scrolling does not apply to sprites, the game should maintain their relationship
                             // with the background. So, we'll just use the MSB of the shifter.
@@ -807,9 +819,9 @@ namespace NESEmulator
 
                             // Extract the palette from the bottom 2 bits. Recall that foreground palettes are the latter 4
                             // in the palette memory.
-                            fg_palette = (byte)((_secondaryOAM[i].attribute & 0x03) + 0x04);
+                            fg_palette = (byte)((SecondaryOAM[i].attribute & 0x03) + 0x04);
                             //fg_priority = (byte)((_spriteScanline[i].attribute & 0x20) == 0 ? 1 : 0);
-                            if ((_secondaryOAM[i].attribute & 0x20) == 0)
+                            if ((SecondaryOAM[i].attribute & 0x20) == 0)
                                 fg_priority = 1;
                             else
                                 fg_priority = 0;
@@ -822,7 +834,9 @@ namespace NESEmulator
                                 if (i == 0)
                                 {
                                     _spriteZeroBeingRendered = true;
+#if SPRITE_ZERO_DEBUG
                                     Log.Debug($"Sprite 0 being rendered at [_cycle={_cycle}] [_scanline={_scanline}]");
+#endif
                                 }
 
                                 break;
@@ -891,14 +905,18 @@ namespace NESEmulator
                             if (_cycle >= 9 && _cycle < 256)
                             {
                                 _status.SpriteZeroHit = true;
+#if SPRITE_ZERO_DEBUG
                                 Log.Debug($"Sprite 0 HIT at [_cycle={_cycle}] [_scanline={_scanline}]");
+#endif
                             }
                         }
                         //else if (_cycle >= 2 && _cycle != 255 && _cycle < 258)
                         else if (_cycle >= 2 && _cycle < 256)
                         {
                             _status.SpriteZeroHit = true;
+#if SPRITE_ZERO_DEBUG
                             Log.Debug($"Sprite 0 HIT at [_cycle={_cycle}] [_scanline={_scanline}]");
+#endif
                         }
                     }
                 }
@@ -1105,9 +1123,9 @@ namespace NESEmulator
             {
                 for (int i = 0; i < _spriteCurrCount; i++)
                 {
-                    if (_secondaryOAM[i].x > 0)
+                    if (SecondaryOAM[i].x > 0)
                     {
-                        _secondaryOAM[i].x--;
+                        SecondaryOAM[i].x--;
                     }
                     else
                     {
@@ -1357,7 +1375,7 @@ namespace NESEmulator
 
         private void resetSpriteDataForScanline()
         {
-            foreach (var sl in _secondaryOAM)
+            foreach (var sl in SecondaryOAM)
                 sl.Fill(0xFF);
 
             _spriteCurrCount = 0;
@@ -1398,9 +1416,12 @@ namespace NESEmulator
                         {
                             // Yup, so it may trigger a sprite zero hit when drawn
                             _spriteZeroHitPossible = true;
+#if SPRITE_ZERO_DEBUG
+                            Log.Debug($"Sprite 0 on scanline [_scanline={_scanline}] [x={OAM[OAMEntry].x}] [y={OAM[OAMEntry].y}]");
+#endif
                         }
 
-                        _secondaryOAM[_spriteCurrCount] = OAM[OAMEntry];
+                        SecondaryOAM[_spriteCurrCount] = OAM[OAMEntry];
                         _spriteCurrCount++;
                     }
                     else
@@ -1418,12 +1439,12 @@ namespace NESEmulator
         {
             ushort sprite_pattern_addr_lo;
 
-            ushort cellRow = (ushort)(_scanline - _secondaryOAM[i].y);
-            cellRow = (ushort)((_secondaryOAM[i].attribute & 0x80) == 0 ? cellRow : (7 - cellRow));
+            ushort cellRow = (ushort)(_scanline - SecondaryOAM[i].y);
+            cellRow = (ushort)((SecondaryOAM[i].attribute & 0x80) == 0 ? cellRow : (7 - cellRow));
 
             sprite_pattern_addr_lo = (ushort)(
                  ((_control.PatternSprite ? 1 : 0) << 12)   // Which pattern table? 0KB or 4KB offset
-                | (_secondaryOAM[i].id << 4)              // Which cell? Tile ID * 16 (16B per tile)
+                | (SecondaryOAM[i].id << 4)              // Which cell? Tile ID * 16 (16B per tile)
                 | cellRow);                                 // Which row in cell?
 
             return sprite_pattern_addr_lo;
@@ -1434,16 +1455,16 @@ namespace NESEmulator
             ushort sprite_pattern_addr_lo;
 
             // 8x16 sprite mode - the sprite attribute determines the pattern table
-            bool inverted   = (_secondaryOAM[i].attribute & 0x80) != 0;
-            ushort cellRow  = (ushort)((_scanline - _secondaryOAM[i].y) & 0x07);
+            bool inverted   = (SecondaryOAM[i].attribute & 0x80) != 0;
+            ushort cellRow  = (ushort)((_scanline - SecondaryOAM[i].y) & 0x07);
             cellRow         = (ushort)(!inverted ? cellRow : 7 - cellRow);
-            int topHalf     = (byte)((_scanline - _secondaryOAM[i].y) < 8 ? 0 : 1);
+            int topHalf     = (byte)((_scanline - SecondaryOAM[i].y) < 8 ? 0 : 1);
             topHalf += inverted ? 1 : 0;
             if (topHalf > 1) topHalf = 0;
 
             sprite_pattern_addr_lo = (ushort)(
-                  ((_secondaryOAM[i].id & 0x01) << 12)                // Which pattern table? 0KB or 4KB offset
-                | (((_secondaryOAM[i].id & 0xFE) + topHalf) << 4)     // Which cell? Tile ID * 16 (16B per tile)
+                  ((SecondaryOAM[i].id & 0x01) << 12)                // Which pattern table? 0KB or 4KB offset
+                | (((SecondaryOAM[i].id & 0xFE) + topHalf) << 4)     // Which cell? Tile ID * 16 (16B per tile)
                 | cellRow);                                             // Which row in cell?
 
             return sprite_pattern_addr_lo;

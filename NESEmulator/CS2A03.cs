@@ -92,7 +92,7 @@ namespace NESEmulator
                 // Check if we need to do our special case frame counter write handling
                 if (_frameCounterWritten)
                 {
-                    if (_frameCounterCycleWait-- == 0)
+                    if (_frameCounterCycleWait-- <= 0)
                     {
                         updateFrameCounter();
                         _frameCounterWritten = false;
@@ -287,7 +287,6 @@ namespace NESEmulator
                 _frameCounterData = data;
                 _frameCounterWritten = true;
                 _frameCounterCycleWait = (byte)(((_cpuClockCounter % 6) == 0) ? 3 : 2);
-                //_frameCounter.Reset();
                 _frameCounter.InterruptInhibit = data.TestBit(6);
                 if (_frameCounter.InterruptInhibit && _frameCounter.FrameInterrupt)
                 {

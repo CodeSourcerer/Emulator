@@ -110,7 +110,7 @@ namespace NESEmulatorApp
             //string romfile = "tests\\instr_misc\\03-dummy_reads.nes"; // passes
             //string romfile = "tests\\instr_misc\\04-dummy_reads_apu.nes"; // passes - but black screen cause it tests unofficial opcodes too
             //string romfile = "tests\\ppu_vbl_nmi.nes"; // displays white screen
-            string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes"; // failed #7 - vbl period too short
+            //string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes"; // failed #7 - vbl period too short
             // APU tests
             //string romfile = "tests\\APU\\01.len_ctr.nes"; // passes
             //string romfile = "tests\\APU\\02.len_table.nes"; // passes
@@ -122,6 +122,7 @@ namespace NESEmulatorApp
             //string romfile = "tests\\APU\\08.irq_timing.nes"; 
             //string romfile = "tests\\APU\\10.len_halt_timing.nes";
             //string romfile = "tests\\APU\\11.len_reload_timing.nes";
+            
             // From mmc3_test_2
             //string romfile = "tests\\mmc3_test_2\\1-clocking.nes";
             // From cpu_interrupts_v2
@@ -145,7 +146,7 @@ namespace NESEmulatorApp
             //string romfile = "tests\\ppu_sprite_hit\\04-flip.nes"; // passes
             //string romfile = "tests\\ppu_sprite_hit\\05-left_clip.nes"; // passes
             //string romfile = "tests\\ppu_sprite_hit\\06-right_edge.nes"; // passes
-            //string romfile = "tests\\ppu_sprite_hit\\07-screen_bottom.nes"; // fails 4) Should always miss when Y = 255
+            string romfile = "tests\\ppu_sprite_hit\\07-screen_bottom.nes"; // passes
             //string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes";
             //string romfile = "tests\\ppu_open_bus\\ppu_open_bus.nes";
 
@@ -317,6 +318,7 @@ namespace NESEmulatorApp
             //DrawRam(2, 182, 0x0100, 16, 16);
             //DrawCpu(416, 2);
             //DrawCode(416, 72, 26);
+            //DrawOam(270, 10, 0, 8, true);
             //DrawOam(270, 140, 0, 32);
             //DrawOam(500, 140, 32, 32);
 
@@ -478,11 +480,13 @@ namespace NESEmulatorApp
             }
         }
 
-        void DrawOam(int x, int y, int start, int count)
+        void DrawOam(int x, int y, int start, int count, bool secondary = false)
         {
+            var OAM = secondary ? nesBus.PPU.SecondaryOAM : nesBus.PPU.OAM;
+
             for (int i = start, y_offset = 0; i < start + count; i++, y_offset++)
             {
-                string sOAM = $"{i:X2}: ({nesBus.PPU.OAM[i].x}, {nesBus.PPU.OAM[i].y}) ID: {nesBus.PPU.OAM[i].id:X2} AT: {nesBus.PPU.OAM[i].attribute:X2}";
+                string sOAM = $"{i:X2}: ({OAM[i].x}, {OAM[i].y}) ID: {OAM[i].id:X2} AT: {OAM[i].attribute:X2}";
                 pge.DrawString(x, y + y_offset * 10, sOAM, Pixel.WHITE);
             }
         }
