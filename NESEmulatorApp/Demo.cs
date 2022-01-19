@@ -91,10 +91,10 @@ namespace NESEmulatorApp
             //string romfile = "tests\\ice_climber.nes";
             //string romfile = "tests\\pacman-namco.nes";
             //string romfile = "tests\\ducktales.nes";
-            //string romfile = "tests\\young_indy.nes";
             // Mapper 1
+            //string romfile = "tests\\young_indy.nes";
             //string romfile = "tests\\zelda.nes";
-            //string romfile = "tests\\zeldaII.nes";
+            string romfile = "tests\\zeldaII.nes";
             //string romfile = "tests\\megaman2.nes";
 
             // Test roms
@@ -111,18 +111,19 @@ namespace NESEmulatorApp
             //string romfile = "tests\\instr_misc\\04-dummy_reads_apu.nes"; // passes - but black screen cause it tests unofficial opcodes too
             //string romfile = "tests\\ppu_vbl_nmi.nes"; // displays white screen
             //string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes"; // failed #7 - vbl period too short
+
             // APU tests
             //string romfile = "tests\\APU\\01.len_ctr.nes"; // passes
             //string romfile = "tests\\APU\\02.len_table.nes"; // passes
             //string romfile = "tests\\APU\\03.irq_flag.nes"; // passes
-            //string romfile = "tests\\APU\\04.clock_jitter.nes"; // 2) Frame irq is set too soon
+            //string romfile = "tests\\APU\\04.clock_jitter.nes"; // 5) Odd jitter not handled properly
             //string romfile = "tests\\APU\\05.len_timing_mode0.nes"; 
             //string romfile = "tests\\APU\\06.len_timing_mode1.nes"; 
             //string romfile = "tests\\APU\\07.irq_flag_timing.nes"; 
             //string romfile = "tests\\APU\\08.irq_timing.nes"; 
             //string romfile = "tests\\APU\\10.len_halt_timing.nes";
             //string romfile = "tests\\APU\\11.len_reload_timing.nes";
-            
+
             // From mmc3_test_2
             //string romfile = "tests\\mmc3_test_2\\1-clocking.nes";
             // From cpu_interrupts_v2
@@ -147,8 +148,12 @@ namespace NESEmulatorApp
             //string romfile = "tests\\ppu_sprite_hit\\05-left_clip.nes"; // passes
             //string romfile = "tests\\ppu_sprite_hit\\06-right_edge.nes"; // passes
             string romfile = "tests\\ppu_sprite_hit\\07-screen_bottom.nes"; // passes
-            //string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes";
+            //string romfile = "tests\\ppu_sprite_hit\\07-screen_bottom.nes"; // passes
+            //string romfile = "tests\\ppu_sprite_hit\\08-double_height.nes"; // passes
+            //string romfile = "tests\\ppu_sprite_hit\\09-timing.nes"; // 4) Flag set too late for upper-left corner
+            //string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes"; // passes
             //string romfile = "tests\\ppu_open_bus\\ppu_open_bus.nes";
+            //string romfile = "tests\\nmi_sync\\demo_ntsc.nes";
 
             if (args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]))
                 romfile = args[0];
