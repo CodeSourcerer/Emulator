@@ -56,7 +56,7 @@ namespace NESEmulatorApp
             //window.KeyDown += Window_KeyDown;
             var renderer = serviceProvider.GetService<IRenderer>();
             pge = new PixelGameEngine(renderer, serviceProvider.GetService<IPlatform>(), appName);
-            pge.Construct(SCREEN_WIDTH, SCREEN_HEIGHT, 2, 2, false, false);
+            pge.Construct(SCREEN_WIDTH, SCREEN_HEIGHT, 4, 4, false, false);
             pge.OnCreate += pge_OnCreate;
             pge.OnFrameUpdate = pge_OnUpdate;
             pge.OnDestroy += pge_OnDestroy;
@@ -87,52 +87,71 @@ namespace NESEmulatorApp
             //string romfile = "tests\\smb3.nes";
             //string romfile = "tests\\capt_america.nes";
             //string romfile = "tests\\Abadox.nes";
-            //string romfile = "tests\\burgertime.nes";
+            //string romfile = "tests\\BurgerTime.nes";
             //string romfile = "tests\\ice_climber.nes";
             //string romfile = "tests\\pacman-namco.nes";
             //string romfile = "tests\\ducktales.nes";
-            //string romfile = "tests\\young_indy.nes";
             // Mapper 1
+            //string romfile = "tests\\young_indy.nes";
             //string romfile = "tests\\zelda.nes";
-            //string romfile = "tests\\zeldaII.nes";
+            string romfile = "tests\\zeldaII.nes";
             //string romfile = "tests\\megaman2.nes";
 
             // Test roms
             //string romfile = "tests\\nestest.nes";
             //string romfile = "tests\\instr_test_v5\\official_only.nes"; // passes
-            //string romfile = "tests\\1.Branch_Basics.nes";
-            //string romfile = "tests\\2.Backward_Branch.nes";
+            //string romfile = "tests\\1.Branch_Basics.nes"; // passes
+            //string romfile = "tests\\2.Backward_Branch.nes"; // passes
             //string romfile = "tests\\3.Forward_Branch.nes";
             //string romfile = "tests\\instr_timing\\1-instr_timing.nes"; // passes except for illegal opcodes
             //string romfile = "tests\\instr_timing\\2-branch_timing.nes"; // passes
             //string romfile = "tests\\instr_misc\\01-abs_x_wrap.nes"; // passes
             //string romfile = "tests\\instr_misc\\02-branch_wrap.nes"; // passes
             //string romfile = "tests\\instr_misc\\03-dummy_reads.nes"; // passes
-            //string romfile = "tests\\instr_misc\\04-dummy_reads_apu.nes";
-            //string romfile = "tests\\ppu_vbl_nmi.nes"; // displays white screen
-            //string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes"; // failed #7 - vbl period too short
-            //string romfile = "tests\\apu_test.nes";
+            //string romfile = "tests\\instr_misc\\04-dummy_reads_apu.nes"; // passes - but black screen cause it tests unofficial opcodes too
+
             // APU tests
             //string romfile = "tests\\APU\\01.len_ctr.nes"; // passes
             //string romfile = "tests\\APU\\02.len_table.nes"; // passes
             //string romfile = "tests\\APU\\03.irq_flag.nes"; // passes
-            //string romfile = "tests\\APU\\04.clock_jitter.nes"; // passes
-            //string romfile = "tests\\APU\\05.len_timing_mode0.nes"; // passes
-            //string romfile = "tests\\APU\\06.len_timing_mode1.nes"; // passes
-            //string romfile = "tests\\APU\\07.irq_flag_timing.nes"; // passes
-            //string romfile = "tests\\APU\\08.irq_timing.nes"; // fails - $03 -- too late"
-            //string romfile = "tests\\APU\\10.len_halt_timing.nes"; // fails - "3) Length should be clocked when halted at 14915"
-            //string romfile = "tests\\APU\\11.len_reload_timing.nes"; // fails - "4) Reload during length clock when ctr = 0 should work normally"
+            //string romfile = "tests\\APU\\04.clock_jitter.nes"; // 5) Odd jitter not handled properly
+            //string romfile = "tests\\APU\\05.len_timing_mode0.nes"; 
+            //string romfile = "tests\\APU\\06.len_timing_mode1.nes"; 
+            //string romfile = "tests\\APU\\07.irq_flag_timing.nes"; 
+            //string romfile = "tests\\APU\\08.irq_timing.nes"; 
+            //string romfile = "tests\\APU\\10.len_halt_timing.nes";
+            //string romfile = "tests\\APU\\11.len_reload_timing.nes";
+
             // From mmc3_test_2
             //string romfile = "tests\\mmc3_test_2\\1-clocking.nes";
             // From cpu_interrupts_v2
             //string romfile = "tests\\cpu_interrupts.nes"; // white screen
             //string romfile = "tests\\cpu_interrupts_v2\\1-cli_latency.nes"; // passes
-            string romfile = "tests\\cpu_interrupts_v2\\2-nmi_and_brk.nes"; // fails
+            //string romfile = "tests\\cpu_interrupts_v2\\2-nmi_and_brk.nes"; // fails
             //string romfile = "tests\\cpu_interrupts_v2\\3-nmi_and_irq.nes";
             //string romfile = "tests\\cpu_interrupts_v2\\4-irq_and_dma.nes";
             //string romfile = "tests\\cpu_interrupts_v2\\5-branch_delays_irq.nes";
+
+            // PPU Tests
+            // From blargg_ppu_tests_2005.09.15b
+            //string romfile = "tests\\blargg_ppu_tests_2005.09.15b\\palette_ram.nes"; // passes
+            //string romfile = "tests\\blargg_ppu_tests_2005.09.15b\\power_up_palette.nes";
+            //string romfile = "tests\\blargg_ppu_tests_2005.09.15b\\sprite_ram.nes"; // passes
+            //string romfile = "tests\\blargg_ppu_tests_2005.09.15b\\vbl_clear_time.nes"; // passes
+            //string romfile = "tests\\blargg_ppu_tests_2005.09.15b\\vram_access.nes"; // passes
+            //string romfile = "tests\\ppu_sprite_hit\\01-basics.nes"; // passes
+            //string romfile = "tests\\ppu_sprite_hit\\02-alignment.nes"; // passes
+            //string romfile = "tests\\ppu_sprite_hit\\03-corners.nes"; // passes
+            //string romfile = "tests\\ppu_sprite_hit\\04-flip.nes"; // passes
+            //string romfile = "tests\\ppu_sprite_hit\\05-left_clip.nes"; // passes
+            //string romfile = "tests\\ppu_sprite_hit\\06-right_edge.nes"; // passes
+            //string romfile = "tests\\ppu_sprite_hit\\07-screen_bottom.nes"; // passes
+            //string romfile = "tests\\ppu_sprite_hit\\08-double_height.nes"; // passes
+            //string romfile = "tests\\ppu_sprite_hit\\09-timing.nes"; // 4) Flag set too late for upper-left corner
             //string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes";
+            //string romfile = "tests\\ppu_open_bus\\ppu_open_bus.nes";
+            //string romfile = "tests\\nmi_sync\\demo_ntsc.nes";
+            //string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes"; // passes
 
             if (args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]))
                 romfile = args[0];
@@ -149,7 +168,7 @@ namespace NESEmulatorApp
             if (!cartridge.ImageValid)
                 throw new ApplicationException("Invalid ROM image");
             nesBus.InsertCartridge(cartridge);
-            nesBus.Reset();
+            nesBus.PowerOn();
 
             pge.Start();
         }
@@ -236,22 +255,35 @@ namespace NESEmulatorApp
                     nesBus.PPU.FrameComplete = false;
                     break;
 
+                case Key.Semicolon:
+                    // Advance to CPU clock cycle
+                    while (nesBus.SystemClockCycle % 3 != 0)
+                        nesBus.clock();
+
+                    // execute one CPU clock worth
+                    for (int i = 0; i < 3; i++)
+                    {
+                        nesBus.clock();
+                    }
+                    break;
+
                 case Key.C:
                     do
                     {
                         nesBus.clock();
-                    } while (!nesBus.CPU.isComplete());
+                    } while (nesBus.CPU.isComplete());
                     do
                     {
                         nesBus.clock();
-                    } while (nesBus.CPU.isComplete());
+                    } while (!nesBus.CPU.isComplete());
+
                     break;
             }
         }
 
         private void pge_OnUpdate(object sender, FrameUpdateEventArgs frameUpdateArgs)
         {
-            pge.Clear(Pixel.BLUE);
+            pge.Clear(Pixel.DARK_BLUE);
 
             if (runEmulation)
             {
@@ -287,8 +319,9 @@ namespace NESEmulatorApp
             // Draw Ram Page 0x00
             //DrawRam(2, 2, 0x0000, 16, 16);
             //DrawRam(2, 182, 0x0100, 16, 16);
-            //DrawCpu(516, 2);
-            //DrawCode(516, 72, 26);
+            //DrawCpu(416, 2);
+            //DrawCode(416, 72, 26);
+            //DrawOam(270, 10, 0, 8, true);
             //DrawOam(270, 140, 0, 32);
             //DrawOam(500, 140, 32, 32);
 
@@ -306,7 +339,7 @@ namespace NESEmulatorApp
         private void pge_OnCreate(object sender, EventArgs e)
         {
             // Extract disassembly
-            //mapAsm = cpu.Disassemble(0x0000, 0xFFFF);
+            mapAsm = nesBus.CPU.Disassemble(0x0000, 0xFFFF);
 
             //cpu.Reset();
 
@@ -450,11 +483,13 @@ namespace NESEmulatorApp
             }
         }
 
-        void DrawOam(int x, int y, int start, int count)
+        void DrawOam(int x, int y, int start, int count, bool secondary = false)
         {
+            var OAM = secondary ? nesBus.PPU.SecondaryOAM : nesBus.PPU.OAM;
+
             for (int i = start, y_offset = 0; i < start + count; i++, y_offset++)
             {
-                string sOAM = $"{i:X2}: ({nesBus.PPU.OAM[i].x}, {nesBus.PPU.OAM[i].y}) ID: {nesBus.PPU.OAM[i].id:X2} AT: {nesBus.PPU.OAM[i].attribute:X2}";
+                string sOAM = $"{i:X2}: ({OAM[i].x}, {OAM[i].y}) ID: {OAM[i].id:X2} AT: {OAM[i].attribute:X2}";
                 pge.DrawString(x, y + y_offset * 10, sOAM, Pixel.WHITE);
             }
         }
