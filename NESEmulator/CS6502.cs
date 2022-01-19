@@ -355,7 +355,6 @@ namespace NESEmulator
             {
                 // NMI cycles
                 _instCycleCount = 7;
-                //_nmiServicing = true;
                 _nmiPending = false;
                 instr_state.Clear();
             }
