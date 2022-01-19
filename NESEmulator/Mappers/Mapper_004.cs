@@ -113,7 +113,7 @@ namespace NESEmulator.Mappers
                 if (_targetRegister == 0 || _targetRegister == 1)
                     _register[_targetRegister] &= 0xFE;
 
-                //Log.Debug($"Register[{_targetRegister}]={data:X2}");
+                Log.Debug($"Register[{_targetRegister}]={data:X2}");
                 updateCHRBankOffsets();
                 updatePRGBankOffsets();
                 return true;
@@ -241,6 +241,17 @@ namespace NESEmulator.Mappers
         public override void reset()
         {
             Log.Debug("Mapper 004 reset");
+            _bankSelect = 0;
+            _irqCounter = 0;
+            _irqReload = 0;
+            _irqEnable = false;
+
+            updatePRGBankOffsets();
+            updateCHRBankOffsets();
+        }
+
+        public override void PowerOn()
+        {
             _bankSelect = 0;
             _irqCounter = 0;
             _irqReload = 0;

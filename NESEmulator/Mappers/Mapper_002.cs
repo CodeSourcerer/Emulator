@@ -94,6 +94,12 @@ namespace NESEmulator.Mappers
             updatePRGBankOffsets();
         }
 
+        public override void PowerOn()
+        {
+            _prgBank = 0;
+            updatePRGBankOffsets();
+        }
+
         private void updatePRGBankOffsets()
         {
             _pPRGBank[0] = (uint)(_prgBank * 0x4000);

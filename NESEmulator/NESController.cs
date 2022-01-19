@@ -41,7 +41,7 @@ namespace NESEmulator
             
         }
 
-        public bool Read(ushort addr, out byte data)
+        public bool Read(ushort addr, out byte data, bool readOnly = false)
         {
             bool dataRead = false;
             data = 0;
@@ -51,7 +51,8 @@ namespace NESEmulator
                 int controllerNum = addr & 0x0001;
                 // We OR with 0x40 to support the "open bus behavior" with the controller, required for Paper Boy
                 data = (byte)(0x40 | ((_controller_state[controllerNum] & 0x80) > 0 ? 1 : 0));
-                _controller_state[controllerNum] <<= 1;
+                if (!readOnly)
+                    _controller_state[controllerNum] <<= 1;
                 // _controller_state[controllerNum] |= 0x01;
                 dataRead = true;
             }
@@ -74,6 +75,12 @@ namespace NESEmulator
         }
 
         public void Reset()
+        {
+            ControllerState[0] = (byte)NESButton.NO_PRESS;
+            ControllerState[1] = (byte)NESButton.NO_PRESS;
+        }
+
+        public void PowerOn()
         {
             ControllerState[0] = (byte)NESButton.NO_PRESS;
             ControllerState[1] = (byte)NESButton.NO_PRESS;

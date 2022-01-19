@@ -50,13 +50,32 @@ namespace NESEmulator
         private List<Instruction> opcode_lookup;
         private IBus bus;
 
+        #region Emulator vars
+        private byte fetched = 0x00;     // Represents the working input value to the ALU
+        private ushort temp = 0x0000;   // Just a temp var
+        private ushort addr_abs = 0x0000;   // Absolute memory address
+        private sbyte addr_rel = 0x00;     // Relative memory address
+        private byte opcode = 0x00;     // Current instruction
+        private byte cycles = 0;        // Counts how many cycles the instruction has remaining
+        private uint clock_count = 0;        // A global accumulation of the number of clocks
+        private byte _instCycleCount = 0;
+        private ushort _dataPrevCycle = 0; // for cycle operations where previous data obtained is needed
         private bool _nmiPending = false;
+        private bool _nmiServicing = false;
         private bool _irqPending = false;
         private bool _irqDisablePending = false;
+        private bool _irqServicing = false;
         private byte _irqEnableLatency = 0;
-        private byte _irqDisableLatency = 0;
+        private ushort _irqVector = ADDR_IRQ;
         private bool _startCountingIRQs = true;
         private int  _irqCount = 0;
+        /// <summary>
+        /// Intermediate data needed between cycles of an instruction
+        /// </summary>
+        private Dictionary<string, object> instr_state = new Dictionary<string, object>();
+
+        private const string STATE_ADDR_MODE_COMPLETED_CYCLE = "opcode_start_cycle";
+        #endregion // Emulator vars
 
         #region Well-Known Addresses
 
@@ -108,10 +127,6 @@ namespace NESEmulator
             build_lookup();
             ExternalMemoryReader = new MemoryReader();
             ExternalMemoryReader.MemoryReadRequest += ExternalMemoryReader_MemoryReadRequest;
-
-            // https://wiki.nesdev.org/w/index.php?title=CPU_power_up_state
-            // "P = $34"
-            status = FLAGS6502.I | FLAGS6502.B | FLAGS6502.U;
         }
 
         private void ExternalMemoryReader_MemoryReadRequest(object sender, EventArgs e)
@@ -195,14 +210,35 @@ namespace NESEmulator
             status |= (FLAGS6502.U | FLAGS6502.I);
 
             // Clear internal helper variables
-            addr_rel = addr_abs = 0x0000;
+            addr_abs = 0x0000;
+            addr_rel = 0x00;
             fetched = 0x00;
 
             _irqPending = false;
+            _irqServicing = false;
+            _nmiPending = false;
             _nmiPending = false;
 
-            // Reset takes time
-            cycles = 8;
+            clock_count = 0;
+        }
+
+        public override void PowerOn()
+        {
+            // https://wiki.nesdev.org/w/index.php?title=CPU_power_up_state
+            // "P = $34"
+            status = FLAGS6502.I | FLAGS6502.B | FLAGS6502.U;
+
+            // Set PC
+            addr_abs = ADDR_PC;
+            ushort lo = read(addr_abs);
+            ushort hi = read((ushort)(addr_abs + 1));
+            pc = (ushort)((hi << 8) | lo);
+
+            //pc = 0xC000;
+            Log.Info($"Cartridge starts at {pc:X4}");
+
+            // Set internal registers
+            sp = 0xFD;
         }
 
         /// <summary>
@@ -231,29 +267,78 @@ namespace NESEmulator
             //    Log.Debug($"IRQCount = {_irqCount}");
             //}
 
-            // Push the PC to the stack. It is 16-bits, so requires 2 pushes
-            push((byte)((pc >> 8) & 0x00FF));
-            push((byte)(pc & 0x00FF));
+            if (cycles == 0)
+            {
+                _irqVector = ADDR_IRQ;
+                if (_nmiPending)
+                {
+                    Log.Debug($"[{clock_count}] IRQ/BRK has been hijacked by NMI!");
+                    _irqVector = ADDR_NMI;
+                }
+                // IRQ cycles
+                _instCycleCount = 7;
+                //_irqServicing = true;
+                instr_state.Clear();
+            }
+            else if (cycles == 2)
+            {
+                if (_nmiPending)
+                {
+                    Log.Debug($"[{clock_count}] IRQ/BRK has been hijacked by NMI!");
+                    _irqVector = ADDR_NMI;
+                }
+                // Push the PC to the stack. It is 16-bits, so requires 2 pushes
+                push((byte)((pc >> 8) & 0x00FF));
+            }
+            else if (cycles == 3)
+            {
+                if (_nmiPending)
+                {
+                    Log.Debug($"[{clock_count}] IRQ/BRK has been hijacked by NMI!");
+                    _irqVector = ADDR_NMI;
+                }
+                push((byte)(pc & 0x00FF));
+            }
+            else if (cycles == 4)
+            {
+                if (_nmiPending)
+                {
+                    Log.Debug($"[{clock_count}] IRQ/BRK has been hijacked by NMI!");
+                    _irqVector = ADDR_NMI;
+                }
+                // Then push status register to the stack
+                setFlag(FLAGS6502.B, false);
+                setFlag(FLAGS6502.U, true);
+                push((byte)status);
+                setFlag(FLAGS6502.I, true);
+            }
+            else if (cycles == 5)
+            {
+                // Read new PC location from fixed address
+                addr_abs = _irqVector;
+                ushort lo = read(addr_abs);
+                instr_state["lo"] = lo;
+            }
+            else if (cycles == 6)
+            {
+                ushort hi = read((ushort)(addr_abs + 1));
+                // NOTE: It is my understanding that on the original hardware, the vector address
+                // can in the middle of this instruction get hijacked by NMIs and point the PC to the
+                // NMI handler. We do not do cycle-by-cycle emulation currently, so this cannot happen
+                // at this time. It can possibly be done with our method with a little refactoring though....
+                pc = (ushort)((hi << 8) | (ushort)instr_state["lo"]);
+                _irqServicing = false;
+            }
 
-            // Then push status register to the stack
-            setFlag(FLAGS6502.B, false);
-            setFlag(FLAGS6502.U, true);
-            push((byte)status);
-            setFlag(FLAGS6502.I, true);
+            //if (_nmiPending && pollForIRQ(true) && cycles < 5)
+            //{
+            //    // An NMI has hijacked the IRQ/BRK vector. Set PC to NMI vector.
+            //    addr_abs = ADDR_NMI;
+            //    ushort lo = read(addr_abs);
+            //    ushort hi = read((ushort)(addr_abs + 1));
+            //    pc = (ushort)((hi << 8) | lo);
+            //}
 
-            // Read new PC location from fixed address
-            addr_abs = ADDR_IRQ;
-            ushort lo = read(addr_abs);
-            ushort hi = read((ushort)(addr_abs + 1));
-            // NOTE: It is my understanding that on the original hardware, the vector address
-            // can in the middle of this instruction get hijacked by NMIs and point the PC to the
-            // NMI handler. We do not do cycle-by-cycle emulation currently, so this cannot happen
-            // at this time. It can possibly be done with our method with a little refactoring though....
-            pc = (ushort)((hi << 8) | lo);
-
-            Log.Debug($"[{clock_count}] IRQ invoked - will enter handler at [{clock_count + 7}]");
-            // IRQ cycles
-            cycles = 7;
         }
 
         /// <summary>
@@ -266,28 +351,45 @@ namespace NESEmulator
         /// </remarks>
         public void NMI()
         {
-            // Push the PC to the stack. It is 16-bits, so requires 2 pushes
-            push((byte)((pc >> 8) & 0x00FF));
-            push((byte)(pc & 0x00FF));
-
-            // Then push status register to the stack
-            setFlag(FLAGS6502.B, false);
-            setFlag(FLAGS6502.U, true);
-            push((byte)status);
-            // "IRQ will be executed only when the I flag is clear.IRQ and BRK both set the I flag, whereas the NMI does not
-            // affect its state. (https://www.nesdev.org/6502_cpu.txt)
-            //setFlag(FLAGS6502.I, true);
-
-            // Read new PC location from fixed address
-            addr_abs = ADDR_NMI;
-            ushort lo = read(addr_abs);
-            ushort hi = read((ushort)(addr_abs + 1));
-            pc = (ushort)((hi << 8) | lo);
-
-            _nmiPending = false;
-
-            // NMI cycles
-            cycles = 7;
+            if (cycles == 0)
+            {
+                // NMI cycles
+                _instCycleCount = 7;
+                _nmiPending = false;
+                instr_state.Clear();
+            }
+            else if (cycles == 2)
+            {
+                // Push the PC to the stack. It is 16-bits, so requires 2 pushes
+                push((byte)((pc >> 8) & 0x00FF));
+            }
+            else if (cycles == 3)
+            {
+                push((byte)(pc & 0x00FF));
+            }
+            else if (cycles == 4)
+            {
+                // Then push status register to the stack
+                setFlag(FLAGS6502.B, false);
+                setFlag(FLAGS6502.U, true);
+                push((byte)status);
+                // "IRQ will be executed only when the I flag is clear.IRQ and BRK both set the I flag, whereas the NMI does not
+                // affect its state. (https://www.nesdev.org/6502_cpu.txt)
+                //setFlag(FLAGS6502.I, true);
+            }
+            else if (cycles == 5)
+            {
+                // Read new PC location from fixed address
+                addr_abs = ADDR_NMI;
+                ushort lo = read(addr_abs);
+                instr_state["lo"] = lo;
+            }
+            else if (cycles == 6)
+            { 
+                ushort hi = read((ushort)(addr_abs + 1));
+                pc = (ushort)((hi << 8) | (ushort)instr_state["lo"]);
+                _nmiServicing = false;
+            }
         }
 
         /// <summary>
@@ -305,14 +407,12 @@ namespace NESEmulator
                 if (!midInstructionCycle)
                     _irqDisablePending = false;
                 // Fine - this is the LAST ONE. After this, I'm cutting you off!
-                //IRQ();
                 return true;
             }
             else if (getFlag(FLAGS6502.I) == 0)
             {
                 if (_irqPending && _irqEnableLatency == 0)
                 {
-                    //IRQ();
                     return true;
                 }
 
@@ -327,6 +427,7 @@ namespace NESEmulator
 
             return false;
         }
+        (uint, string sInst) disassembled;
 
         /// <summary>
         /// Perform clock cycle
@@ -351,74 +452,70 @@ namespace NESEmulator
             clock_count++;
 
             // Read in another code-base that instructions don't start executing until after cpu cycles, so here we go.
-            if (clock_count <= 8) return;
+            if (clock_count < 8) return;
 
             if (DMATransfer)
             {
-                doDMATransfer(clockCounter);
+                doDMATransfer(clock_count);
             }
             else if (_readerFetch)
             {
-                readerFetch(clockCounter);
+                readerFetch(clock_count);
             }
             else
             {
-                //if (_nmiPending && pollForIRQ(true) && cycles < 5)
-                //{
-                //    // An NMI has hijacked the IRQ/BRK vector. Set PC to NMI vector.
-                //    addr_abs = ADDR_NMI;
-                //    ushort lo = read(addr_abs);
-                //    ushort hi = read((ushort)(addr_abs + 1));
-                //    pc = (ushort)((hi << 8) | lo);
-                //    Log.Debug($"[{clock_count}] IRQ/BRK has been hijacked by NMI!");
-                //}
-
-                if (cycles == 0)
+                // Check if all cycles completed
+                if (cycles == _instCycleCount)
                 {
+                    cycles = 0;
                     if (_nmiPending)
                     {
                         //Log.Debug($"[{clock_count}] Invoking NMI");
-                        NMI();
+                        _nmiServicing = true;
                     }
                     else if (pollForIRQ())
                     {
-                        IRQ();
+                        _irqServicing = true;
                     }
                     else
                     {
-                        //var (addr, sInst) = Disassemble(pc);
-                        //Log.Debug($"[{clock_count}] {sInst}");
+                        //disassembled = Disassemble(pc);
+                        //Log.Debug($"[{clock_count}] {disassembled.sInst}");
 
                         // Read the next instruction byte. This 8-bit value is used to index the translation
                         // table to get the relevat information about how to implement the instruction
                         opcode = read(pc);
 
-                        // Make sure Unused status flag is 1
-                        setFlag(FLAGS6502.U, true);
-
                         // After reading opcode, increment pc
                         pc++;
 
+                        // Make sure Unused status flag is 1
+                        setFlag(FLAGS6502.U, true);
+
                         // Get starting number of cycles
-                        cycles = opcode_lookup[opcode].cycles;
-
-                        // Perform fetch of intermediate data using the required addressing mode
-                        byte additional_cycle1 = opcode_lookup[opcode].addr_mode();
-
-                        // Perform operation
-                        byte additional_cycle2 = opcode_lookup[opcode].operation();
-
-                        // Add additional cycles that may be required to complete operation
-                        cycles += (byte)(additional_cycle1 & additional_cycle2);
+                        _instCycleCount = opcode_lookup[opcode].cycles;
 
                         // Make sure Unused status flag is 1
                         setFlag(FLAGS6502.U, true);
                     }
                 }
 
-                //clock_count++;
-
-                cycles--;
+                if (_nmiServicing)
+                {
+                    NMI();
+                }
+                else if (_irqServicing)
+                {
+                    IRQ();
+                }
+                else
+                {
+                    if (opcode_lookup[opcode].addr_mode())
+                    {
+                        opcode_lookup[opcode].operation();
+                    }
+                }
+                cycles++;
             }
         }
 
@@ -428,7 +525,7 @@ namespace NESEmulator
         /// <returns></returns>
         public bool isComplete()
         {
-            return this.cycles == 0;
+            return this.cycles == _instCycleCount;
         }
 
         /// <summary>
@@ -469,9 +566,10 @@ namespace NESEmulator
             return mapLines;
         }
 
-        public (ushort, string) Disassemble(ushort addr)
+        public (uint, string) Disassemble(uint addr)
         {
             byte value = 0x00, lo = 0x00, hi = 0x00;
+            ushort ptr = 0x0000;
 
             string hexAddr = addr.ToString("X4");
 
@@ -492,7 +590,10 @@ namespace NESEmulator
             else if (opcode_lookup[opcode].addr_mode == IMM)
             {
                 value = bus.Read((ushort)addr, true);
-                addr++;
+                if (opcode != 0)
+                {
+                    addr++;
+                }
                 addressMode = string.Format("#${0} {{IMM}}", value.ToString("X2"));
             }
             else if (opcode_lookup[opcode].addr_mode == ZP0)
@@ -519,9 +620,11 @@ namespace NESEmulator
             else if (opcode_lookup[opcode].addr_mode == IZX)
             {
                 lo = bus.Read((ushort)addr, true);
-                hi = 0x00;
                 addr++;
-                addressMode = string.Format("(${0}, X) {{IZX}}", lo.ToString("X2"));
+                hi = 0x00;
+                ptr = (ushort)(bus.Read((ushort)((lo + x + 1) & 0x00FF), true) << 8 | bus.Read((ushort)((lo + x) & 0x00FF), true));
+                value = bus.Read(ptr, true);
+                addressMode = string.Format("(${0}, X) {{IZX}} @ {1} = {2} = {3}", lo.ToString("X2"), lo.ToString("X2"), ptr.ToString("X4"), value.ToString("X2"));
             }
             else if (opcode_lookup[opcode].addr_mode == IZY)
             {
@@ -536,7 +639,8 @@ namespace NESEmulator
                 addr++;
                 hi = bus.Read((ushort)addr, true);
                 addr++;
-                addressMode = string.Format("${0} {{ABS}}", ((hi << 8) | lo).ToString("X4"));
+                value = bus.Read((ushort)(hi << 8 | lo), true);
+                addressMode = string.Format("${0} {{ABS}} = {1}", ((hi << 8) | lo).ToString("X4"), value.ToString("X2"));
             }
             else if (opcode_lookup[opcode].addr_mode == ABX)
             {
@@ -544,7 +648,9 @@ namespace NESEmulator
                 addr++;
                 hi = bus.Read((ushort)addr, true);
                 addr++;
-                addressMode = string.Format("${0}, X {{ABX}}", ((hi << 8) | lo).ToString("X4"));
+                ptr = (ushort)((hi << 8) | lo);
+                value = bus.Read((ushort)(ptr + x), true);
+                addressMode = string.Format("${0}, X {{ABX}} @ {1} = {2}", ptr.ToString("X4"), ((ushort)(ptr + x)).ToString("X4"), value.ToString("X2"));
             }
             else if (opcode_lookup[opcode].addr_mode == ABY)
             {
@@ -552,7 +658,9 @@ namespace NESEmulator
                 addr++;
                 hi = bus.Read((ushort)addr, true);
                 addr++;
-                addressMode = string.Format("${0}, Y {{ABY}}", ((hi << 8) | lo).ToString("X4"));
+                ptr = (ushort)((hi << 8) | lo);
+                value = bus.Read((ushort)(ptr + y), true);
+                addressMode = string.Format("${0}, Y {{ABY}} @ {1} = {2}", ptr.ToString("X4"), ((ushort)(ptr + y)).ToString("X4"), value.ToString("X2"));
             }
             else if (opcode_lookup[opcode].addr_mode == IND)
             {
@@ -560,7 +668,14 @@ namespace NESEmulator
                 addr++;
                 hi = bus.Read((ushort)addr, true);
                 addr++;
-                addressMode = string.Format("(${0}) {{IND}}", ((hi << 8) | lo).ToString("X4"));
+                ptr = (ushort)(hi << 8 | lo);
+                var addr_lo = bus.Read(ptr, true);
+                var ptr_addr = 0;
+                if (lo == 0xFF)
+                    ptr_addr = (ushort)(bus.Read((ushort)(ptr & 0xFF00), true) << 8 | addr_lo);
+                else
+                    ptr_addr = (ushort)(bus.Read((ushort)(ptr + 1), true) << 8 | addr_lo);
+                addressMode = string.Format("(${0}) {{IND}} = {1}", ptr.ToString("X4"), ptr_addr.ToString("X4"));
             }
             else if (opcode_lookup[opcode].addr_mode == REL)
             {
@@ -574,16 +689,6 @@ namespace NESEmulator
             return (addr, sInst);
         }
 
-#region Emulator vars
-        private byte   fetched      = 0x00;     // Represents the working input value to the ALU
-        private ushort temp         = 0x0000;   // Just a temp var
-        private ushort addr_abs     = 0x0000;   // Absolute memory address
-        private ushort addr_rel     = 0x0000;   // Relative memory address
-        private byte   opcode       = 0x00;     // Current instruction
-        private byte   cycles       = 0;        // Counts how many cycles the instruction has remaining
-        private uint   clock_count  = 0;        // A global accumulation of the number of clocks
-#endregion // Emulator vars
-
         /// <summary>
         /// The read location of data can come from two sources:
         /// A memory address or its immediately available as part of the instruction.
@@ -592,7 +697,8 @@ namespace NESEmulator
         /// <returns></returns>
         private byte fetch()
         {
-            if (!(opcode_lookup[opcode].addr_mode == IMP))
+            if (!(opcode_lookup[opcode].addr_mode == IMP ||
+                  opcode_lookup[opcode].addr_mode == IZY))
                 fetched = read(addr_abs);
 
             return fetched;
@@ -606,7 +712,8 @@ namespace NESEmulator
                 {
                     _dmaSync = true;
                     _dmaStartAddr = read(0x2003);
-                    _dmaAddr = _dmaStartAddr;
+                    // Starting DMA address always at 0xXX00 (XX = _dmaPage)
+                    _dmaAddr = 0;
                 }
             }
             else
@@ -614,14 +721,14 @@ namespace NESEmulator
                 if (clockCounter % 2 == 0)
                 {
                     _dmaData = read((ushort)(_dmaPage << 8 | _dmaAddr));
+                    _dmaAddr++;
                 }
                 else
                 {
-                    // So yeah, let's just break all encapsulation and grab that PPU. Kinda what the HW is doing, I suppose...
-                    ((NESBus)bus).PPU.OAM[_dmaAddr >> 2][_dmaAddr & 0x03] = _dmaData;
-                    _dmaAddr++;
+                    write(0x2004, _dmaData);
 
-                    if (_dmaAddr == _dmaStartAddr)
+                    // When we wrap back to 0, we are done.
+                    if (_dmaAddr == 0)
                     {
                         DMATransfer = false;
                         _dmaSync = false;
@@ -636,7 +743,8 @@ namespace NESEmulator
             {
                 ExternalMemoryReader.Buffer = read(ExternalMemoryReader.MemoryPtr);
                 ExternalMemoryReader.BufferReady = true;
-                this.cycles = ExternalMemoryReader.CyclesToComplete;
+                //this.cycles = ExternalMemoryReader.CyclesToComplete;
+                _instCycleCount = ExternalMemoryReader.CyclesToComplete;
                 _readerFetch = false;
             }
         }
@@ -670,7 +778,7 @@ namespace NESEmulator
             return false;
         }
 
-        public override bool Read(ushort addr, out byte data)
+        public override bool Read(ushort addr, out byte data, bool readOnly = false)
         {
             // Ignore since we call BUS' Read(), which calls this.
             data = 0;
@@ -736,10 +844,24 @@ namespace NESEmulator
         /// does something very simple like like sets a status bit. However, we will
         /// target the accumulator, for instructions like PHA
         /// </remarks>
-        private byte IMP()
+        private bool IMP()
         {
-            fetched = a;
-            return 0;
+            bool isComplete = false;
+            switch (cycles)
+            {
+                case 0:
+                    instr_state.Clear();
+                    // Not technically accurate to do here, but it's fine.
+                    fetched = a;
+                    instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                    isComplete = true;
+                    break;
+                default:
+                    isComplete = true;
+                    break;
+            }
+
+            return isComplete;
         }
 
         /// <summary>
@@ -750,10 +872,26 @@ namespace NESEmulator
         /// The instruction expects the next byte to be used as a value, so we'll prep
         /// the read address to point to the next byte
         /// </remarks>
-        private byte IMM()
+        private bool IMM()
         {
-            addr_abs = pc++;
-            return 0;
+            bool isComplete = false;
+            switch (cycles)
+            {
+                case 0:
+                    instr_state.Clear();
+                    break;
+                case 1:
+                    addr_abs = pc++;
+                    fetch();
+                    instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                    isComplete = true;
+                    break;
+                default:
+                    isComplete = true;
+                    break;
+            }
+
+            return isComplete;
         }
 
         /// <summary>
@@ -765,12 +903,46 @@ namespace NESEmulator
         /// a location in first 0xFF bytes of address range. Clearly this only requires
         /// one byte instead of the usual two.
         /// </remarks>
-        private byte ZP0()
+        private bool ZP0()
         {
-            addr_abs = read(pc);
-            pc++;
-            addr_abs &= 0x00FF;
-            return 0;
+            bool isComplete = false;
+            switch (cycles)
+            {
+                case 0:
+                    instr_state.Clear();
+                    break;
+                case 1:
+                    addr_abs = read(pc);
+                    pc++;
+                    addr_abs &= 0x00FF;
+                    if (opcode_lookup[opcode].instr_type == CPUInstructionType.Write)
+                    {
+                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        isComplete = true;
+                    }
+                    break;
+                case 2:
+                    if (instr_state.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
+                    {
+                        isComplete = true;
+                        break;
+                    }
+                    if (opcode_lookup[opcode].instr_type != CPUInstructionType.Write)
+                    {
+                        fetch();
+                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                    }
+                    else
+                    {
+                        Log.Error($"[{clock_count}] ZP0 addressing mode error - extra cycle executed when it shouldn't!");
+                    }
+                    isComplete = true;
+                    break;
+                default:
+                    isComplete = true;
+                    break;
+            }
+            return isComplete;
         }
 
         /// <summary>
@@ -782,17 +954,53 @@ namespace NESEmulator
         /// is added to the supplied single byte address. This is useful for iterating through
         /// ranges within the first page.
         /// </remarks>
-        private byte ZPX()
+        private bool ZPX()
         {
-            addr_abs = read(pc);
-            pc++;
-            // The CPU performs a "dummy" read from the address here.
-            Log.Debug($"[{clock_count}] Dummy read from addr_abs at 0x{addr_abs:X4}, index = 0x{x:X2}");
-            read(addr_abs);
-            addr_abs += x;
-            addr_abs &= 0x00FF;
+            bool isComplete = false;
+            switch (cycles)
+            {
+                case 0:
+                    instr_state.Clear();
+                    break;
+                case 1:
+                    addr_abs = read(pc);
+                    pc++;
+                    break;
+                case 2:
+                    // The CPU performs a "dummy" read from the address here.
+                    //Log.Debug($"[{clock_count}] Dummy read from addr_abs at 0x{addr_abs:X4}, index = 0x{x:X2}");
+                    read(addr_abs);
+                    addr_abs += x;
+                    addr_abs &= 0x00FF;
+                    if (opcode_lookup[opcode].instr_type == CPUInstructionType.Write)
+                    {
+                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        isComplete = true;
+                    }
+                    break;
+                case 3:
+                    if (instr_state.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
+                    {
+                        isComplete = true;
+                        break;
+                    }
 
-            return 0;
+                    if (opcode_lookup[opcode].instr_type != CPUInstructionType.Write)
+                    {
+                        fetch();
+                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                    }
+                    else
+                    {
+                        Log.Error($"[{clock_count}] ZPX addressing mode error - extra cycle executed when it shouldn't!");
+                    }
+                    isComplete = true;
+                    break;
+                default:
+                    isComplete = true;
+                    break;
+            }
+            return isComplete;
         }
 
         /// <summary>
@@ -802,17 +1010,52 @@ namespace NESEmulator
         /// <remarks>
         /// Same as Zero Page with X offset, but uses Y register for offset
         /// </remarks>
-        private byte ZPY()
+        private bool ZPY()
         {
-            addr_abs = read(pc);
-            pc++;
-            // The CPU performs a "dummy" read from the address here.
-            Log.Debug($"[{clock_count}] Dummy read from addr_abs at 0x{addr_abs:X4}, index = 0x{y:X2}");
-            read(addr_abs);
-            addr_abs += y;
-            addr_abs &= 0x00FF;
-
-            return 0;
+            bool isComplete = false;
+            switch (cycles)
+            {
+                case 0:
+                    instr_state.Clear();
+                    break;
+                case 1:
+                    addr_abs = read(pc);
+                    pc++;
+                    break;
+                case 2:
+                    // The CPU performs a "dummy" read from the address here.
+                    //Log.Debug($"[{clock_count}] Dummy read from addr_abs at 0x{addr_abs:X4}, index = 0x{y:X2}");
+                    read(addr_abs);
+                    addr_abs += y;
+                    addr_abs &= 0x00FF;
+                    if (opcode_lookup[opcode].instr_type == CPUInstructionType.Write)
+                    {
+                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        isComplete = true;
+                    }
+                    break;
+                case 3:
+                    if (instr_state.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
+                    {
+                        isComplete = true;
+                        break;
+                    }
+                    if (opcode_lookup[opcode].instr_type != CPUInstructionType.Write)
+                    {
+                        fetch();
+                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                    }
+                    else
+                    {
+                        Log.Error($"[{clock_count}] ZPY addressing mode error - extra cycle executed when it shouldn't!");
+                    }
+                    isComplete = true;
+                    break;
+                default:
+                    isComplete = true;
+                    break;
+            }
+            return isComplete;
         }
 
         /// <summary>
@@ -824,14 +1067,26 @@ namespace NESEmulator
         /// must reside within -128 to +127 of the branch instruction, i.e.
         /// you cant directly branch to any address in the addressable range.
         /// </remarks>
-        private byte REL()
+        private bool REL()
         {
-            addr_rel = read(pc);
-            pc++;
-            if ((addr_rel & 0x80) != 0)
-                addr_rel |= 0xFF00;
+            bool isComplete = false;
+            switch (cycles)
+            {
+                case 0:
+                    instr_state.Clear();
+                    break;
+                case 1:
+                    addr_rel = unchecked((sbyte)read(pc));
+                    pc++;
+                    instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                    isComplete = true;
+                    break;
+                default:
+                    isComplete = true;
+                    break;
+            }
 
-            return 0;
+            return isComplete;
         }
 
         /// <summary>
@@ -841,16 +1096,65 @@ namespace NESEmulator
         /// <remarks>
         /// A full 16-bit address is loaded and used
         /// </remarks>
-        private byte ABS()
+        private bool ABS()
         {
-            ushort lo = read(pc);
-            pc++;
-            ushort hi = read(pc);
-            pc++;
+            bool isComplete = false;
+            switch (cycles)
+            {
+                case 0:
+                    instr_state.Clear();
+                    break;
+                case 1:
+                    instr_state["lo"] = (ushort)read(pc);
+                    pc++;
+                    // JSR ends this part early
+                    if (opcode_lookup[opcode].operation == JSR)
+                    {
+                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        isComplete = true;
+                    }
+                    break;
+                case 2:
+                    if (instr_state.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
+                    {
+                        isComplete = true;
+                        break;
+                    }
 
-            addr_abs = (ushort)((hi << 8) | lo);
+                    ushort hi = read(pc);
+                    pc++;
+                    addr_abs = (ushort)((hi << 8) | (ushort)instr_state["lo"]);
+                    if (opcode_lookup[opcode].instr_type == CPUInstructionType.Write ||
+                        opcode_lookup[opcode].instr_type == CPUInstructionType.Branch)
+                    {
+                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        isComplete = true;
+                    }
+                    break;
+                case 3:
+                    if (instr_state.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
+                    {
+                        isComplete = true;
+                        break;
+                    }
 
-            return 0;
+                    if (opcode_lookup[opcode].instr_type == CPUInstructionType.R_M_W ||
+                        opcode_lookup[opcode].instr_type == CPUInstructionType.Read)
+                    {
+                        fetch();
+                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                    }
+                    else
+                    {
+                        Log.Error($"[{clock_count}] ABS addressing mode error - extra cycle executed when it shouldn't have!");
+                    }
+                    isComplete = true;
+                    break;
+                default:
+                    isComplete = true;
+                    break;
+            }
+            return isComplete;
         }
 
         /// <summary>
@@ -862,28 +1166,77 @@ namespace NESEmulator
         /// is added to the supplied two byte address. If the resulting address changes
         /// the page, an additional clock cycle is required
         /// </remarks>
-        private byte ABX()
+        private bool ABX()
         {
-            byte lo = read(pc);
-            pc++;
-            byte hi = read(pc);
-            pc++;
-
-            addr_abs = (ushort)((hi << 8) | lo);
-            ushort addr_eff = (ushort)((hi << 8) | (lo + x));
-            addr_abs += x;
-
-            if ((addr_abs & 0xFF00) != (hi << 8) || opcode_lookup[opcode].instr_type == CPUInstructionType.R_M_W)
+            bool isComplete = false;
+            switch (cycles)
             {
-                // perform "dummy read"
-                Log.Debug($"[{clock_count}] {{ABX}} Dummy read from addr_eff at 0x{addr_eff:X4}. addr_abs = 0x{addr_abs:X4}, index = 0x{x:X2}");
-                read(addr_eff);
-                return 1;
+                case 0:
+                    instr_state.Clear();
+                    break;
+                case 1:
+                    instr_state["lo"] = (ushort)read(pc);
+                    pc++;
+                    break;
+                case 2:
+                    ushort hi = read(pc);
+                    instr_state["hi"] = hi;
+                    pc++;
+                    addr_abs = (ushort)((hi << 8) | (ushort)instr_state["lo"]);
+                    instr_state["addr_eff"] = (ushort)((hi << 8) | (byte)((ushort)instr_state["lo"] + x));
+                    break;
+                case 3:
+                    // Read without page boundary checking
+                    fetched = read((ushort)instr_state["addr_eff"]);
+                    addr_abs += x;
+                    instr_state["page_cross"] = (addr_abs & 0xFF00) != (((ushort)instr_state["hi"]) << 8);
+                    if ((bool)instr_state["page_cross"] ||
+                        opcode_lookup[opcode].instr_type == CPUInstructionType.R_M_W ||
+                        opcode_lookup[opcode].instr_type == CPUInstructionType.Write)
+                    {
+                        if (opcode_lookup[opcode].instr_type == CPUInstructionType.Read)
+                        {
+                            // If page boundary crossed, we need another cycle
+                            _instCycleCount++;
+                        }
+                    }
+                    else
+                    {
+                        // We don't need another cycle, end it here.
+                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        isComplete = true;
+                    }
+                    break;
+                case 4:
+                    if (instr_state.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
+                    {
+                        isComplete = true;
+                        break;
+                    }
+
+                    if ((bool)instr_state["page_cross"] ||
+                        opcode_lookup[opcode].instr_type == CPUInstructionType.R_M_W ||
+                        opcode_lookup[opcode].instr_type == CPUInstructionType.Write)
+                    {
+                        if (opcode_lookup[opcode].instr_type != CPUInstructionType.Write)
+                        {
+                            // Read again from correct address
+                            fetched = read(addr_abs);
+                        }
+                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                    }
+                    else
+                    {
+                        Log.Error($"[{clock_count}] ABX cycle 4 executed when it shouldn't have!");
+                    }
+                    isComplete = true;
+                    break;
+                default:
+                    isComplete = true;
+                    break;
             }
-            else
-            {
-                return 0;
-            }
+
+            return isComplete;
         }
 
         /// <summary>
@@ -895,28 +1248,80 @@ namespace NESEmulator
         /// is added to the supplied two byte address. If the resulting address changes
         /// the page, an additional clock cycle is required
         /// </remarks>
-        private byte ABY()
+        private bool ABY()
         {
-            ushort lo = read(pc);
-            pc++;
-            ushort hi = read(pc);
-            pc++;
-
-            addr_abs = (ushort)((hi << 8) | lo);
-            ushort addr_eff = (ushort)((hi << 8) | (lo + y));
-            addr_abs += y;
-
-            if ((addr_abs & 0xFF00) != (hi << 8))
+            bool isComplete = false;
+            switch (cycles)
             {
-                // perform "dummy read"
-                Log.Debug($"[{clock_count}] Dummy read from addr_eff at 0x{addr_eff:X4}. addr_abs = 0x{addr_abs:X4}, index = 0x{y:X2}");
-                read(addr_eff);
-                return 1;
+                case 0:
+                    instr_state.Clear();
+                    break;
+                case 1:
+                    instr_state["lo"] = (ushort)read(pc);
+                    pc++;
+                    break;
+                case 2:
+                    ushort hi = read(pc);
+                    instr_state["hi"] = hi;
+                    pc++;
+                    addr_abs = (ushort)((hi << 8) | (ushort)instr_state["lo"]);
+                    instr_state["addr_eff"] = (ushort)((hi << 8) | (byte)((ushort)instr_state["lo"] + y));
+                    break;
+                case 3:
+                    // read from effective address, before checking if we crossed page boundary
+                    //Log.Debug($"[{clock_count}] ABY read effective address (cycle 3) [opcode={opcode:X2}] [addr_eff={(ushort)instr_state["addr_eff"]:X4}]"); 
+                    fetched = read((ushort)instr_state["addr_eff"]);
+                    // did we cross a page boundary?
+                    addr_abs += y;
+                    instr_state["page_cross"] = (addr_abs & 0xFF00) != (((ushort)instr_state["hi"]) << 8);
+                    if ((bool)instr_state["page_cross"] ||
+                        opcode_lookup[opcode].instr_type == CPUInstructionType.R_M_W ||
+                        opcode_lookup[opcode].instr_type == CPUInstructionType.Write)
+                    {
+                        if (opcode_lookup[opcode].instr_type == CPUInstructionType.Read)
+                        {
+                            // If page boundary crossed, we need another cycle
+                            _instCycleCount++;
+                        }
+                    }
+                    else
+                    {
+                        // We don't need another cycle, end it here.
+                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        isComplete = true;
+                    }
+                    break;
+                case 4:
+                    if (instr_state.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
+                    {
+                        isComplete = true;
+                        break;
+                    }
+
+                    if ((bool)instr_state["page_cross"] ||
+                        opcode_lookup[opcode].instr_type == CPUInstructionType.R_M_W ||
+                        opcode_lookup[opcode].instr_type == CPUInstructionType.Write)
+                    {
+                        if (opcode_lookup[opcode].instr_type != CPUInstructionType.Write)
+                        {
+                            //Log.Debug($"[{clock_count}] ABY read after adjusting address (cycle 4) [opcode={opcode:X2}] [addr_abs={addr_abs:X4}]");
+                            // Read again from correct address
+                            fetched = read(addr_abs);
+                        }
+                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                    }
+                    else
+                    {
+                        Log.Error($"[{clock_count}] ABY cycle 4 executed when it shouldn't have!");
+                    }
+                    isComplete = true;
+                    break;
+                default:
+                    isComplete = true;
+                    break;
             }
-            else
-            {
-                return 0;
-            }
+
+            return isComplete;
         }
 
         /// <summary>
@@ -924,37 +1329,58 @@ namespace NESEmulator
         /// </summary>
         /// <returns></returns>
         /// <remarks>
+        /// This mode is only used by the JMP instruction. 
         /// The supplied 16-bit address is read to get the actual 16-bit address. This 
         /// instruction is unusual in that it has a bug in the hardware! To emulate its
         /// function accurately, we also need to emulate this bug. If the low byte of the
         /// supplied address is 0xFF, then to read the high byte of the actual address
-        /// we need to cross a page boundary. This doesnt actually work on the chip as 
+        /// we need to cross a page boundary. This doesn't actually work on the chip as 
         /// designed, instead it wraps back around in the same page, yielding an 
-        /// invalid actual address
+        /// invalid actual address.
         /// </remarks>
-        private byte IND()
+        private bool IND()
         {
-            ushort ptr_lo = read(pc);
-            pc++;
-            ushort ptr_hi = read(pc);
-            pc++;
-
-            ushort ptr = (ushort)((ptr_hi << 8) | ptr_lo);
-
-            ushort lo = read(ptr);
-
-            // Simulate page boundary hardware bug
-            if (ptr_lo == 0x00FF)
+            bool isComplete = false;
+            switch (cycles)
             {
-                addr_abs = (ushort)((read((ushort)(ptr & 0xFF00)) << 8) | lo);
+                case 0:
+                    instr_state.Clear();
+                    break;
+                case 1:
+                    // Fetch pointer address low
+                    instr_state["ptr_lo"] = (ushort)read(pc);
+                    pc++;
+                    break;
+                case 2:
+                    // Fetch pointer address high
+                    ushort hi = read(pc);
+                    pc++;
+                    instr_state["ptr"] = (ushort)((hi << 8) | (ushort)instr_state["ptr_lo"]);
+                    break;
+                case 3:
+                    instr_state["addr_lo"] = (ushort)read((ushort)instr_state["ptr"]);
+                    break;
+                case 4:
+                    ushort lo = (ushort)instr_state["addr_lo"];
+                    if ((ushort)instr_state["ptr_lo"] == 0x00FF)
+                    {
+                        // Simulate page boundary hardware bug
+                        addr_abs = (ushort)((read((ushort)((ushort)instr_state["ptr"] & 0xFF00)) << 8) | lo);
+                    }
+                    else
+                    {
+                        // Normal behavior
+                        addr_abs = (ushort)((read((ushort)((ushort)instr_state["ptr"] + 1)) << 8) | lo);
+                    }
+                    pc = addr_abs;
+                    instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                    isComplete = true;
+                    break;
+                default:
+                    isComplete = true;
+                    break;
             }
-            else
-            {
-                // Normal behavior
-                addr_abs = (ushort)((read((ushort)(ptr + 1)) << 8) | lo);
-            }
-
-            return 0;
+            return isComplete;
         }
 
         /// <summary>
@@ -963,24 +1389,49 @@ namespace NESEmulator
         /// <returns></returns>
         /// <remarks>
         /// The supplied 8-bit address is offset by X Register to index a location in page 0x00. 
-        /// The actual 16-bit address is read from this location
+        /// The actual 16-bit address is read from this location. For some reason, page boundary 
+        /// crossing is not checked for this mode (even though it is for IZY).
         /// </remarks>
-        private byte IZX()
+        private bool IZX()
         {
-            ushort ptr = read(pc);
-            pc++;
+            bool isComplete = false;
+            switch (cycles)
+            {
+                case 0:
+                    instr_state.Clear();
+                    break;
+                case 1:
+                    // fetch pointer address, increment PC
+                    instr_state["ptr"] = (ushort)read(pc);
+                    pc++;
+                    break;
+                case 2:
+                    // Read from address
+                    read((ushort)instr_state["ptr"]);
+                    break;
+                case 3:
+                    // fetch effective address low
+                    var ptr = (ushort)((ushort)instr_state["ptr"] + x);
+                    instr_state["addr_eff_lo"] = (ushort)read((ushort)(ptr & 0x00FF));
+                    break;
+                case 4:
+                    var ptr2 = (ushort)((ushort)instr_state["ptr"] + x + 1);
+                    // fetch effective address hi
+                    ushort hi = read((ushort)(ptr2 & 0x00FF));
+                    addr_abs = (ushort)((hi << 8) | (ushort)instr_state["addr_eff_lo"]);
+                    break;
+                case 5:
+                    if (opcode_lookup[opcode].instr_type != CPUInstructionType.Write)
+                        fetch();
+                    instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                    isComplete = true;
+                    break;
+                default:
+                    isComplete = true;
+                    break;
+            }
 
-            // According to https://github.com/iliak/nes/blob/master/doc/6502_cpu.txt#L1191, it
-            // seems like the below should work but it causes dummy read tests to fail.
-            //ushort addr_eff = (ushort)((read(ptr) + x) & 0x00FF);
-            //ushort lo = read(addr_eff);
-            //ushort hi = read((ushort)((addr_eff + 1) & 0x00FF));
-            ushort lo = read((ushort)((ushort)(ptr + x) & 0x00FF));
-            ushort hi = read((ushort)((ushort)(ptr + x + 1) & 0x00FF));
-
-            addr_abs = (ushort)((hi << 8) | lo);
-
-            return 0;
+            return isComplete;
         }
 
         /// <summary>
@@ -992,34 +1443,91 @@ namespace NESEmulator
         /// 16-bit address is read, and the contents of the Y Register is added to it to offset 
         /// it. If the offset causes a change in page then an additional clock cycle is required.
         /// </remarks>
-        private byte IZY()
+        private bool IZY()
         {
-            ushort ptr = read(pc);
-            pc++;
-
-            ushort lo = read(ptr);
-            ushort hi = read((ushort)((ushort)(ptr + 1) & 0x00FF));
-
-            addr_abs = (ushort)((hi << 8) | lo);
-            ushort addr_eff = (ushort)((hi << 8) | (lo + y));
-            addr_abs += y;
-
-            if ((addr_abs & 0xFF00) != (hi << 8))
+            bool isComplete = false;
+            switch (cycles)
             {
-                // perform "dummy read"
-                Log.Debug($"[{clock_count}] {{IZY}} Dummy read from addr_eff at 0x{addr_eff:X4}. addr_abs = 0x{addr_abs:X4}, index = 0x{y:X2}");
-                read(addr_eff);
-                return 1;
+                case 0:
+                    instr_state.Clear();
+                    break;
+                case 1:
+                    // fetch pointer address, increment PC
+                    instr_state["ptr"] = (ushort)read(pc);
+                    pc++;
+                    break;
+                case 2:
+                    // Fetch effective address low
+                    instr_state["addr_eff_lo"] = (ushort)read((ushort)instr_state["ptr"]);
+                    break;
+                case 3:
+                    // fetch effective address high
+                    ushort hi = (ushort)((ushort)instr_state["ptr"] + 1);
+                    instr_state["addr_eff_hi"] = (ushort)read((ushort)(hi & 0x00FF));
+                    addr_abs = (ushort)((ushort)instr_state["addr_eff_hi"] << 8 | (ushort)instr_state["addr_eff_lo"]);
+                    instr_state["addr_eff_lo"] = (byte)((ushort)instr_state["addr_eff_lo"] + y);
+                    break;
+                case 4:
+                    // Read from effective address
+                    var addr_eff = (ushort)((ushort)instr_state["addr_eff_hi"] << 8 | (byte)instr_state["addr_eff_lo"]);
+                    //Log.Debug($"[{clock_count}] IZY read effective address (cycle 4) [opcode={opcode:X2}] [addr_eff={addr_eff:X4}]");
+                    fetched = read(addr_eff);
+                    // did we cross a page boundary?
+                    instr_state["page_cross"] = (addr_abs & 0xFF00) != ((addr_abs + y) & 0xFF00);
+                    if ((bool)instr_state["page_cross"] ||
+                        opcode_lookup[opcode].instr_type == CPUInstructionType.R_M_W ||
+                        opcode_lookup[opcode].instr_type == CPUInstructionType.Write)
+                    {
+                        if (opcode_lookup[opcode].instr_type == CPUInstructionType.Read)
+                        {
+                            //Log.Debug($"[{clock_count}] Adding cycle for page-crossed IZY instruction");
+                            // Add a cycle to fix address and read again
+                            _instCycleCount++;
+                        }
+                        addr_abs += y;
+                    }
+                    else
+                    {
+                        // address did not cross page boundary
+                        addr_abs = addr_eff;
+                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        isComplete = true;
+                    }
+                    break;
+                case 5:
+                    if (instr_state.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
+                    {
+                        isComplete = true;
+                        break;
+                    }
+
+                    if ((bool)instr_state["page_cross"] ||
+                        opcode_lookup[opcode].instr_type == CPUInstructionType.R_M_W ||
+                        opcode_lookup[opcode].instr_type == CPUInstructionType.Write)
+                    {
+                        if (opcode_lookup[opcode].instr_type != CPUInstructionType.Write)
+                        {
+                            //Log.Debug($"[{clock_count}] Reading after page-crossed IZY instruction (cycle 5) [opcode={opcode:X2}] [addr_abs={addr_abs:X4}]");
+                            fetched = read(addr_abs);
+                        }
+                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        isComplete = true;
+                    }
+                    else
+                    {
+                        Log.Error($"[{clock_count}] IZY addressing mode error - cycle 5 executed when it shouldn't have!");
+                    }
+                    break;
+                default:
+                    isComplete = true;
+                    break;
             }
-            else
-            {
-                return 0;
-            }
+            return isComplete;
         }
 
-#endregion // Addressing Modes
+        #endregion // Addressing Modes
 
-#region OpCodes
+        #region OpCodes
         /*****
          * There are 56 "legitimate" opcodes provided by the 6502 CPU. I have not modelled "unofficial" opcodes. As each opcode is 
          * defined by 1 byte, there are potentially 256 possible codes. Codes are not used in a "switch case" style on a processor,
@@ -1032,6 +1540,7 @@ namespace NESEmulator
          * conditions combined with certain addressing modes. If that is the case, they return 1.
          *****/
 
+        #region Arithmetic instructions
         /// <summary>
         /// Instruction: Add with Carry In
         /// </summary>
@@ -1042,33 +1551,79 @@ namespace NESEmulator
         /// </remarks>
         private byte ADC()
         {
-            // Grab the data that we are adding to the accumulator
-            fetch();
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
-            // Add is performed in 16-bit domain for emulation to capture any
-            // carry bit, which will exist in bit 8 of the 16-bit word
-            temp = (ushort)(a + fetched + getFlag(FLAGS6502.C));
+            // This is a read instruction, so everything should be done on the last cycle.
+            if (cycles == opcodeStartCycle)
+            {
+                // Add is performed in 16-bit domain for emulation to capture any
+                // carry bit, which will exist in bit 8 of the 16-bit word
+                temp = (ushort)(a + fetched + getFlag(FLAGS6502.C));
 
-            // The carry flag out exists in the high byte bit 0
-            setFlag(FLAGS6502.C, temp > 255);
+                // The carry flag out exists in the high byte bit 0
+                setFlag(FLAGS6502.C, temp > 255);
 
-            // The Zero flag is set if the result is 0
-            testAndSet(FLAGS6502.Z, temp);
+                // The Zero flag is set if the result is 0
+                testAndSet(FLAGS6502.Z, temp);
 
-            // The signed Overflow flag is set based on all that up there! :D
-            setFlag(FLAGS6502.V, ((~(a ^ fetched) & (a ^ temp)) & 0x0080) != 0);
+                // The signed Overflow flag is set based on all that up there! :D
+                setFlag(FLAGS6502.V, ((~(a ^ fetched) & (a ^ temp)) & 0x0080) != 0);
 
-            // The negative flag is set to the most significant bit of the result
-            testAndSet(FLAGS6502.N, temp);
+                // The negative flag is set to the most significant bit of the result
+                testAndSet(FLAGS6502.N, temp);
 
-            // Load the result into the accumulator (it's 8-bit dont forget!)
-            a = (byte)(temp & 0x00FF);
-
+                // Load the result into the accumulator (it's 8-bit dont forget!)
+                a = (byte)(temp & 0x00FF);
+            }
+            else
+            {
+                Log.Error($"[{clock_count}] ADC error - incorrect cycle! [cycles={cycles}] [opcodeStartCycle={opcodeStartCycle}] [_instCycleCount={_instCycleCount}]");
+            }
             // This instruction has the potential to require an additional clock cycle
+            // (we don't use this anymore)
             return 1;
         }
 
-#region Bitwise Operators
+        /// <summary>
+        /// Instruction: Subtraction with Borrow In
+        /// Function:    A = A - M - (1 - C)
+        /// Flags Out:   C, V, N, Z
+        /// </summary>
+        /// <returns></returns>
+        private byte SBC()
+        {
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            // This is a read instruction, so everything should be done on the last cycle.
+            if (cycles == opcodeStartCycle)
+            {
+                // Operating in 16-bit domain to capture carry out
+
+                // We can invert the bottom 8 bits with bitwise xor
+                ushort value = (ushort)((fetched) ^ 0x00FF);
+
+                // Notice this is exactly the same as addition from here!
+                temp = (ushort)(a + value + getFlag(FLAGS6502.C));
+                setFlag(FLAGS6502.C, (temp & 0xFF00) != 0);
+                testAndSet(FLAGS6502.Z, temp);
+                setFlag(FLAGS6502.V, ((temp ^ a) & (temp ^ value) & 0x0080) != 0);
+                testAndSet(FLAGS6502.N, temp);
+                a = (byte)(temp & 0x00FF);
+            }
+            else
+            {
+                Log.Error($"[{clock_count}] SBC error - incorrect cycle! [cycles={cycles}] [opcodeStartCycle={opcodeStartCycle}] [_instCycleCount={_instCycleCount}]");
+            }
+            // This instruction has the potential to require an additional clock cycle
+            // (we don't use this anymore)
+            return 1;
+        }
+
+        #endregion // Arithmetic instructions
+
+        #region Bitwise Operators
         /// <summary>
         /// Instruction: Bitwise Logic AND
         /// </summary>
@@ -1079,10 +1634,22 @@ namespace NESEmulator
         /// </remarks>
         private byte AND()
         {
-            fetch();
-            a = (byte)(a & fetched);
-            testAndSet(FLAGS6502.Z, a);
-            testAndSet(FLAGS6502.N, a);
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            // This is a read instruction, so everything should be done on the last cycle.
+            if (cycles == opcodeStartCycle)
+            {
+                a = (byte)(a & fetched);
+                testAndSet(FLAGS6502.Z, a);
+                testAndSet(FLAGS6502.N, a);
+            }
+            else
+            {
+                Log.Error($"[{clock_count}] AND error - incorrect cycle! [cycles={cycles}] [opcodeStartCycle={opcodeStartCycle}] [_instCycleCount={_instCycleCount}]");
+            }
+            // This instruction has the potential to require an additional clock cycle
+            // (we don't use this anymore)
             return 1;
         }
 
@@ -1094,35 +1661,31 @@ namespace NESEmulator
         /// <returns></returns>
         private byte ASL()
         {
-            fetch();
-            temp = (ushort)(fetched << 1);
-            setFlag(FLAGS6502.C, (temp & 0xFF00) > 0);
-            testAndSet(FLAGS6502.Z, temp);
-            testAndSet(FLAGS6502.N, temp);
-            if (opcode_lookup[opcode].addr_mode == IMP)
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            if (cycles == opcodeStartCycle + 1)
             {
-                a = (byte)(temp & 0x00FF);
+                if (opcode_lookup[opcode].addr_mode != IMP)
+                {
+                    // Write the value back to the effective address, and do the operation on it
+                    write(addr_abs, fetched);
+                }
+                temp = (ushort)(fetched << 1);
+                setFlag(FLAGS6502.C, (temp & 0xFF00) > 0);
+                testAndSet(FLAGS6502.Z, temp);
+                testAndSet(FLAGS6502.N, temp);
+
+                if (opcode_lookup[opcode].addr_mode == IMP)
+                {
+                    a = (byte)(temp & 0x00FF);
+                }
             }
-            else
+            else if (cycles == opcodeStartCycle + 2)
             {
-                write(addr_abs, fetched);   // write original value first
+                // write the new value to the effective address
                 write(addr_abs, (byte)(temp & 0x00FF));
             }
-            return 0;
-        }
-
-        /// <summary>
-        /// Instruction: Test memory bits with accumulator
-        /// Flags Out:   Z, N, V
-        /// </summary>
-        /// <returns></returns>
-        private byte BIT()
-        {
-            fetch();
-            temp = (ushort)(a & fetched);
-            testAndSet(FLAGS6502.Z, temp);
-            testAndSet(FLAGS6502.N, fetched);
-            setFlag(FLAGS6502.V, (fetched & (1 << 6)) != 0);
             return 0;
         }
 
@@ -1134,51 +1697,32 @@ namespace NESEmulator
         /// <returns></returns>
         private byte LSR()
         {
-            fetch();
-            setFlag(FLAGS6502.C, (fetched & 0x0001) == 1);
-            temp = (ushort)(fetched >> 1);
-            testAndSet(FLAGS6502.Z, temp);
-            testAndSet(FLAGS6502.N, temp);
-            if (opcode_lookup[opcode].addr_mode == IMP)
-                a = (byte)(temp & 0x00FF);
-            else
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            if (cycles == opcodeStartCycle + 1)
             {
-                write(addr_abs, fetched);   // write original value first
+                if (opcode_lookup[opcode].addr_mode != IMP)
+                {
+                    // Write the value back to the effective address, and do the operation on it
+                    write(addr_abs, fetched);
+                }
+                setFlag(FLAGS6502.C, (fetched & 0x0001) == 1);
+                temp = (ushort)(fetched >> 1);
+                testAndSet(FLAGS6502.Z, temp);
+                testAndSet(FLAGS6502.N, temp);
+
+                if (opcode_lookup[opcode].addr_mode == IMP)
+                {
+                    a = (byte)(temp & 0x00FF);
+                }
+            }
+            else if (cycles == opcodeStartCycle + 2)
+            {
+                // write the new value to the effective address
                 write(addr_abs, (byte)(temp & 0x00FF));
             }
             return 0;
-        }
-
-        /// <summary>
-        /// Instruction: Bitwise Logic XOR
-        /// Function:    A = A xor M
-        /// Flags Out:   N, Z
-        /// </summary>
-        /// <returns></returns>
-        private byte EOR()
-        {
-            fetch();
-            a = (byte)(a ^ fetched);
-            testAndSet(FLAGS6502.Z, a);
-            testAndSet(FLAGS6502.N, a);
-            return 1;
-        }
-
-        /// <summary>
-        /// Instruction: Bitwise Logic OR
-        /// </summary>
-        /// <returns></returns>
-        /// <remarks>
-        /// Function:    A = A | M
-        /// Flags Out:   N, Z
-        /// </remarks>
-        private byte ORA()
-        {
-            fetch();
-            a |= fetched;
-            testAndSet(FLAGS6502.Z, a);
-            testAndSet(FLAGS6502.N, a);
-            return 1;
         }
 
         /// <summary>
@@ -1189,16 +1733,29 @@ namespace NESEmulator
         /// <returns></returns>
         private byte ROL()
         {
-            fetch();
-            temp = (ushort)((fetched << 1) | getFlag(FLAGS6502.C));
-            setFlag(FLAGS6502.C, (temp & 0xFF00) > 0);
-            testAndSet(FLAGS6502.Z, temp);
-            testAndSet(FLAGS6502.N, temp);
-            if (opcode_lookup[opcode].addr_mode == IMP)
-                a = (byte)(temp & 0x00FF);
-            else
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            if (cycles == opcodeStartCycle + 1)
             {
-                write(addr_abs, fetched);   // write original value first
+                if (opcode_lookup[opcode].addr_mode != IMP)
+                {
+                    // Write the value back to the effective address, and do the operation on it
+                    write(addr_abs, fetched);
+                }
+                temp = (ushort)((fetched << 1) | getFlag(FLAGS6502.C));
+                setFlag(FLAGS6502.C, (temp & 0xFF00) > 0);
+                testAndSet(FLAGS6502.Z, temp);
+                testAndSet(FLAGS6502.N, temp);
+
+                if (opcode_lookup[opcode].addr_mode == IMP)
+                {
+                    a = (byte)(temp & 0x00FF);
+                }
+            }
+            else if (cycles == opcodeStartCycle + 2)
+            {
+                // write the new value to the effective address
                 write(addr_abs, (byte)(temp & 0x00FF));
             }
             return 0;
@@ -1212,23 +1769,117 @@ namespace NESEmulator
         /// <returns></returns>
         private byte ROR()
         {
-            fetch();
-            temp = (ushort)((getFlag(FLAGS6502.C) << 7) | fetched >> 1);
-            setFlag(FLAGS6502.C, (fetched & 0x01) == 1);
-            testAndSet(FLAGS6502.Z, temp);
-            testAndSet(FLAGS6502.N, temp);
-            if (opcode_lookup[opcode].addr_mode == IMP)
-                a = (byte)(temp & 0x00FF);
-            else
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            if (cycles == opcodeStartCycle + 1)
             {
-                write(addr_abs, fetched);   // write original value first
+                if (opcode_lookup[opcode].addr_mode != IMP)
+                {
+                    // Write the value back to the effective address, and do the operation on it
+                    write(addr_abs, fetched);
+                }
+                temp = (ushort)((getFlag(FLAGS6502.C) << 7) | fetched >> 1);
+                setFlag(FLAGS6502.C, (fetched & 0x01) == 1);
+                testAndSet(FLAGS6502.Z, temp);
+                testAndSet(FLAGS6502.N, temp);
+
+                if (opcode_lookup[opcode].addr_mode == IMP)
+                {
+                    a = (byte)(temp & 0x00FF);
+                }
+            }
+            else if (cycles == opcodeStartCycle + 2)
+            {
+                if (opcode_lookup[opcode].addr_mode == IMP)
+                {
+                    Log.Error($"[{clock_count}] ROR error! Executing cycle {cycles} in IMP mode!");
+                }
+                // write the new value to the effective address
                 write(addr_abs, (byte)(temp & 0x00FF));
             }
             return 0;
         }
-#endregion // Bitwise Operators
 
-#region Branch instructions
+        /// <summary>
+        /// Instruction: Test memory bits with accumulator
+        /// Flags Out:   Z, N, V
+        /// </summary>
+        /// <returns></returns>
+        private byte BIT()
+        {
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            // This is a read instruction, so everything should be done on the last cycle.
+            if (cycles == opcodeStartCycle)
+            {
+                temp = (ushort)(a & fetched);
+                testAndSet(FLAGS6502.Z, temp);
+                testAndSet(FLAGS6502.N, fetched);
+                setFlag(FLAGS6502.V, (fetched & (1 << 6)) != 0);
+            }
+            else
+            {
+                Log.Error($"[{clock_count}] BIT error - incorrect cycle! [cycles={cycles}] [opcodeStartCycle={opcodeStartCycle}] [_instCycleCount={_instCycleCount}]");
+            }
+            return 0;
+        }
+
+        /// <summary>
+        /// Instruction: Bitwise Logic XOR
+        /// Function:    A = A xor M
+        /// Flags Out:   N, Z
+        /// </summary>
+        /// <returns></returns>
+        private byte EOR()
+        {
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            // This is a read instruction, so everything should be done on the last cycle.
+            if (cycles == opcodeStartCycle)
+            {
+                a = (byte)(a ^ fetched);
+                testAndSet(FLAGS6502.Z, a);
+                testAndSet(FLAGS6502.N, a);
+            }
+            else
+            {
+                Log.Error($"[{clock_count}] EOR error - incorrect cycle! [cycles={cycles}] [opcodeStartCycle={opcodeStartCycle}] [_instCycleCount={_instCycleCount}]");
+            }
+            return 1;
+        }
+
+        /// <summary>
+        /// Instruction: Bitwise Logic OR
+        /// </summary>
+        /// <returns></returns>
+        /// <remarks>
+        /// Function:    A = A | M
+        /// Flags Out:   N, Z
+        /// </remarks>
+        private byte ORA()
+        {
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            // This is a read instruction, so everything should be done on the last cycle.
+            if (cycles == opcodeStartCycle)
+            {
+                a |= fetched;
+                testAndSet(FLAGS6502.Z, a);
+                testAndSet(FLAGS6502.N, a);
+            }
+            else
+            {
+                Log.Error($"[{clock_count}] ORA error - incorrect cycle! [cycles={cycles}] [opcodeStartCycle={opcodeStartCycle}] [_instCycleCount={_instCycleCount}]");
+            }
+            return 1;
+        }
+        #endregion // Bitwise Operators
+
+        #region Branch instructions
 
         /// <summary>
         /// Instruction: Branch if Carry Clear
@@ -1237,16 +1888,35 @@ namespace NESEmulator
         /// <returns></returns>
         private byte BCC()
         {
-            if (getFlag(FLAGS6502.C) == 0)
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            if (cycles == opcodeStartCycle)
             {
-                cycles++;
-                addr_abs = (ushort)(pc + addr_rel);
-
+                if (getFlag(FLAGS6502.C) == 0)
+                {
+                    // "If branch is taken, add operand to PCL."
+                    addr_abs = (ushort)(pc + addr_rel);
+                    instr_state["need_extra"] = 1;
+                    _instCycleCount++;
+                }
+            }
+            else if (cycles == opcodeStartCycle + 1)
+            {
+                // sanity check
+                if (!instr_state.ContainsKey("need_extra"))
+                {
+                    Log.Error($"[{clock_count}] BCC error - extra cycle executed when not needed!");
+                }
+                // "Fix PCH."
                 if ((addr_abs & 0xFF00) != (pc & 0xFF00))
-                    cycles++;
-
+                {
+                    instr_state["need_extra2"] = 1;
+                    _instCycleCount++;
+                }
                 pc = addr_abs;
             }
+
             return 0;
         }
 
@@ -1257,14 +1927,32 @@ namespace NESEmulator
         /// <returns></returns>
         private byte BCS()
         {
-            if (getFlag(FLAGS6502.C) == 1)
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            if (cycles == opcodeStartCycle)
             {
-                cycles++;
-                addr_abs = (ushort)(pc + addr_rel);
-
+                if (getFlag(FLAGS6502.C) == 1)
+                {
+                    // "If branch is taken, add operand to PCL."
+                    addr_abs = (ushort)(pc + addr_rel);
+                    instr_state["need_extra"] = 1;
+                    _instCycleCount++;
+                }
+            }
+            else if (cycles == opcodeStartCycle + 1)
+            {
+                // sanity check
+                if (!instr_state.ContainsKey("need_extra"))
+                {
+                    Log.Error($"[{clock_count}] BCS error - extra cycle executed when not needed!");
+                }
+                // "Fix PCH."
                 if ((addr_abs & 0xFF00) != (pc & 0xFF00))
-                    cycles++;
-
+                {
+                    instr_state["need_extra2"] = 1;
+                    _instCycleCount++;
+                }
                 pc = addr_abs;
             }
             return 0;
@@ -1277,14 +1965,32 @@ namespace NESEmulator
         /// <returns></returns>
         private byte BEQ()
         {
-            if (getFlag(FLAGS6502.Z) == 1)
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            if (cycles == opcodeStartCycle)
             {
-                cycles++;
-                addr_abs = (ushort)(pc + addr_rel);
-
+                // "If branch is taken, add operand to PCL."
+                if (getFlag(FLAGS6502.Z) == 1)
+                {
+                    addr_abs = (ushort)(pc + addr_rel);
+                    instr_state["need_extra"] = 1;
+                    _instCycleCount++;
+                }
+            }
+            else if (cycles == opcodeStartCycle + 1)
+            {
+                // sanity check
+                if (!instr_state.ContainsKey("need_extra"))
+                {
+                    Log.Error($"[{clock_count}] BEQ error - extra cycle executed when not needed!");
+                }
+                // "Fix PCH."
                 if ((addr_abs & 0xFF00) != (pc & 0xFF00))
-                    cycles++;
-
+                {
+                    instr_state["need_extra2"] = 1;
+                    _instCycleCount++;
+                }
                 pc = addr_abs;
             }
             return 0;
@@ -1297,14 +2003,32 @@ namespace NESEmulator
         /// <returns></returns>
         private byte BMI()
         {
-            if (getFlag(FLAGS6502.N) == 1)
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            if (cycles == opcodeStartCycle)
             {
-                cycles++;
-                addr_abs = (ushort)(pc + addr_rel);
-
+                // "If branch is taken, add operand to PCL."
+                if (getFlag(FLAGS6502.N) == 1)
+                {
+                    addr_abs = (ushort)(pc + addr_rel);
+                    instr_state["need_extra"] = 1;
+                    _instCycleCount++;
+                }
+            }
+            else if (cycles == opcodeStartCycle + 1)
+            {
+                // sanity check
+                if (!instr_state.ContainsKey("need_extra"))
+                {
+                    Log.Error($"[{clock_count}] BMI error - extra cycle executed when not needed!");
+                }
+                // "Fix PCH."
                 if ((addr_abs & 0xFF00) != (pc & 0xFF00))
-                    cycles++;
-
+                {
+                    instr_state["need_extra2"] = 1;
+                    _instCycleCount++;
+                }
                 pc = addr_abs;
             }
             return 0;
@@ -1317,14 +2041,31 @@ namespace NESEmulator
         /// <returns></returns>
         private byte BNE()
         {
-            if (getFlag(FLAGS6502.Z) == 0)
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            if (cycles == opcodeStartCycle)
             {
-                cycles++;
-                addr_abs = (ushort)(pc + addr_rel);
-
+                // "If branch is taken, add operand to PCL."
+                if (getFlag(FLAGS6502.Z) == 0)
+                {
+                    addr_abs = (ushort)(pc + addr_rel);
+                    instr_state["need_extra"] = 1;
+                    _instCycleCount++;
+                }
+            }
+            else if (cycles == opcodeStartCycle + 1)
+            {
+                // sanity check
+                if (!instr_state.ContainsKey("need_extra"))
+                {
+                    Log.Error($"[{clock_count}] BNE error - extra cycle executed when not needed!");
+                }
+                // "Fix PCH."
                 if ((addr_abs & 0xFF00) != (pc & 0xFF00))
-                    cycles++;
-
+                {
+                    _instCycleCount++;
+                }
                 pc = addr_abs;
             }
             return 0;
@@ -1337,14 +2078,32 @@ namespace NESEmulator
         /// <returns></returns>
         private byte BPL()
         {
-            if (getFlag(FLAGS6502.N) == 0)
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            if (cycles == opcodeStartCycle)
             {
-                cycles++;
-                addr_abs = (ushort)(pc + addr_rel);
-
+                // "If branch is taken, add operand to PCL."
+                if (getFlag(FLAGS6502.N) == 0)
+                {
+                    addr_abs = (ushort)(pc + addr_rel);
+                    instr_state["need_extra"] = 1;
+                    _instCycleCount++;
+                }
+            }
+            else if (cycles == opcodeStartCycle + 1)
+            {
+                // sanity check
+                if (!instr_state.ContainsKey("need_extra"))
+                {
+                    Log.Error($"[{clock_count}] BPL error - extra cycle executed when not needed!");
+                }
+                // "Fix PCH."
                 if ((addr_abs & 0xFF00) != (pc & 0xFF00))
-                    cycles++;
-
+                {
+                    instr_state["need_extra2"] = 1;
+                    _instCycleCount++;
+                }
                 pc = addr_abs;
             }
             return 0;
@@ -1357,14 +2116,32 @@ namespace NESEmulator
         /// <returns></returns>
         private byte BVC()
         {
-            if (getFlag(FLAGS6502.V) == 0)
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            if (cycles == opcodeStartCycle)
             {
-                cycles++;
-                addr_abs = (ushort)(pc + addr_rel);
-
+                // "If branch is taken, add operand to PCL."
+                if (getFlag(FLAGS6502.V) == 0)
+                {
+                    addr_abs = (ushort)(pc + addr_rel);
+                    instr_state["need_extra"] = 1;
+                    _instCycleCount++;
+                }
+            }
+            else if (cycles == opcodeStartCycle + 1)
+            {
+                // sanity check
+                if (!instr_state.ContainsKey("need_extra"))
+                {
+                    Log.Error($"[{clock_count}] BVC error - extra cycle executed when not needed!");
+                }
+                // "Fix PCH."
                 if ((addr_abs & 0xFF00) != (pc & 0xFF00))
-                    cycles++;
-
+                {
+                    instr_state["need_extra2"] = 1;
+                    _instCycleCount++;
+                }
                 pc = addr_abs;
             }
             return 0;
@@ -1377,20 +2154,38 @@ namespace NESEmulator
         /// <returns></returns>
         private byte BVS()
         {
-            if (getFlag(FLAGS6502.V) == 1)
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            if (cycles == opcodeStartCycle)
             {
-                cycles++;
-                addr_abs = (ushort)(pc + addr_rel);
-
+                // "If branch is taken, add operand to PCL."
+                if (getFlag(FLAGS6502.V) == 1)
+                {
+                    addr_abs = (ushort)(pc + addr_rel);
+                    instr_state["need_extra"] = 1;
+                    _instCycleCount++;
+                }
+            }
+            else if (cycles == opcodeStartCycle + 1)
+            {
+                // sanity check
+                if (!instr_state.ContainsKey("need_extra"))
+                {
+                    Log.Error($"[{clock_count}] BVS error - extra cycle executed when not needed!");
+                }
+                // "Fix PCH."
                 if ((addr_abs & 0xFF00) != (pc & 0xFF00))
-                    cycles++;
-
+                {
+                    instr_state["need_extra2"] = 1;
+                    _instCycleCount++;
+                }
                 pc = addr_abs;
             }
             return 0;
         }
 
-#endregion // Branch instructions
+        #endregion // Branch instructions
 
         /// <summary>
         /// Instruction: Break
@@ -1399,24 +2194,61 @@ namespace NESEmulator
         /// <returns></returns>
         private byte BRK()
         {
-            // dummy read
-            read(pc);
-
-            push((byte)((pc >> 8) & 0x00FF));
-            push((byte)(pc & 0x00FF));
-
-            setFlag(FLAGS6502.B, true);
-            push((byte)status);
-            setFlag(FLAGS6502.B, false);
-            setFlag(FLAGS6502.I, true);
-
-            byte lo = read(ADDR_IRQ);
-            byte hi = read(ADDR_IRQ + 1);
-            pc = (ushort)((hi << 8) | lo);
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            if (cycles == opcodeStartCycle)
+            {
+                _irqVector = ADDR_IRQ;
+                if (_nmiPending)
+                {
+                    Log.Debug($"[{clock_count}] IRQ/BRK has been hijacked by NMI!");
+                    _irqVector = ADDR_NMI;
+                }
+            }
+            else if (cycles == opcodeStartCycle + 1)
+            {
+                push((byte)((pc >> 8) & 0x00FF));
+                if (_nmiPending)
+                {
+                    Log.Debug($"[{clock_count}] IRQ/BRK has been hijacked by NMI!");
+                    _irqVector = ADDR_NMI;
+                }
+            }
+            else if (cycles == opcodeStartCycle + 2)
+            {
+                push((byte)(pc & 0x00FF));
+                if (_nmiPending)
+                {
+                    Log.Debug($"[{clock_count}] IRQ/BRK has been hijacked by NMI!");
+                    _irqVector = ADDR_NMI;
+                }
+            }
+            else if (cycles == opcodeStartCycle + 3)
+            {
+                setFlag(FLAGS6502.B, true);
+                push((byte)status);
+                setFlag(FLAGS6502.B, false);
+                setFlag(FLAGS6502.I, true);
+                if (_nmiPending == true)
+                {
+                    // NMI hijacked BRK
+                    Log.Debug($"[{clock_count}] IRQ/BRK has been hijacked by NMI!");
+                    _irqVector = ADDR_NMI;
+                }
+            }
+            else if (cycles == opcodeStartCycle + 4)
+            {
+                instr_state["lo"] = read(_irqVector);
+            }
+            else if (cycles == opcodeStartCycle + 5)
+            {
+                byte hi = read((ushort)(_irqVector + 1));
+                pc = (ushort)((hi << 8) | (byte)instr_state["lo"]);
+            }
             return 0;
         }
 
-#region Clear instructions
+        #region Clear instructions
 
         /// <summary>
         /// Instruction: Clear Carry Flag
@@ -1425,7 +2257,12 @@ namespace NESEmulator
         /// <returns></returns>
         private byte CLC()
         {
-            setFlag(FLAGS6502.C, false);
+            if (cycles == 1)
+            {
+                // Dummy read
+                read(pc);
+                setFlag(FLAGS6502.C, false);
+            }
             return 0;
         }
 
@@ -1436,7 +2273,12 @@ namespace NESEmulator
         /// <returns></returns>
         private byte CLD()
         {
-            setFlag(FLAGS6502.D, false);
+            if (cycles == 1)
+            {
+                // Dummy read
+                read(pc);
+                setFlag(FLAGS6502.D, false);
+            }
             return 0;
         }
 
@@ -1447,11 +2289,97 @@ namespace NESEmulator
         /// <returns></returns>
         private byte CLV()
         {
-            setFlag(FLAGS6502.V, false);
+            if (cycles == 1)
+            {
+                // Dummy read
+                read(pc);
+                setFlag(FLAGS6502.V, false);
+            }
             return 0;
         }
 
-#endregion // Clear instructions
+        /// <summary>
+        /// Instruction: Enable Interrupts / Clear Interrupt Disable Flag
+        /// Function:    I = 0
+        /// </summary>
+        /// <returns></returns>
+        private byte CLI()
+        {
+            if (cycles == 1)
+            {
+                // Dummy read
+                read(pc);
+                //Log.Debug($"[{clock_count}] CLI");
+                _startCountingIRQs = true;
+                _irqCount = 0;
+                if (getFlag(FLAGS6502.I) == 1)
+                {
+                    _irqEnableLatency = 1;
+                }
+                setFlag(FLAGS6502.I, false);
+            }
+            return 0;
+        }
+        #endregion // Clear instructions
+
+        #region Set Instructions
+        /// <summary>
+        /// Instruction: Set Carry Flag
+        /// Function:    C = 1
+        /// Flags Out:   C
+        /// </summary>
+        /// <returns></returns>
+        private byte SEC()
+        {
+            if (cycles == 1)
+            {
+                // Dummy read
+                read(pc);
+                setFlag(FLAGS6502.C, true);
+            }
+            return 0;
+        }
+
+        /// <summary>
+        /// Instruction: Set Decimal Flag
+        /// Function:    D = 1
+        /// Flags Out:   D
+        /// </summary>
+        /// <returns></returns>
+        private byte SED()
+        {
+            if (cycles == 1)
+            {
+                // Dummy read
+                read(pc);
+                setFlag(FLAGS6502.D, true);
+            }
+            return 0;
+        }
+
+        /// <summary>
+        /// Instruction: Set Interrupt Disable Flag / Disable Interrupts
+        /// Function:    I = 1
+        /// Flags Out:   I
+        /// </summary>
+        /// <returns></returns>
+        private byte SEI()
+        {
+            if (cycles == 1)
+            {
+                // Dummy read
+                read(pc);
+                if (getFlag(FLAGS6502.I) == 0)
+                {
+                    _irqDisablePending = true;
+                    _startCountingIRQs = false;
+                }
+
+                setFlag(FLAGS6502.I, true);
+            }
+            return 0;
+        }
+        #endregion // Set Instructions
 
         /// <summary>
         /// Instruction: Compare Accumulator
@@ -1461,11 +2389,17 @@ namespace NESEmulator
         /// <returns></returns>
         private byte CMP()
         {
-            fetch();
-            temp = (ushort)(a - fetched);
-            setFlag(FLAGS6502.C, a >= fetched);
-            testAndSet(FLAGS6502.Z, temp);
-            testAndSet(FLAGS6502.N, temp);
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            // This is a read instruction, so everything should be done on the last cycle.
+            if (cycles == opcodeStartCycle)
+            {
+                temp = (ushort)(a - fetched);
+                setFlag(FLAGS6502.C, a >= fetched);
+                testAndSet(FLAGS6502.Z, temp);
+                testAndSet(FLAGS6502.N, temp);
+            }
             return 1;
         }
 
@@ -1477,11 +2411,17 @@ namespace NESEmulator
         /// <returns></returns>
         private byte CPX()
         {
-            fetch();
-            temp = (ushort)(x - fetched);
-            setFlag(FLAGS6502.C, x >= fetched);
-            testAndSet(FLAGS6502.Z, temp);
-            testAndSet(FLAGS6502.N, temp);
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            // This is a read instruction, so everything should be done on the last cycle.
+            if (cycles == opcodeStartCycle)
+            {
+                temp = (ushort)(x - fetched);
+                setFlag(FLAGS6502.C, x >= fetched);
+                testAndSet(FLAGS6502.Z, temp);
+                testAndSet(FLAGS6502.N, temp);
+            }
             return 0;
         }
 
@@ -1493,11 +2433,17 @@ namespace NESEmulator
         /// <returns></returns>
         private byte CPY()
         {
-            fetch();
-            temp = (ushort)(y - fetched);
-            setFlag(FLAGS6502.C, y >= fetched);
-            testAndSet(FLAGS6502.Z, temp);
-            testAndSet(FLAGS6502.N, temp);
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            // This is a read instruction, so everything should be done on the last cycle.
+            if (cycles == opcodeStartCycle)
+            {
+                temp = (ushort)(y - fetched);
+                setFlag(FLAGS6502.C, y >= fetched);
+                testAndSet(FLAGS6502.Z, temp);
+                testAndSet(FLAGS6502.N, temp);
+            }
             return 0;
         }
 
@@ -1509,12 +2455,22 @@ namespace NESEmulator
         /// <returns></returns>
         private byte DEC()
         {
-            fetch();
-            write(addr_abs, fetched);   // write original value first
-            temp = (ushort)(fetched - 1);
-            write(addr_abs, (byte)(temp & 0x00FF));
-            testAndSet(FLAGS6502.Z, temp);
-            testAndSet(FLAGS6502.N, temp);
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            if (cycles == opcodeStartCycle + 1)
+            {
+                // Write the value back to the effective address, and do the operation on it
+                write(addr_abs, fetched);
+                temp = (ushort)(fetched - 1);
+                testAndSet(FLAGS6502.Z, temp);
+                testAndSet(FLAGS6502.N, temp);
+            }
+            else if (cycles == opcodeStartCycle + 2)
+            {
+                // write the new value to the effective address
+                write(addr_abs, (byte)(temp & 0x00FF));
+            }
             return 0;
         }
 
@@ -1526,9 +2482,12 @@ namespace NESEmulator
         /// <returns></returns>
         private byte DEX()
         {
-            x--;
-            testAndSet(FLAGS6502.Z, x);
-            testAndSet(FLAGS6502.N, x);
+            if (cycles == 1)
+            {
+                x--;
+                testAndSet(FLAGS6502.Z, x);
+                testAndSet(FLAGS6502.N, x);
+            }
             return 0;
         }
 
@@ -1540,9 +2499,12 @@ namespace NESEmulator
         /// <returns></returns>
         private byte DEY()
         {
-            y--;
-            testAndSet(FLAGS6502.Z, y);
-            testAndSet(FLAGS6502.N, y);
+            if (cycles == 1)
+            {
+                y--;
+                testAndSet(FLAGS6502.Z, y);
+                testAndSet(FLAGS6502.N, y);
+            }
             return 0;
         }
 
@@ -1554,12 +2516,21 @@ namespace NESEmulator
         /// <returns></returns>
         private byte INC()
         {
-            fetch();
-            write(addr_abs, fetched);   // write original value first
-            temp = (ushort)(fetched + 1);
-            write(addr_abs, (byte)(temp & 0x00FF));
-            testAndSet(FLAGS6502.Z, temp);
-            testAndSet(FLAGS6502.N, temp);
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            if (cycles == opcodeStartCycle + 1)
+            {
+                // Write the value back to the effective address, and do the operation on it
+                write(addr_abs, fetched);
+                temp = (ushort)(fetched + 1);
+                testAndSet(FLAGS6502.Z, temp);
+                testAndSet(FLAGS6502.N, temp);
+            }
+            else if (cycles == opcodeStartCycle + 2)
+            {
+                write(addr_abs, (byte)(temp & 0x00FF));
+            }
             return 0;
         }
 
@@ -1571,9 +2542,12 @@ namespace NESEmulator
         /// <returns></returns>
         private byte INX()
         {
-            x++;
-            testAndSet(FLAGS6502.Z, x);
-            testAndSet(FLAGS6502.N, x);
+            if (cycles == 1)
+            {
+                x++;
+                testAndSet(FLAGS6502.Z, x);
+                testAndSet(FLAGS6502.N, x);
+            }
             return 0;
         }
 
@@ -1585,9 +2559,12 @@ namespace NESEmulator
         /// <returns></returns>
         private byte INY()
         {
-            y++;
-            testAndSet(FLAGS6502.Z, y);
-            testAndSet(FLAGS6502.N, y);
+            if (cycles == 1)
+            {
+                y++;
+                testAndSet(FLAGS6502.Z, y);
+                testAndSet(FLAGS6502.N, y);
+            }
             return 0;
         }
 
@@ -1598,7 +2575,19 @@ namespace NESEmulator
         /// <returns></returns>
         private byte JMP()
         {
-            pc = addr_abs;
+            // Depending on addressing mode, there's two possibilities here.
+            if (opcode_lookup[opcode].addr_mode == ABS)
+            {
+                if (cycles == 2)
+                {
+                    pc = addr_abs;
+                }
+            }
+            else if (opcode_lookup[opcode].addr_mode == IND)
+            {
+                // Indirect addressing mode is only for JMP, so we don't do anything here
+                // since it is all handled in the IND cycles (including setting the PC)
+            }
             return 0;
         }
 
@@ -1609,14 +2598,28 @@ namespace NESEmulator
         /// <returns></returns>
         private byte JSR()
         {
-            pc--;
-            push((byte)(pc >> 8));
-            push((byte)(pc & 0x00FF));
-            pc = addr_abs;
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            if (cycles == 3)
+            {
+                push((byte)(pc >> 8));
+            }
+            else if (cycles == 4)
+            {
+                push((byte)(pc & 0x00FF));
+            }
+            else if (cycles == 5)
+            {
+                byte hi = read(pc);
+                addr_abs = (ushort)((hi << 8) | (ushort)instr_state["lo"]);
+                pc = addr_abs;
+            }
+
             return 0;
         }
 
-#region Load instructions
+        #region Load instructions
 
         /// <summary>
         /// Instruction: Load The Accumulator
@@ -1626,10 +2629,16 @@ namespace NESEmulator
         /// <returns></returns>
         private byte LDA()
         {
-            fetch();
-            a = fetched;
-            testAndSet(FLAGS6502.Z, a);
-            testAndSet(FLAGS6502.N, a);
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            // This is a read instruction, so everything should be done on the last cycle.
+            if (cycles == opcodeStartCycle)
+            {
+                a = fetched;
+                testAndSet(FLAGS6502.Z, a);
+                testAndSet(FLAGS6502.N, a);
+            }
             return 1;
         }
 
@@ -1641,10 +2650,16 @@ namespace NESEmulator
         /// <returns></returns>
         private byte LDX()
         {
-            fetch();
-            x = fetched;
-            testAndSet(FLAGS6502.Z, x);
-            testAndSet(FLAGS6502.N, x);
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            // This is a read instruction, so everything should be done on the last cycle.
+            if (cycles == opcodeStartCycle)
+            {
+                x = fetched;
+                testAndSet(FLAGS6502.Z, x);
+                testAndSet(FLAGS6502.N, x);
+            }
             return 1;
         }
 
@@ -1656,14 +2671,20 @@ namespace NESEmulator
         /// <returns></returns>
         private byte LDY()
         {
-            fetch();
-            y = fetched;
-            testAndSet(FLAGS6502.Z, y);
-            testAndSet(FLAGS6502.N, y);
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            // This is a read instruction, so everything should be done on the last cycle.
+            if (cycles == opcodeStartCycle)
+            {
+                y = fetched;
+                testAndSet(FLAGS6502.Z, y);
+                testAndSet(FLAGS6502.N, y);
+            }
             return 1;
         }
 
-#endregion // Load instructions
+        #endregion // Load instructions
 
         /// <summary>
         /// No operation
@@ -1699,7 +2720,15 @@ namespace NESEmulator
         /// <returns></returns>
         private byte PHA()
         {
-            push(a);
+            // Dummy read
+            if (cycles == 1)
+            {
+                read(pc);
+            }
+            else if (cycles == 2)
+            {
+                push(a);
+            }
             return 0;
         }
 
@@ -1711,10 +2740,18 @@ namespace NESEmulator
         /// <returns></returns>
         private byte PHP()
         {
-            write((ushort)(ADDR_STACK + sp), (byte)(status | FLAGS6502.B | FLAGS6502.U));
-            setFlag(FLAGS6502.B, false);
-            setFlag(FLAGS6502.U, false);
-            sp--;
+            // Dummy read
+            if (cycles == 1)
+            {
+                read(pc);
+            }
+            else if (cycles == 2)
+            {
+                write((ushort)(ADDR_STACK + sp), (byte)(status | FLAGS6502.B | FLAGS6502.U));
+                setFlag(FLAGS6502.B, false);
+                setFlag(FLAGS6502.U, false);
+                sp--;
+            }
             return 0;
         }
 
@@ -1726,9 +2763,17 @@ namespace NESEmulator
         /// <returns></returns>
         private byte PLA()
         {
-            a = pop();
-            testAndSet(FLAGS6502.Z, a);
-            testAndSet(FLAGS6502.N, a);
+            // Dummy read
+            if (cycles == 1)
+            {
+                read(pc);
+            }
+            else if (cycles == 3)
+            {
+                a = pop();
+                testAndSet(FLAGS6502.Z, a);
+                testAndSet(FLAGS6502.N, a);
+            };
             return 0;
         }
 
@@ -1741,52 +2786,24 @@ namespace NESEmulator
         /// </returns>
         private byte PLP()
         {
-            bool prevI = getFlag(FLAGS6502.I) == 1;
-            status = (FLAGS6502)pop();
-            if (!prevI && getFlag(FLAGS6502.I) == 1)
-                _irqDisablePending = true;
-            if (prevI && getFlag(FLAGS6502.I) == 0)
-                _irqEnableLatency = 1;
-            setFlag(FLAGS6502.U, true);
+            // Dummy read
+            if (cycles == 1)
+            {
+                read(pc);
+            }
+            else if (cycles == 3)
+            {
+                bool prevI = getFlag(FLAGS6502.I) == 1;
+                status = (FLAGS6502)pop();
+                if (!prevI && getFlag(FLAGS6502.I) == 1)
+                    _irqDisablePending = true;
+                if (prevI && getFlag(FLAGS6502.I) == 0)
+                    _irqEnableLatency = 1;
+                setFlag(FLAGS6502.U, true);
+            };
             return 0;
         }
         #endregion // Stack Instructions
-
-        /// <summary>
-        /// Instruction: Enable Interrupts / Clear Interrupt Disable Flag
-        /// Function:    I = 0
-        /// </summary>
-        /// <returns></returns>
-        private byte CLI()
-        {
-            //Log.Debug($"[{clock_count}] CLI");
-            _startCountingIRQs = true;
-            _irqCount = 0;
-            if (getFlag(FLAGS6502.I) == 1)
-            {
-                _irqEnableLatency = 1;
-            }
-            setFlag(FLAGS6502.I, false);
-            return 0;
-        }
-
-        /// <summary>
-        /// Instruction: Set Interrupt Disable Flag / Disable Interrupts
-        /// Function:    I = 1
-        /// Flags Out:   I
-        /// </summary>
-        /// <returns></returns>
-        private byte SEI()
-        {
-            if (getFlag(FLAGS6502.I) == 0)
-            {
-                _irqDisablePending = true;
-                _startCountingIRQs = false;
-            }
-
-            setFlag(FLAGS6502.I, true);
-            return 0;
-        }
 
         /// <summary>
         /// Instruction: Return From Interrupt
@@ -1796,13 +2813,26 @@ namespace NESEmulator
         /// <returns></returns>
         private byte RTI()
         {
-            status = (FLAGS6502)pop();
-            status &= ~FLAGS6502.B;
-            status &= ~FLAGS6502.U;
-
-            pc = pop();
-            pc |= (ushort)(pop() << 8);
-
+            // Dummy read
+            if (cycles == 1)
+            {
+                read(pc);
+            }
+            else if (cycles == 3)
+            {
+                status = (FLAGS6502)pop();
+                status &= ~FLAGS6502.B;
+                status &= ~FLAGS6502.U;
+                return 0;
+            }
+            else if (cycles == 4)
+            {
+                pc = pop();
+            }
+            else if (cycles == 5)
+            {
+                pc |= (ushort)(pop() << 8);
+            };
             return 0;
         }
 
@@ -1814,58 +2844,24 @@ namespace NESEmulator
         /// <returns></returns>
         private byte RTS()
         {
-            pc = pop();
-            pc |= (ushort)(pop() << 8);
-            pc++;
-            return 0;
-        }
+            // Dummy read
+            if (cycles == 1)
+            {
+                read(pc);
+            }
+            else if (cycles == 3)
+            {
+                pc = pop();
+            }
+            else if (cycles == 4)
+            {
+                pc |= (ushort)(pop() << 8);
+            }
+            else if (cycles == 5)
+            {
+                pc++;
+            }
 
-        /// <summary>
-        /// Instruction: Subtraction with Borrow In
-        /// Function:    A = A - M - (1 - C)
-        /// Flags Out:   C, V, N, Z
-        /// </summary>
-        /// <returns></returns>
-        private byte SBC()
-        {
-            fetch();
-
-            // Operating in 16-bit domain to capture carry out
-
-            // We can invert the bottom 8 bits with bitwise xor
-            ushort value = (ushort)((fetched) ^ 0x00FF);
-
-            // Notice this is exactly the same as addition from here!
-            temp = (ushort)(a + value + getFlag(FLAGS6502.C));
-            setFlag(FLAGS6502.C, (temp & 0xFF00) != 0);
-            testAndSet(FLAGS6502.Z, temp);
-            setFlag(FLAGS6502.V, ((temp ^ a) & (temp ^ value) & 0x0080) != 0);
-            testAndSet(FLAGS6502.N, temp);
-            a = (byte)(temp & 0x00FF);
-            return 1;
-        }
-
-        /// <summary>
-        /// Instruction: Set Carry Flag
-        /// Function:    C = 1
-        /// Flags Out:   C
-        /// </summary>
-        /// <returns></returns>
-        private byte SEC()
-        {
-            setFlag(FLAGS6502.C, true);
-            return 0;
-        }
-
-        /// <summary>
-        /// Instruction: Set Decimal Flag
-        /// Function:    D = 1
-        /// Flags Out:   D
-        /// </summary>
-        /// <returns></returns>
-        private byte SED()
-        {
-            setFlag(FLAGS6502.D, true);
             return 0;
         }
 
@@ -1879,7 +2875,14 @@ namespace NESEmulator
         /// <returns></returns>
         private byte STA()
         {
-            write(addr_abs, a);
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            // This is a write instruction, so everything should be done on the last cycle.
+            if (cycles == opcodeStartCycle)
+            {
+                write(addr_abs, a);
+            }
             return 0;
         }
 
@@ -1891,7 +2894,14 @@ namespace NESEmulator
         /// <returns></returns>
         private byte STX()
         {
-            write(addr_abs, x);
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            // This is a write instruction, so everything should be done on the last cycle.
+            if (cycles == opcodeStartCycle)
+            {
+                write(addr_abs, x);
+            }
             return 0;
         }
 
@@ -1903,7 +2913,14 @@ namespace NESEmulator
         /// <returns></returns>
         private byte STY()
         {
-            write(addr_abs, y);
+            // Which cycle did the addressing mode operations end?
+            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+
+            // This is a write instruction, so everything should be done on the last cycle.
+            if (cycles == opcodeStartCycle)
+            {
+                write(addr_abs, y);
+            }
             return 0;
         }
 
@@ -1919,9 +2936,16 @@ namespace NESEmulator
         /// <returns></returns>
         private byte TAX()
         {
-            x = a;
-            testAndSet(FLAGS6502.Z, x);
-            testAndSet(FLAGS6502.N, x);
+            if (cycles == 1)
+            {
+                x = a;
+                testAndSet(FLAGS6502.Z, x);
+                testAndSet(FLAGS6502.N, x);
+            }
+            else if (cycles > 1)
+            {
+                Log.Error($"[{clock_count}] TAX error - incorrect cycle # [cycles={cycles}]");
+            }
             return 0;
         }
 
@@ -1933,9 +2957,16 @@ namespace NESEmulator
         /// <returns></returns>
         private byte TAY()
         {
-            y = a;
-            testAndSet(FLAGS6502.Z, y);
-            testAndSet(FLAGS6502.N, y);
+            if (cycles == 1)
+            {
+                y = a;
+                testAndSet(FLAGS6502.Z, y);
+                testAndSet(FLAGS6502.N, y);
+            }
+            else if (cycles > 1)
+            {
+                Log.Error($"[{clock_count}] TAY error - incorrect cycle # [cycles={cycles}]");
+            }
             return 0;
         }
 
@@ -1947,9 +2978,16 @@ namespace NESEmulator
         /// <returns></returns>
         private byte TSX()
         {
-            x = sp;
-            testAndSet(FLAGS6502.Z, x);
-            testAndSet(FLAGS6502.N, x);
+            if (cycles == 1)
+            {
+                x = sp;
+                testAndSet(FLAGS6502.Z, x);
+                testAndSet(FLAGS6502.N, x);
+            }
+            else if (cycles > 1)
+            {
+                Log.Error($"[{clock_count}] TSX error - incorrect cycle # [cycles={cycles}]");
+            }
             return 0;
         }
 
@@ -1961,9 +2999,16 @@ namespace NESEmulator
         /// <returns></returns>
         private byte TXA()
         {
-            a = x;
-            testAndSet(FLAGS6502.Z, a);
-            testAndSet(FLAGS6502.N, a);
+            if (cycles == 1)
+            {
+                a = x;
+                testAndSet(FLAGS6502.Z, a);
+                testAndSet(FLAGS6502.N, a);
+            }
+            else if (cycles > 1)
+            {
+                Log.Error($"[{clock_count}] TXA error - incorrect cycle # [cycles={cycles}]");
+            }
             return 0;
         }
 
@@ -1975,7 +3020,14 @@ namespace NESEmulator
         /// <returns></returns>
         private byte TXS()
         {
-            sp = x;
+            if (cycles == 1)
+            {
+                sp = x;
+            }
+            else if (cycles > 1)
+            {
+                Log.Error($"[{clock_count}] TXS error - incorrect cycle # [cycles={cycles}]");
+            }
             return 0;
         }
 
@@ -1987,9 +3039,16 @@ namespace NESEmulator
         /// <returns></returns>
         private byte TYA()
         {
-            a = y;
-            testAndSet(FLAGS6502.Z, a);
-            testAndSet(FLAGS6502.N, a);
+            if (cycles == 1)
+            {
+                a = y;
+                testAndSet(FLAGS6502.Z, a);
+                testAndSet(FLAGS6502.N, a);
+            }
+            else if (cycles > 1)
+            {
+                Log.Error($"[{clock_count}] TYA error - incorrect cycle # [cycles={cycles}]");
+            }
             return 0;
         }
 
@@ -2215,8 +3274,8 @@ namespace NESEmulator
                 new Instruction() { name = "CPY", operation = CPY, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
                 new Instruction() { name = "CMP", operation = CMP, addr_mode = ABS, instr_type = CPUInstructionType.Read,    cycles = 4 },
                 new Instruction() { name = "DEC", operation = DEC, addr_mode = ABS, instr_type = CPUInstructionType.R_M_W,   cycles = 6 },
-                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 }, // 0xCF
-                new Instruction() { name = "BNE", operation = BNE, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 2 },
+                new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 6 },
+                new Instruction() { name = "BNE", operation = BNE, addr_mode = REL, instr_type = CPUInstructionType.Branch,  cycles = 2 }, // 0xD0
                 new Instruction() { name = "CMP", operation = CMP, addr_mode = IZY, instr_type = CPUInstructionType.Read,    cycles = 5 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 2 },
                 new Instruction() { name = "???", operation = XXX, addr_mode = IMP, instr_type = CPUInstructionType.Special, cycles = 8 },
@@ -2267,10 +3326,11 @@ namespace NESEmulator
             };
         }
 
-        private void push(byte data)
+        private byte push(byte data)
         {
             write((ushort)(ADDR_STACK + sp), data);
             sp--;
+            return sp;
         }
 
         private byte pop()

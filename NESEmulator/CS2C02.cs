@@ -55,7 +55,7 @@ namespace NESEmulator
 
         // Pixel "dot" position information
         private short  _scanline;
-        private ushort _cycle;
+        private short  _cycle;
         private ulong  _frameCounter;
 
         // Background rendering
@@ -81,7 +81,7 @@ namespace NESEmulator
 
         // Sprite rendering
         public ObjectAttributeEntry[] OAM = new ObjectAttributeEntry[64];
-        private ObjectAttributeEntry[] _secondaryOAM = new ObjectAttributeEntry[8];
+        public ObjectAttributeEntry[] SecondaryOAM = new ObjectAttributeEntry[8];
         private byte   _OAMaddr;
         private byte   _spriteCurrCount;
         private byte[] _spriteCurrShifterPatternLo = new byte[8];
@@ -96,6 +96,9 @@ namespace NESEmulator
         // Special case flags
         private bool _frameSuppressVBL;
         private bool _frameSuppressNMI;
+        private byte _prevWrittenValue;
+        private bool _vramWritePending;
+        private byte _vramWriteDelay = 3;
 
         private Cartridge _cartridge;
         private List<PPUCycleNode>[] _cycleOperations;
@@ -139,6 +142,36 @@ namespace NESEmulator
 
         public Sprite GetNameTable(int i)
         {
+            // Each nametable is 30 rows of 32 tiles - WIP
+            //for (int tileY = 0; tileY < 30; tileY++)
+            //{
+            //    for (int tileX = 0; tileX < 32; tileX++)
+            //    {
+            //        byte ntByte = ppuRead((ushort)(0x2000 + tileY * 32 + tileX));
+
+            //        for (int row = 0; row < 8; row++)
+            //        {
+            //            byte tileLSB = ppuRead((ushort)(((_control.PatternBackground ? 1 : 0) << 12)
+            //                                      + (ntByte << 4)
+            //                                      + row));
+            //            byte tileMSB = ppuRead((ushort)(((_control.PatternBackground ? 1 : 0) << 12)
+            //                                    + (ntByte << 4)
+            //                                    + row + 8));
+
+            //            for (int col = 0; col < 8; col++)
+            //            {
+            //                // We can get the index value by simply combining the bits together
+            //                // but we're only interested in the lsb of the row words because...
+            //                byte pixel = (byte)((tileLSB & 0x01) + ((tileMSB & 0x01) << 1));
+
+            //                // ...we will shift the row words 1 bit right for each column of
+            //                // the character.
+            //                tileLSB >>= 1;
+            //                tileMSB >>= 1;
+            //            }
+            //        }
+            //    }
+            //}
             if (i < 2)
                 return _nameTable[i];
 
@@ -271,11 +304,19 @@ namespace NESEmulator
             //_vram_addr.reg          = 0;
             _tram_addr.reg          = 0;
             //_OAMaddr                = 0;
+            _vramWritePending       = false;
+            _vramWriteDelay         = 3;
             _cycleOpItr = _cycleOperations[_scanline].GetEnumerator();
             _cycleOpItr.MoveNext();
         }
 
-        public bool Read(ushort addr, out byte data)
+        public void PowerOn()
+        {
+            _cycleOpItr = _cycleOperations[_scanline].GetEnumerator();
+            _cycleOpItr.MoveNext();
+        }
+
+        public bool Read(ushort addr, out byte data, bool readOnly = false)
         {
             bool dataRead = false;
             data = 0;
@@ -284,6 +325,8 @@ namespace NESEmulator
             {
                 addr &= 0x0007;
                 dataRead = true;
+
+                if (readOnly) return true;
 
                 // These are the live PPU registers that repsond
                 // to being read from in various ways. Note that not
@@ -300,37 +343,38 @@ namespace NESEmulator
                         // Only the top three bits contain status information, however it is possible that some "noise"
                         // gets picked up on the bottom 5 bits which represent the last PPU bus transaction. Some games
                         // "may" use this noise as valid data (even though they probably shouldn't)
-                        data = (byte)((_status.reg & 0xE0) | (_ppuDataBuffer & 0x1F));
+                        data = (byte)((_status.reg & 0xE0) | (_prevWrittenValue & 0x1F));
+                        //Log.Debug($"[PPU: {_currentClockCycle}] [_scanline={_scanline}] [_cycle={_cycle}] [data={data:X2}]");
+                        if (readOnly) break;
 
+                        // Log.Debug($"PPU Status read [_scanline={_scanline}][_cycle={_cycle}][data={data:X2}]");
                         if (_scanline == 241)
                         {
-                            //Console.WriteLine($"PPU Status read [_scanline={_scanline}][_cycle={_cycle}]");
-
                             // Special case 1: Reading one PPU clock before reads it as clear and never sets the flag or generates NMI for that frame.
                             if (_cycle == 0)
                             {
                                 _frameSuppressNMI = true;
                                 _frameSuppressVBL = true;
 #if DEBUG_VBL
-                                Log.Debug($"[{_currentClockCycle / 3}] NMI/VBL supressed");
+                                Log.Debug($"[PPU: {_currentClockCycle}] NMI/VBL supressed");
 #endif
                                 data.SetBit(7, false);
+                                _status.VerticalBlank = false;
                             }
                             // Special case 2: Reading on the same PPU clock or one later reads it as set, clears it, and suppresses the NMI for that frame.
                             else if (_cycle == 1 || _cycle == 2)
                             {
                                 _frameSuppressNMI = true;
+#if DEBUG_VBL
+                                Log.Debug($"[PPU: {_currentClockCycle}] NMI supressed");
+#endif
                             }
                         }
 
 #if DEBUG_VBL
                         if (_status.VerticalBlank)
                         {
-                            Log.Debug($"[{_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] VBL cleared from status read");
-                        }
-                        else
-                        {
-                            Log.Debug($"[{_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] Status read, VBL was not set");
+                            Log.Debug($"[PPU: {_currentClockCycle}] [_scanline={_scanline}] [_cycle={_cycle}] [data={data:X2}] VBL cleared from status read");
                         }
 #endif
                         // Clear the vertical blanking flag
@@ -350,21 +394,47 @@ namespace NESEmulator
                     case 0x0006:    // PPU Address - not readable
                         break;
                     case 0x0007:    // PPU Data
+                        if (readOnly) break;
+
                         // Reads from the NameTable ram get delayed one cycle, so output buffer which contains the data
                         // from the previous read request
                         data = _ppuDataBuffer;
+
                         // Then update buffer for next time
-                        _ppuDataBuffer = ppuRead(_vram_addr.reg);
+                        _ppuDataBuffer = ppuRead(_vram_addr.reg, readOnly);
 
                         // However, if the address was in the palette range, the data is not delayed, so it returns
                         // immediately
                         if (_vram_addr.reg >= ADDR_PALETTE)
+                        {
                             data = _ppuDataBuffer;
+                            // "Reading the palettes still updates the internal buffer though, but the data placed in it is the mirrored nametable
+                            // data that would appear "underneath" the palette." https://wiki.nesdev.org/w/index.php?title=PPU_registers#PPUDATA
+                            // Palette RAM and VRAM map overlap, so reading from palette RAM still reads the contents of VRAM at this location
+                            _ppuDataBuffer = ppuRead(_vram_addr.reg, readOnly, true);
+                        }
 
-                        // All reads from the PPU data automatically increment the nametable address depending upon the
-                        // mode set in the control register. If set to vertical mode, the increment is 32 so it skips
-                        // one whole nametable row; in horizontal mode it just increments by 1, moving to the next column
-                        _vram_addr.reg += (ushort)(_control.IncrementMode ? 32 : 1);
+                        if ((_scanline < 240 || _scanline == 261) && (_mask.RenderBackground || _mask.RenderSprites))
+                        {
+                            // During rendering (on the pre-render line and the visible lines 0-239, provided either background or sprite
+                            // rendering is enabled), it will update v in an odd way, triggering a coarse X increment and a Y increment
+                            // simultaneously (with normal wrapping behavior).
+                            // https://wiki.nesdev.org/w/index.php?title=PPU_scrolling#.242007_reads_and_writes
+#if DEBUG_PPU
+                            Log.Debug($"Glitch scroll! [_scanline={_scanline}] [_cycle={_cycle}]");
+#endif
+                            _vram_addr.CoarseX += 1;
+                            _vram_addr.FineY += 1;
+                        }
+                        else
+                        {
+                            //Log.Debug($"Normal PPUDATA read [_scanline={_scanline}] [_cycle={_cycle}]");
+                            // All reads from the PPU data automatically increment the nametable address depending upon the
+                            // mode set in the control register. If set to vertical mode, the increment is 32 so it skips
+                            // one whole nametable row; in horizontal mode it just increments by 1, moving to the next column
+                            _vram_addr.reg += (ushort)(_control.IncrementMode ? 32 : 1);
+                        }
+
                         break;
                 }
             }
@@ -381,11 +451,15 @@ namespace NESEmulator
             {
                 addr &= 0x0007;
                 dataWritten = true;
+                _prevWrittenValue = data;
 
                 switch (addr)
                 {
                     case 0x0000:    // Control
-                        if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
+                        // Writes to the following registers are ignored if earlier than ~29658 CPU clocks after reset: PPUCTRL, PPUMASK, PPUSCROLL, PPUADDR.
+                        // https://wiki.nesdev.org/w/index.php?title=PPU_power_up_state
+                        // TODO: This should only apply after a RESET - the way I wrote this was after power on. Oops.
+                        //if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
 
 #if DEBUG_VBL
                         if (((PPUControl)data).EnableNMI != _control.EnableNMI)
@@ -399,15 +473,27 @@ namespace NESEmulator
                         _tram_addr.NameTableX = _control.NameTableX;
                         _tram_addr.NameTableY = _control.NameTableY;
                         checkAndRaiseNMI();
+#if DEBUG_PPU
+                        Log.Debug($"[PPU: {_currentClockCycle}] PPUCTRL written. Nametable = {_control.reg & 3}");
+#endif
                         break;
                     case 0x0001:    // Mask
-                        if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
+                        // Writes to the following registers are ignored if earlier than ~29658 CPU clocks after reset: PPUCTRL, PPUMASK, PPUSCROLL, PPUADDR.
+                        // https://wiki.nesdev.org/w/index.php?title=PPU_power_up_state
+                        // TODO: This should only apply after a RESET - the way I wrote this was after power on. Oops.
+                        //if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
 
                         _mask.reg = data;
+#if DEBUG_PPU
                         if (!_mask.RenderBackground)
-                            Log.Debug($"[{_currentClockCycle / 3}] Background rendering disabled");
+                            Log.Debug($"[PPU: {_currentClockCycle}] Background rendering disabled [_scanline={_scanline}] [_cycle={_cycle}]");
+                        else
+                            Log.Debug($"[PPU: {_currentClockCycle}] Background rendering enabled [_scanline={_scanline}] [_cycle={_cycle}]");
                         if (!_mask.RenderSprites)
-                            Log.Debug($"[{_currentClockCycle / 3}] Sprite rendering disabled");
+                            Log.Debug($"[PPU: {_currentClockCycle}] Sprite rendering disabled [_scanline={_scanline}] [_cycle={_cycle}]");
+                        else
+                            Log.Debug($"[PPU: {_currentClockCycle}] Sprite rendering enabled [_scanline={_scanline}] [_cycle={_cycle}]");
+#endif
                         break;
                     case 0x0002:    // Status
                         break;
@@ -419,7 +505,10 @@ namespace NESEmulator
                         _OAMaddr++;
                         break;
                     case 0x0005:    // Scroll
-                        if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
+                        // Writes to the following registers are ignored if earlier than ~29658 CPU clocks after reset: PPUCTRL, PPUMASK, PPUSCROLL, PPUADDR.
+                        // https://wiki.nesdev.org/w/index.php?title=PPU_power_up_state
+                        // TODO: This should only apply after a RESET - the way I wrote this was after power on. Oops.
+                        //if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
 
                         if (_addressLatch == 0)
                         {
@@ -439,7 +528,10 @@ namespace NESEmulator
                         }
                         break;
                     case 0x0006:    // PPU Address
-                        if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
+                        // Writes to the following registers are ignored if earlier than ~29658 CPU clocks after reset: PPUCTRL, PPUMASK, PPUSCROLL, PPUADDR.
+                        // https://wiki.nesdev.org/w/index.php?title=PPU_power_up_state
+                        // TODO: This should only apply after a RESET - the way I wrote this was after power on. Oops.
+                        //if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
 
                         if (_addressLatch == 0)
                         {
@@ -455,7 +547,8 @@ namespace NESEmulator
                             // Writing to the PPU is unwise during rendering as the PPU will maintain the vram address
                             // automatically while rendering the scanline position.
                             _tram_addr.reg = (ushort)((_tram_addr.reg & 0xFF00) | data);
-                            _vram_addr = _tram_addr;
+                            _vramWritePending = true;
+                            //_vram_addr = _tram_addr;
                             _addressLatch = 0;
                         }
                         break;
@@ -474,69 +567,74 @@ namespace NESEmulator
         }
 
         // TODO: I think this should be a read from _ppuBus... will investigate later
-        private byte ppuRead(ushort addr, bool rdonly = false)
+        private byte ppuRead(ushort addr, bool rdonly = false, bool ignorePaletteRange = false)
         {
             byte data = 0;
             addr &= ADDR_PPU_MAX;
+            ushort tmpaddr = addr;
 
             // TODO: Eventually loop through ppuBus like we do with the NES bus, attempting to do reads until
             // one "hits"
 
-            if (_cartridge.ppuRead(addr, out data))
+            if (_cartridge.ppuRead(tmpaddr, out data))
             {
 
             }
-            else if (addr >= 0x0000 && addr <= 0x1FFF)  // Pattern (sprite) memory range
+            else
             {
-                // If the cartridge can't map the address, have a physical location ready here
-                data = _tblPattern[(addr & 0x1000) >> 12][addr & 0x0FFF];
-            }
-            else if (addr >= 0x2000 && addr <= 0x3EFF)  // Nametable memory (VRAM) range
-            {
-                addr &= 0x0FFF;
+                if (addr >= 0x0000 && addr <= 0x1FFF)  // Pattern (sprite) memory range
+                {
+                    // If the cartridge can't map the address, have a physical location ready here
+                    data = _tblPattern[(addr & 0x1000) >> 12][addr & 0x0FFF];
+                }
+                else if (addr >= 0x2000 && addr <= 0x3FFF)  // Nametable memory (VRAM) range
+                {
+                    tmpaddr &= 0x0FFF;
 
-                if (_cartridge.mirror == Cartridge.Mirror.VERTICAL)
-                {
-                    if (addr >= 0x0000 && addr <= 0x03FF)
-                        data = _tblName[0][addr & 0x03FF];
-                    else if (addr >= 0x0400 && addr <= 0x07FF)
-                        data = _tblName[1][addr & 0x03FF];
-                    else if (addr >= 0x0800 && addr <= 0x0BFF)
-                        data = _tblName[0][addr & 0x03FF];
-                    else if (addr >= 0x0C00 && addr <= 0x0FFF)
-                        data = _tblName[1][addr & 0x03FF];
+                    if (_cartridge.mirror == Cartridge.Mirror.VERTICAL)
+                    {
+                        if (tmpaddr >= 0x0000 && tmpaddr <= 0x03FF)
+                            data = _tblName[0][tmpaddr & 0x03FF];
+                        else if (tmpaddr >= 0x0400 && tmpaddr <= 0x07FF)
+                            data = _tblName[1][tmpaddr & 0x03FF];
+                        else if (tmpaddr >= 0x0800 && tmpaddr <= 0x0BFF)
+                            data = _tblName[0][tmpaddr & 0x03FF];
+                        else if (tmpaddr >= 0x0C00 && tmpaddr <= 0x0FFF)
+                            data = _tblName[1][tmpaddr & 0x03FF];
+                    }
+                    else if (_cartridge.mirror == Cartridge.Mirror.HORIZONTAL)
+                    {
+                        if (tmpaddr >= 0x0000 && tmpaddr <= 0x03FF)
+                            data = _tblName[0][addr & 0x03FF];
+                        else if (tmpaddr >= 0x0400 && tmpaddr <= 0x07FF)
+                            data = _tblName[0][tmpaddr & 0x03FF];
+                        else if (addr >= 0x0800 && tmpaddr <= 0x0BFF)
+                            data = _tblName[1][tmpaddr & 0x03FF];
+                        else if (tmpaddr >= 0x0C00 && tmpaddr <= 0x0FFF)
+                            data = _tblName[1][tmpaddr & 0x03FF];
+                    }
+                    else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_LO)
+                    {
+                        data = _tblName[0][tmpaddr & 0x03FF];
+                    }
+                    else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_HI)
+                    {
+                        data = _tblName[0][tmpaddr & 0x03FF + 0x0400];
+                    }
                 }
-                else if (_cartridge.mirror == Cartridge.Mirror.HORIZONTAL)
-                {
-                    if (addr >= 0x0000 && addr <= 0x03FF)
-                        data = _tblName[0][addr & 0x03FF];
-                    else if (addr >= 0x0400 && addr <= 0x07FF)
-                        data = _tblName[0][addr & 0x03FF];
-                    else if (addr >= 0x0800 && addr <= 0x0BFF)
-                        data = _tblName[1][addr & 0x03FF];
-                    else if (addr >= 0x0C00 && addr <= 0x0FFF)
-                        data = _tblName[1][addr & 0x03FF];
-                }
-                else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_LO)
-                {
-                    data = _tblName[0][addr & 0x03FF];
-                }
-                else if (_cartridge.mirror == Cartridge.Mirror.ONESCREEN_HI)
-                {
-                    data = _tblName[0][addr & 0x03FF + 0x0400];
-                }
-            }
-            else if (addr >= 0x3F00 && addr <= 0x3FFF)  // Palette memory range
-            {
-                // Mask bottom 5 bits
-                addr &= 0x001F;
 
-                if (addr == 0x0010) addr = 0x0000;
-                if (addr == 0x0014) addr = 0x0004;
-                if (addr == 0x0018) addr = 0x0008;
-                if (addr == 0x001C) addr = 0x000C;
+                if (!ignorePaletteRange && (addr >= 0x3F00 && addr <= 0x3FFF))  // Palette memory range
+                {
+                    // Mask bottom 5 bits
+                    tmpaddr = (ushort)(addr & 0x001F);
 
-                data = (byte)(_palette[addr] & (_mask.GrayScale ? 0x30 : 0x3F));
+                    if (tmpaddr == 0x0010) tmpaddr = 0x0000;
+                    if (tmpaddr == 0x0014) tmpaddr = 0x0004;
+                    if (tmpaddr == 0x0018) tmpaddr = 0x0008;
+                    if (tmpaddr == 0x001C) tmpaddr = 0x000C;
+
+                    data = (byte)(_palette[tmpaddr] & (_mask.GrayScale ? 0x30 : 0x3F));
+                }
             }
 
             if ((addr & 0x1000) > 0)
@@ -625,10 +723,29 @@ namespace NESEmulator
 
         private List<PPUCycleNode>.Enumerator _cycleOpItr;
 
+        ulong _firstFrameCycle = 0;
         public void Clock(ulong clockCounter)
         {
             _currentClockCycle = clockCounter;
 
+            // Apparently a 3 dot delay when writing an address? 
+            if (_vramWritePending)
+            {
+                if (_vramWriteDelay-- == 0)
+                {
+                    _vramWritePending = false;
+                    _vramWriteDelay = 3;
+                    _vram_addr = _tram_addr;
+                }
+            }
+
+            //Log.Debug($"[PPU: {clockCounter}] [_scanline={_scanline}] [_cycle={_cycle}] [_frameCounter={_frameCounter}]");
+            if (_cycle == 0 && _scanline == 0)
+            {
+                // Should be 89,342 or 89,341
+                //Log.Debug($"Frame took {clockCounter - _firstFrameCycle} PPU clocks");
+                _firstFrameCycle = clockCounter;
+            }
             // As we progress through scanlines and cycles, the PPU is effectively
             // a state machine going through the motions of fetching background 
             // information and sprite information, compositing them into a pixel
@@ -638,7 +755,7 @@ namespace NESEmulator
             if (_cycleOpItr.Current != null && (_cycle == _cycleOpItr.Current.CycleStart))
             {
                 // Do the operation for this cycle
-                _cycleOpItr.Current.CycleOperation();
+                _cycleOpItr.Current.CycleOperations.ForEach(cycleOp => cycleOp());
                 // Prepare for the next operation
                 _cycleOpItr.MoveNext();
             }
@@ -652,11 +769,9 @@ namespace NESEmulator
                 // Foreground Rendering ===================================================
                 if (_scanline != 261)
                 {
-                    // Do secondary OAM clear and sprite evaluation at cycle 258 other crap is
-                    // messing with sprite shift registers before this time and the evaluation
-                    // overwrites the sprite data for this scanline. Need to possibly revisit this later...
-                    if (_cycle == 258)
-                    { 
+                    if (_cycle == 257)
+                    {
+                        // Clear secondary OAM (this happens on cycles 1-64)
                         resetSpriteDataForScanline();
 
                         // We've reached the end of a visible scanline. It is now time to determine which
@@ -666,48 +781,67 @@ namespace NESEmulator
                     }
                 }
 
-                if (_cycle > 256 && _cycle <= 320)
+                //if (_cycle > 256 && _cycle <= 320)
+                //{
+                //    switch ((_cycle - 1) % 8)
+                //    {
+                //        case 0:
+                //            // Garbage NT byte fetch
+                //            fetchNextBGTileId();
+                //            break;
+                //        case 2:
+                //            // Garbage AT byte fetch
+                //            fetchNextBGTileAttrib();
+                //            break;
+                //        case 4:
+                //            // Low sprite tile byte
+
+                //            // Determine the memory addresses that contain the byte of pattern data. We only need
+                //            // the lo pattern address, because the hi pattern address is always offset by 8 from the
+                //            // lo address.
+                //            _spritePatternAddrLo = _control.SpriteSize ? loadNextSpr8x16TileLSB(_currSprite) :
+                //                                                         loadNextSpr8x8TileLSB(_currSprite);
+                //            _spritePatternBitsLo = ppuRead(_spritePatternAddrLo);
+                //            // If the sprite is flipped horizontally, we need to flip the pattern bytes
+                //            if ((SecondaryOAM[_currSprite].attribute & 0x40) != 0)
+                //                _spritePatternBitsLo = _spritePatternBitsLo.Flip();
+                //            // Now we can load the pattern into our sprite shift registers ready for rendering on the next scanline
+                //            _spriteCurrShifterPatternLo[_currSprite] = _spritePatternBitsLo;
+                //            break;
+                //        case 6:
+                //            // High sprite tile byte
+
+                //            // Hi bit plane equivalent is always offset by 8 bytes from lo bit plane
+                //            _spritePatternBitsHi = ppuRead((ushort)(_spritePatternAddrLo + 8));
+                //            // If the sprite is flipped horizontally, we need to flip the pattern bytes
+                //            if ((SecondaryOAM[_currSprite].attribute & 0x40) != 0)
+                //                _spritePatternBitsHi = _spritePatternBitsHi.Flip();
+                //            // Now we can load the pattern into our sprite shift registers ready for rendering on the next scanline
+                //            _spriteCurrShifterPatternHi[_currSprite] = _spritePatternBitsHi;
+
+                //            _currSprite++;
+                //            break;
+                //    }
+                //}
+
+                // On _scanline 261, this will get skipped because the cycle operation will have advanced us to the next frame!
+                if (_cycle == 340)
                 {
-                    switch ((_cycle - 1) % 8)
+                    for (byte currSpr = 0; currSpr < 8; currSpr++)
                     {
-                        case 0:
-                            // Garbage NT byte fetch
-                            fetchNextBGTileId();
-                            break;
-                        case 2:
-                            // Garbage AT byte fetch
-                            fetchNextBGTileAttrib();
-                            break;
-                        case 4:
-                            // Low sprite tile byte
-
-                            // Determine the memory addresses that contain the byte of pattern data. We only need
-                            // the lo pattern address, because the hi pattern address is always offset by 8 from the
-                            // lo address.
-                            _spritePatternAddrLo = _control.SpriteSize ? loadNextSpr8x16TileLSB(_currSprite) :
-                                                                         loadNextSpr8x8TileLSB(_currSprite);
-                            _spritePatternBitsLo = ppuRead(_spritePatternAddrLo);
-                            // If the sprite is flipped horizontally, we need to flip the pattern bytes
-                            if ((_secondaryOAM[_currSprite].attribute & 0x40) != 0)
-                                _spritePatternBitsLo = _spritePatternBitsLo.Flip();
-                            // Now we can load the pattern into our sprite shift registers ready for rendering on the next scanline
-                            _spriteCurrShifterPatternLo[_currSprite] = _spritePatternBitsLo;
-                            break;
-                        case 6:
-                            // High sprite tile byte
-
-                            // Hi bit plane equivalent is always offset by 8 bytes from lo bit plane
-                            _spritePatternBitsHi = ppuRead((ushort)(_spritePatternAddrLo + 8));
-                            // If the sprite is flipped horizontally, we need to flip the pattern bytes
-                            if ((_secondaryOAM[_currSprite].attribute & 0x40) != 0)
-                                _spritePatternBitsHi = _spritePatternBitsHi.Flip();
-                            // Now we can load the pattern into our sprite shift registers ready for rendering on the next scanline
-                            _spriteCurrShifterPatternHi[_currSprite] = _spritePatternBitsHi;
-
-                            _currSprite++;
-                            break;
+                        _spritePatternAddrLo = _control.SpriteSize ? loadNextSpr8x16TileLSB(currSpr) :
+                                                                     loadNextSpr8x8TileLSB(currSpr);
+                        _spritePatternBitsLo = ppuRead(_spritePatternAddrLo);
+                        if ((SecondaryOAM[currSpr].attribute & 0x40) != 0)
+                            _spritePatternBitsLo = _spritePatternBitsLo.Flip();
+                        _spriteCurrShifterPatternLo[currSpr] = _spritePatternBitsLo;
+                        _spritePatternBitsHi = ppuRead((ushort)(_spritePatternAddrLo + 8));
+                        if ((SecondaryOAM[currSpr].attribute & 0x40) != 0)
+                            _spritePatternBitsHi = _spritePatternBitsHi.Flip();
+                        _spriteCurrShifterPatternHi[currSpr] = _spritePatternBitsHi;
                     }
                 }
+
             }
 
             // Composition - We now have background pixel information for this cycle. At this point we are only
@@ -720,8 +854,7 @@ namespace NESEmulator
             // yield the current background color in effect.
             if (_mask.RenderBackground)
             {
-                if ((_mask.RenderBackgroundLeft && _cycle < 9) ||
-                    _cycle >= 9)
+                if (_mask.RenderBackgroundLeft || _cycle >= 8)
                 {
                     // Handle Pixel Selection by selecting the relevant bit depending upon fine x scrolling. This
                     // has the effect of offsetting ALL background rendering by a set number of pixels, permitting
@@ -749,7 +882,7 @@ namespace NESEmulator
 
             if (_mask.RenderSprites)
             {
-                if ((_mask.RenderSpritesLeft && _cycle < 9) || _cycle >= 9)
+                if ((_mask.RenderSpritesLeft || _cycle >= 8) && _cycle < 258)
                 {
                     // Iterate through all sprites for this scanline. This is to maintain state priority.
                     // As soon as we find a non transparent pixel of a sprite, we can abort.
@@ -758,7 +891,7 @@ namespace NESEmulator
                     for (byte i = 0; i < _spriteCurrCount; i++)
                     {
                         // Scanline cycle has "collided" with sprite, shifters taking over
-                        if (_secondaryOAM[i].x == 0)
+                        if (SecondaryOAM[i].x == 0)
                         {
                             // Note: Fine X scrolling does not apply to sprites, the game should maintain their relationship
                             // with the background. So, we'll just use the MSB of the shifter.
@@ -770,9 +903,9 @@ namespace NESEmulator
 
                             // Extract the palette from the bottom 2 bits. Recall that foreground palettes are the latter 4
                             // in the palette memory.
-                            fg_palette = (byte)((_secondaryOAM[i].attribute & 0x03) + 0x04);
+                            fg_palette = (byte)((SecondaryOAM[i].attribute & 0x03) + 0x04);
                             //fg_priority = (byte)((_spriteScanline[i].attribute & 0x20) == 0 ? 1 : 0);
-                            if ((_secondaryOAM[i].attribute & 0x20) == 0)
+                            if ((SecondaryOAM[i].attribute & 0x20) == 0)
                                 fg_priority = 1;
                             else
                                 fg_priority = 0;
@@ -785,6 +918,9 @@ namespace NESEmulator
                                 if (i == 0)
                                 {
                                     _spriteZeroBeingRendered = true;
+#if SPRITE_ZERO_DEBUG
+                                    Log.Debug($"Sprite 0 being rendered at [_cycle={_cycle}] [_scanline={_scanline}]");
+#endif
                                 }
 
                                 break;
@@ -797,8 +933,8 @@ namespace NESEmulator
             // Now we have a background pixel and a foreground pixel. They need to be combined. It is possible for the sprites
             // to go behind background tiles that are not "transparent", yet another neat trick of the PPU that adds complexity
 
-            byte pixel   = 0x00;    // The FINAL FINAL pixel
-            byte palette = 0x00;    // The FINAL FINAL palette
+            byte pixel   = 0x00;    // The FINAL pixel
+            byte palette = 0x00;    // The FINAL palette
 
             if (bg_pixel == 0 && fg_pixel == 0)
             {
@@ -840,23 +976,31 @@ namespace NESEmulator
                 }
 
                 // Sprite 0 hit detection
-                if (_spriteZeroHitPossible && _spriteZeroBeingRendered)
+                if (_spriteZeroHitPossible && _spriteZeroBeingRendered && !_status.SpriteZeroHit)
                 {
                     // Sprite 0 is a collision between foreground and background so they must both be enabled
                     if (_mask.RenderBackground && _mask.RenderSprites)
                     {
                         // The left edge of the screen has specific switches to control its appearance. This is used to
                         // smooth inconsistencies when scrolling (since sprite's x coord must be >= 0)
-                        if (!(_mask.RenderBackgroundLeft || _mask.RenderSpritesLeft))
+                        if (!(_mask.RenderBackgroundLeft && _mask.RenderSpritesLeft))
                         {
-                            if (_cycle >= 9 && _cycle < 258)
+                            //if (_cycle >= 9 && _cycle != 255 && _cycle < 258)
+                            if (_cycle >= 7 && _cycle < 256)
                             {
                                 _status.SpriteZeroHit = true;
+#if SPRITE_ZERO_DEBUG
+                                Log.Debug($"Sprite 0 HIT at [_cycle={_cycle}] [_scanline={_scanline}]");
+#endif
                             }
                         }
-                        else if (_cycle >= 1 && _cycle < 258)
+                        //else if (_cycle >= 2 && _cycle != 255 && _cycle < 258)
+                        else if (_cycle >= 2 && _cycle < 256)
                         {
                             _status.SpriteZeroHit = true;
+#if SPRITE_ZERO_DEBUG
+                            Log.Debug($"Sprite 0 HIT at [_cycle={_cycle}] [_scanline={_scanline}]");
+#endif
                         }
                     }
                 }
@@ -865,7 +1009,19 @@ namespace NESEmulator
             // Now we have a final pixel color, and a palette for this cycle of the current scanline. Let's at
             // long last, draw it
             if ((_cycle - 1) >= 0 && (_scanline >= 0 && _scanline <= 239))
+            {
                 _screen.SetPixel((uint)(_cycle - 1), (ushort)_scanline, GetColorFromPaletteRam(palette, pixel));
+#if SPRITE_ZERO_DEBUG
+                //if (_spriteZeroBeingRendered)
+                //{
+                //    _screen.SetPixel((uint)(_cycle - 1), (ushort)_scanline, Pixel.YELLOW);
+                //}
+                if (_spriteZeroHitPossible && _spriteZeroBeingRendered && _status.SpriteZeroHit)
+                {
+                    _screen.SetPixel((uint)(_cycle - 1), (ushort)_scanline, Pixel.MAGENTA);
+                }
+#endif
+            }
 
             advanceCycle();
         }
@@ -1045,6 +1201,7 @@ namespace NESEmulator
         {
             if (_mask.RenderBackground)
             {
+                //Log.Debug($"[_cycle={_cycle}] Background shift");
                 // Shifting background tile pattern row
                 _bg_shifterPatternLo <<= 1;
                 _bg_shifterPatternHi <<= 1;
@@ -1052,15 +1209,19 @@ namespace NESEmulator
                 // Shift palette attributes by 1
                 _bg_shifterAttribLo <<= 1;
                 _bg_shifterAttribHi <<= 1;
+
+                //if (_cycle <= 1 || (_cycle > 256 && _cycle < 321) || _cycle > 336)
+                //    Log.Warn($"[_cycle={_cycle}] Background shift occurred when it shouldn't have");
             }
 
-            if (_mask.RenderSprites && _cycle >= 1 && _cycle < 258)
+            // Shifters for sprites don't start until cycle 2
+            if (_mask.RenderSprites && _cycle >= 2 && _cycle < 257)
             {
                 for (int i = 0; i < _spriteCurrCount; i++)
                 {
-                    if (_secondaryOAM[i].x > 0)
+                    if (SecondaryOAM[i].x > 0)
                     {
-                        _secondaryOAM[i].x--;
+                        SecondaryOAM[i].x--;
                     }
                     else
                     {
@@ -1076,14 +1237,15 @@ namespace NESEmulator
             fetchNextBGTileId();
             // This only happens on odd frames, so do nothing on even frames
             // Also only happens when rendering is turned on.
-            if (_frameCounter % 2 == 0 || !(_mask.RenderBackground && _mask.RenderSprites))
+            if (_frameCounter % 2 == 0 || !(_mask.RenderBackground || _mask.RenderSprites))
             {
-                //if (!(_mask.RenderBackground && _mask.RenderSprites))
-                //    Log.Debug($"[_frameCounter={_frameCounter}] Rendering off, no skipping cycle.");
-
+                //if (!(_mask.RenderBackground || _mask.RenderSprites))
+                //    Log.Debug($"[PPU:{_currentClockCycle}] [_frameCounter={_frameCounter}] Rendering off, no skipping cycle.");
+                //else
+                //    Log.Debug($"[PPU:{_currentClockCycle}] [_frameCounter={_frameCounter}] Rendering on, even frame - no skipping cycle.");
                 return;
             }
-            //Log.Debug($"[_frameCounter={_frameCounter}] Rendering on, odd frame - skipping cycle.");
+            //Log.Debug($"[PPU:{_currentClockCycle}] [_frameCounter={_frameCounter}] Rendering on, odd frame - skipping cycle.");
             advanceFrame();
 
             //_cycleOpItr = _cycleOperations[_scanline].GetEnumerator();
@@ -1092,16 +1254,15 @@ namespace NESEmulator
             fetchNextBGTileId();
         }
 
-        private void finalCycle()
-        {
-            fetchNextBGTileId();
-            advanceFrame();
-        }
-
         private void advanceFrame()
         {
             ++_frameCounter;
-            _cycle = 0;
+            // Set cycle to -1 because we advance the frame as a cycle operation, which happens
+            // before advanceCycle() is called, which will then set it to 0 for the following cycle.
+            // This should be fine, because we do not do anything on cycle -1 ...or 0 for that matter.
+            // The things that should be done on the last cycle should have already been accomplished
+            // before this point as well.
+            _cycle = -1;
             _scanline = 0;
             _currSprite = 0;
             //_frameSuppressVBL = false;
@@ -1123,16 +1284,6 @@ namespace NESEmulator
             // "(vram_addr.reg & 0x0FFF)" : Mask to 12 bits that are relevant
             // "| 0x2000"                 : Offset into nametable space on PPU address bus
             _bg_nextTileId = ppuRead((ushort)(ADDR_NAMETABLE | (_vram_addr.reg & 0x0FFF)));
-        }
-
-        private void loadNextBGTileId()
-        {
-            updateShifters();
-
-            // Load the current background tile pattern and attributes into the "shifter"
-            loadBackgroundShifters();
-
-            fetchNextBGTileId();
         }
 
         /// <summary>
@@ -1183,10 +1334,6 @@ namespace NESEmulator
 
         private void loadNextBGTileAttrib()
         {
-            updateShifters();
-
-            fetchNextBGTileAttrib();
-
             // We've read the correct attribute byte for a specified address, but the byte itself is
             // broken down further into the 2x2 tile groups in the 4x4 attribute zone.
 
@@ -1212,8 +1359,6 @@ namespace NESEmulator
 
         private void loadNextBGTileLSB()
         {
-            updateShifters();
-
             // Fetch the next background tile LSB bit plane from the pattern memory. The Tile ID has
             // been read from the nametable. We will use this id to index into the pattern memory to
             // find the correct sprite (assuming the sprites lie on 8x8 pixel boundaries in that memory,
@@ -1238,37 +1383,11 @@ namespace NESEmulator
 
         private void loadNextBGTileMSB()
         {
-            updateShifters();
-
             // Fetch the next background tile MSB bit plane from the pattern memory. This is the same
             // as above, but has a +8 offset to select the next bit plane
             _bg_nextTileMSB = ppuRead((ushort)(((_control.PatternBackground ? 1 : 0) << 12)
                                               + (_bg_nextTileId << 4)
                                               + (_vram_addr.FineY + 8)));
-        }
-
-        private void advanceBGTileX()
-        {
-            updateShifters();
-
-            // Increment the background tile "pointer" to the next tile horizontally in the nametable
-            // memory. Note this may cross nametable boundaries which is a little complex, but
-            // essential to implement scrolling
-            incrementScrollX();
-        }
-
-        private void advanceBGTileY()
-        {
-            updateShifters();
-
-            incrementScrollX(); // scrolling down seems to also scroll right??
-            incrementScrollY();
-        }
-
-        private void resetBGForNextScanLine()
-        {
-            loadBackgroundShifters();
-            transferAddressX();
         }
 
         private void startVerticalBlank()
@@ -1277,7 +1396,7 @@ namespace NESEmulator
             if (!_frameSuppressVBL)
             {
 #if DEBUG_VBL
-                Log.Debug($"[{_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] [_frameCounter={_frameCounter}] VBL Start");
+                Log.Debug($"[PPU: {_currentClockCycle}] [CPU: {_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] [_frameCounter={_frameCounter}] VBL Start");
 #endif
                 _status.VerticalBlank = true;
                 checkAndRaiseNMI();
@@ -1285,7 +1404,7 @@ namespace NESEmulator
             else
             {
 #if DEBUG_VBL
-                Log.Debug($"[{_currentClockCycle / 3}] [_frameCounter={_frameCounter}] VBL Suppressed.");
+                Log.Debug($"[PPU: {_currentClockCycle}] [CPU: {_currentClockCycle / 3}] [_frameCounter={_frameCounter}] VBL Suppressed.");
 #endif
             }
         }
@@ -1307,7 +1426,7 @@ namespace NESEmulator
             }
         }
 
-        private void clearVerticalBlank()
+        private void endVerticalBlank()
         {
 #if DEBUG_VBL
             Log.Debug($"[{_currentClockCycle / 3}] [_scanline={_scanline}] [_cycle={_cycle}] [_frameCounter={_frameCounter}] End of VBL");
@@ -1329,9 +1448,6 @@ namespace NESEmulator
                 _spriteCurrShifterPatternLo[i] = 0;
                 _spriteCurrShifterPatternHi[i] = 0;
             }
-
-            // We also need to start pre-loading first scanline here
-            loadNextBGTileId();
         }
 
         private List<PPUCycleNode> createCycleNodesForSingleBGTile(short tileNum, bool advanceTileRight)
@@ -1339,17 +1455,21 @@ namespace NESEmulator
             Action advanceTileAction;
 
             if (advanceTileRight)
-                advanceTileAction = advanceBGTileX;
+                advanceTileAction = incrementScrollX;
             else
-                advanceTileAction = advanceBGTileY;
+                advanceTileAction = incrementScrollY;
 
             short offset = (short)(tileNum * 8);
             List<PPUCycleNode> fetchBGTileSeq = new List<PPUCycleNode>(new PPUCycleNode[]
             {
-                    new PPUCycleNode((short)(offset + 1), loadNextBGTileId),     new PPUCycleNode((short)(offset + 2), updateShifters),
-                    new PPUCycleNode((short)(offset + 3), loadNextBGTileAttrib), new PPUCycleNode((short)(offset + 4), updateShifters),
-                    new PPUCycleNode((short)(offset + 5), loadNextBGTileLSB),    new PPUCycleNode((short)(offset + 6), updateShifters),
-                    new PPUCycleNode((short)(offset + 7), loadNextBGTileMSB),    new PPUCycleNode((short)(offset + 8), advanceTileAction)
+                new PPUCycleNode((short)(offset + 1), new List<Action>() { updateShifters, loadBackgroundShifters }), // NT byte
+                new PPUCycleNode((short)(offset + 2), new List<Action>() { updateShifters, fetchNextBGTileId     }),
+                new PPUCycleNode((short)(offset + 3), new List<Action>() { updateShifters, fetchNextBGTileAttrib }), // AT byte
+                new PPUCycleNode((short)(offset + 4), new List<Action>() { updateShifters, loadNextBGTileAttrib  }),
+                new PPUCycleNode((short)(offset + 5), new List<Action>() { updateShifters, loadNextBGTileLSB     }), // Low BG tile byte
+                new PPUCycleNode((short)(offset + 6), new List<Action>() { updateShifters    }),
+                new PPUCycleNode((short)(offset + 7), new List<Action>() { updateShifters, loadNextBGTileMSB     }), // High BG tile byte
+                new PPUCycleNode((short)(offset + 8), new List<Action>() { updateShifters, advanceTileAction })
             });
 
             return fetchBGTileSeq;
@@ -1357,7 +1477,7 @@ namespace NESEmulator
 
         private void resetSpriteDataForScanline()
         {
-            foreach (var sl in _secondaryOAM)
+            foreach (var sl in SecondaryOAM)
                 sl.Fill(0xFF);
 
             _spriteCurrCount = 0;
@@ -1380,7 +1500,7 @@ namespace NESEmulator
             // New set of sprites. Sprite zero may not exist in the new set, so clear this flag.
             _spriteZeroHitPossible = false;
 
-            while (OAMEntry < 64 && !_status.SpriteOverflow)
+            while (OAMEntry < 64)
             {
                 short diff = (short)(_scanline - OAM[OAMEntry].y);
 
@@ -1398,15 +1518,20 @@ namespace NESEmulator
                         {
                             // Yup, so it may trigger a sprite zero hit when drawn
                             _spriteZeroHitPossible = true;
+#if SPRITE_ZERO_DEBUG
+                            Log.Debug($"Sprite 0 on scanline [_scanline={_scanline}] [x={OAM[OAMEntry].x}] [y={OAM[OAMEntry].y}]");
+#endif
                         }
 
-                        _secondaryOAM[_spriteCurrCount] = OAM[OAMEntry];
+                        SecondaryOAM[_spriteCurrCount] = OAM[OAMEntry];
                         _spriteCurrCount++;
                     }
                     else
                     {
                         // Set sprite overflow flag
                         _status.SpriteOverflow = true;
+                        //Log.Debug($"[PPU: {_currentClockCycle}] [_scanline={_scanline}] [_cycle={_cycle}] Sprite overflow!");
+                        break;
                     }
                 }
 
@@ -1418,12 +1543,12 @@ namespace NESEmulator
         {
             ushort sprite_pattern_addr_lo;
 
-            ushort cellRow = (ushort)(_scanline - _secondaryOAM[i].y);
-            cellRow = (ushort)((_secondaryOAM[i].attribute & 0x80) == 0 ? cellRow : (7 - cellRow));
+            ushort cellRow = (ushort)(_scanline - SecondaryOAM[i].y);
+            cellRow = (ushort)((SecondaryOAM[i].attribute & 0x80) == 0 ? cellRow : (7 - cellRow));
 
             sprite_pattern_addr_lo = (ushort)(
                  ((_control.PatternSprite ? 1 : 0) << 12)   // Which pattern table? 0KB or 4KB offset
-                | (_secondaryOAM[i].id << 4)              // Which cell? Tile ID * 16 (16B per tile)
+                | (SecondaryOAM[i].id << 4)              // Which cell? Tile ID * 16 (16B per tile)
                 | cellRow);                                 // Which row in cell?
 
             return sprite_pattern_addr_lo;
@@ -1434,16 +1559,16 @@ namespace NESEmulator
             ushort sprite_pattern_addr_lo;
 
             // 8x16 sprite mode - the sprite attribute determines the pattern table
-            bool inverted   = (_secondaryOAM[i].attribute & 0x80) != 0;
-            ushort cellRow  = (ushort)((_scanline - _secondaryOAM[i].y) & 0x07);
+            bool inverted   = (SecondaryOAM[i].attribute & 0x80) != 0;
+            ushort cellRow  = (ushort)((_scanline - SecondaryOAM[i].y) & 0x07);
             cellRow         = (ushort)(!inverted ? cellRow : 7 - cellRow);
-            int topHalf     = (byte)((_scanline - _secondaryOAM[i].y) < 8 ? 0 : 1);
+            int topHalf     = (byte)((_scanline - SecondaryOAM[i].y) < 8 ? 0 : 1);
             topHalf += inverted ? 1 : 0;
             if (topHalf > 1) topHalf = 0;
 
             sprite_pattern_addr_lo = (ushort)(
-                  ((_secondaryOAM[i].id & 0x01) << 12)                // Which pattern table? 0KB or 4KB offset
-                | (((_secondaryOAM[i].id & 0xFE) + topHalf) << 4)     // Which cell? Tile ID * 16 (16B per tile)
+                  ((SecondaryOAM[i].id & 0x01) << 12)                // Which pattern table? 0KB or 4KB offset
+                | (((SecondaryOAM[i].id & 0xFE) + topHalf) << 4)     // Which cell? Tile ID * 16 (16B per tile)
                 | cellRow);                                             // Which row in cell?
 
             return sprite_pattern_addr_lo;
@@ -1536,27 +1661,25 @@ namespace NESEmulator
             List<PPUCycleNode> visibleScanlineSequence = new List<PPUCycleNode>();
 
             // Typical scanline does no-op for first cycle
-            visibleScanlineSequence.Add(new PPUCycleNode(0, noOp));
+            visibleScanlineSequence.Add(new PPUCycleNode(0, new List<Action>() { noOp }));
             for (short tile = 0; tile < 32; tile++)
             {
                 visibleScanlineSequence.AddRange(createCycleNodesForSingleBGTile(tile, tile != 31));
             }
-            visibleScanlineSequence.Add(new PPUCycleNode(257, resetBGForNextScanLine));
-            visibleScanlineSequence.Add(new PPUCycleNode(258, noOp));
+            visibleScanlineSequence.Add(new PPUCycleNode(257, new List<Action>() { loadBackgroundShifters, transferAddressX }));
+            visibleScanlineSequence.Add(new PPUCycleNode(258, new List<Action>() { noOp }));
             // Pre-load first two tiles for next scanline
             visibleScanlineSequence.AddRange(createCycleNodesForSingleBGTile(40, true));
             visibleScanlineSequence.AddRange(createCycleNodesForSingleBGTile(41, true));
             // Add superfluous reads of next BG tile id
-            visibleScanlineSequence.Add(new PPUCycleNode(337, fetchNextBGTileId));
-            visibleScanlineSequence.Add(new PPUCycleNode(339, fetchNextBGTileId));
+            visibleScanlineSequence.Add(new PPUCycleNode(337, new List<Action>() { fetchNextBGTileId }));
+            visibleScanlineSequence.Add(new PPUCycleNode(339, new List<Action>() { fetchNextBGTileId }));
 
 
             int scanline = 0;
 
             // Add sequences to cycle ops for visible scanlines
             _cycleOperations[scanline] = new List<PPUCycleNode>(visibleScanlineSequence);
-            // Replace first cycle with skip function instead of no-op
-            //_cycleOperations[scanline][0] = new PPUCycleNode(0, skipCycle);
             scanline++; // scanline = 1
 
             for (; scanline < 240; scanline++)
@@ -1566,13 +1689,13 @@ namespace NESEmulator
 
             // Scanline 240 does nothing
             _cycleOperations[scanline] = new List<PPUCycleNode>();
-            _cycleOperations[scanline].Add(new PPUCycleNode(0, noOp));
+            _cycleOperations[scanline].Add(new PPUCycleNode(0, new List<Action>() { noOp }));
             scanline++; // scanline = 241
 
             // Scanline 241, cycle 1 sets VBL flag
             _cycleOperations[scanline] = new List<PPUCycleNode>();
-            _cycleOperations[scanline].Add(new PPUCycleNode(0, noOp));
-            _cycleOperations[scanline].Add(new PPUCycleNode(1, startVerticalBlank));
+            _cycleOperations[scanline].Add(new PPUCycleNode(0, new List<Action>() { noOp }));
+            _cycleOperations[scanline].Add(new PPUCycleNode(1, new List<Action>() { startVerticalBlank }));
             //_cycleOperations[scanline].Add(new PPUCycleNode(2, checkAndRaiseNMI));
             //_cycleOperations[scanline].Add(new PPUCycleNode(3, checkAndRaiseNMI));
             scanline++; // scanline = 242
@@ -1581,7 +1704,7 @@ namespace NESEmulator
             for (; scanline < 261; scanline++)
             {
                 _cycleOperations[scanline] = new List<PPUCycleNode>();
-                _cycleOperations[scanline].Add(new PPUCycleNode(0, noOp));
+                _cycleOperations[scanline].Add(new PPUCycleNode(0, new List<Action>() { noOp }));
             }
 
             // Scanline 261 clears VBL flag and pre-loads first scanline on next frame.
@@ -1589,23 +1712,20 @@ namespace NESEmulator
             _cycleOperations[scanline] = new List<PPUCycleNode>(visibleScanlineSequence);
 
             // SPECIAL CASE: Replace cycle 1 with clearVerticalBlank
-            _cycleOperations[scanline][1] = new PPUCycleNode(1, clearVerticalBlank);
+            _cycleOperations[scanline][1] = new PPUCycleNode(1, new List<Action>() { endVerticalBlank, loadBackgroundShifters, updateShifters });
 
             // Replace last cycle with the skip
-            _cycleOperations[scanline][_cycleOperations[scanline].Count - 2] = new PPUCycleNode(339, skipCycle);
-            _cycleOperations[scanline][_cycleOperations[scanline].Count - 1] = new PPUCycleNode(340, finalCycle);
+            _cycleOperations[scanline][_cycleOperations[scanline].Count - 2] = new PPUCycleNode(339, new List<Action>() { skipCycle });
+            _cycleOperations[scanline][_cycleOperations[scanline].Count - 1] = new PPUCycleNode(340, new List<Action>() { fetchNextBGTileId, advanceFrame });
 
             // SPECIAL CASE: Do Y address xfer every cycle from 280-304
             // Find the index of the "no-op" at cycle 258 and jamb these in right after
             int insertionPoint = visibleScanlineSequence.FindIndex((cycleNode) => cycleNode.CycleStart == 258) + 1;
             for (short cycle = 280; cycle < 305; cycle++)
             {
-                _cycleOperations[scanline].Insert(insertionPoint, new PPUCycleNode(cycle, transferAddressY));
+                _cycleOperations[scanline].Insert(insertionPoint, new PPUCycleNode(cycle, new List<Action>() { transferAddressY }));
                 insertionPoint++;
             }
-
-            // Useless statement to break on
-            scanline = scanline;
         }
     }
 }

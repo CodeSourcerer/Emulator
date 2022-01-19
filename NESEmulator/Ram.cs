@@ -19,7 +19,7 @@ namespace NESEmulator
             _ram = new byte[_ramAmount + 1];
         }
 
-        public bool Read(ushort addr, out byte data)
+        public bool Read(ushort addr, out byte data, bool readOnly = false)
         {
             if (addr > _maxAddressable)
             {
@@ -43,6 +43,9 @@ namespace NESEmulator
         }
 
         public void Reset()
+        { }
+
+        public void PowerOn()
         { }
 
         public void Clock(ulong clockCounter)

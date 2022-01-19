@@ -68,11 +68,12 @@ namespace NESEmulator
         /// <param name="addr"></param>
         /// <param name="data"></param>
         /// <returns>true if byte read, false if address outside of range</returns>
-        public bool Read(ushort addr, out byte data)
+        public bool Read(ushort addr, out byte data, bool readOnly = false)
         {
             data = 0;
 
             uint mapped_addr;
+            // May need to add readOnly flag to Mapper interface?
             if (mapper.cpuMapRead(addr, out mapped_addr, ref data))
             {
                 if (mapped_addr != 0xFFFFFFFF)
@@ -83,6 +84,7 @@ namespace NESEmulator
                 {
                     // Data came from cartridge RAM
                     data = PRGRAM[addr & 0x1FFF];
+                    //Log.Debug($"Read from PRG RAM [addr={addr:X4}] [data={data:X2}]");
                 }
                 return true;
             }
@@ -108,7 +110,7 @@ namespace NESEmulator
                     if (mapper.PRGRAMEnable)
                     {
                         PRGRAM[addr & 0x1FFF] = data;
-                        //Log.Debug($"Write to PRG RAM [addr={addr:X4}]");
+                        //Log.Debug($"Write to PRG RAM [addr={addr:X4}] [data={data:X2}]");
                     }
                 }
                 return true;
@@ -126,6 +128,11 @@ namespace NESEmulator
                 mapper.reset();
         }
 
+        public void PowerOn()
+        {
+            if (mapper != null)
+                mapper.PowerOn();
+        }
         /// <summary>
         /// Attempt to read data from cartridge from PPU bus.
         /// </summary>

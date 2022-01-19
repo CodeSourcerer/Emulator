@@ -166,24 +166,24 @@ namespace NESEmulator.Channels
                         _apu.ClearIRQ();
                         //Log.Debug("DMC IRQ Disabled");
                     }
-                    Log.Debug($"DMC Channel written: [IRQEnable={IRQEnable}] [Loop={Loop}] [RateIndex={RateIndex:X2}]");
+                    //Log.Debug($"DMC Channel written: [IRQEnable={IRQEnable}] [Loop={Loop}] [RateIndex={RateIndex:X2}]");
                     break;
 
                 case ADDR_DIRECTLOAD:
                     Output = (byte)(data & 0x7F);
-                    Log.Debug($"DMC Channel written: [DirectLoad={Output}]");
+                    //Log.Debug($"DMC Channel written: [DirectLoad={Output}]");
                     break;
 
                 case ADDR_SAMPLEADDR:
                     SampleAddress = (ushort)(0xC000 | (data << 6));
-                    Log.Debug($"DMC Channel written: [SampleAddress={SampleAddress:X4}]");
+                    //Log.Debug($"DMC Channel written: [SampleAddress={SampleAddress:X4}]");
                     break;
 
                 case ADDR_SAMPLELENGTH:
                     SampleLength = (ushort)((data << 4) + 1);
                     //if (_bytesRemaining == 0)
                     //    _bytesRemaining = SampleLength;
-                    Log.Debug($"DMC Chennel written: [SampleLength={SampleLength}]");
+                    //Log.Debug($"DMC Chennel written: [SampleLength={SampleLength}]");
                     break;
             }
         }

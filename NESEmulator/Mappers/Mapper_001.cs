@@ -76,13 +76,19 @@ namespace NESEmulator.Mappers
         {
             mapped_addr = 0;
 
-            if (_lastClockCycleWrite == cartridge.ThisClockCycle)
+            // Ignore consecutive writes
+            if (cartridge.ThisClockCycle <= (_lastClockCycleWrite + 1))
+            {
+#if DEBUG_MAPPER001
+                Log.Debug($"[{cartridge.ThisClockCycle}] Consecutive write ignored.");
+#endif
+                _lastClockCycleWrite = cartridge.ThisClockCycle;
                 return false;
+            }
 
             if (addr >= 0x6000 && addr < 0x8000)
             {
                 // Write to RAM on cartridge
-                //Log.Debug($"Writing to cartridge RAM");
                 mapped_addr = 0xFFFFFFFF;
                 _lastClockCycleWrite = cartridge.ThisClockCycle;
                 return true;
@@ -126,7 +132,7 @@ namespace NESEmulator.Mappers
                 int bankNum = addr < 0x1000 ? 0 : 1;
                 mapped_addr = (uint)(_pCHRBank[bankNum] + (addr & 0x0FFF));
 
-               // Log.Debug($"CHR ROM read [bankNum={bankNum}] [addr={addr:X4}]");
+                //Log.Debug($"CHR ROM read [bankNum={bankNum}] [addr={addr:X4}]");
                 return true;
             }
 
@@ -143,7 +149,9 @@ namespace NESEmulator.Mappers
                 int bankNum = addr < 0x1000 ? 0 : 1;
                 mapped_addr = (uint)(_pCHRBank[bankNum] + (addr & 0x0FFF));
 
-                //Log.Debug($"CHR ROM write [bankNum={bankNum}] [addr={addr:X4}]");
+#if DEBUG_MAPPER001
+                Log.Debug($"CHR ROM write [bankNum={bankNum}] [addr={addr:X4}]");
+#endif
                 return true;
             }
 
@@ -153,6 +161,14 @@ namespace NESEmulator.Mappers
         public override void reset()
         {
             Log.Debug($"Mapper 001 cartridge reset");
+            _shiftRegister = 0x10;
+            _controlRegister = 0x1C;
+            updatePRGBankOffsets();
+            updateCHRBankOffsets();
+        }
+
+        public override void PowerOn()
+        {
             _shiftRegister = 0x10;
             _controlRegister = 0x1C;
             updatePRGBankOffsets();
@@ -191,21 +207,27 @@ namespace NESEmulator.Mappers
                 //                    2: fix first bank at $8000 and switch 16 KB bank at $C000;
                 //                    3: fix last bank at $C000 and switch 16 KB bank at $8000)
                 // CHR ROM bank mode(0: switch 8 KB at a time; 1: switch two separate 4 KB banks)
+#if DEBUG_MAPPER001
                 Log.Debug($"Control register written. [Mirroring={mirroring}] [prgROMBankMode={PRGROMBankMode}] [chrROMBankMode={CHRROMBankMode}]");
+#endif
             }
             else if (addr < 0xC000)
             {
                 // Select CHR bank 0
                 _chrBank[0] = (byte)(CHRROMBankMode == 0 ? (_shiftRegister & 0x1E) : (_shiftRegister & 0x1F));
                 updateCHRBankOffsets();
-                Log.Debug($"CHR bank 0 written. [chrBank0={_shiftRegister}]");
+#if DEBUG_MAPPER001
+                Log.Debug($"CHR bank 0 written. [chrBank0={_chrBank[0]}]");
+#endif
             }
             else if (addr < 0xE000)
             {
                 // Select CHR bank 1
                 _chrBank[1] = (byte)(_shiftRegister & 0x1F);
                 updateCHRBankOffsets();
-                Log.Debug($"CHR bank 1 written. [chrBank1={_shiftRegister}]");
+#if DEBUG_MAPPER001
+                Log.Debug($"CHR bank 1 written. [chrBank1={_chrBank[1]}]");
+#endif
             }
             else
             {
@@ -213,7 +235,9 @@ namespace NESEmulator.Mappers
                 updatePRGBankOffsets();
 
                 _prgRAMEnable = _shiftRegister.TestBit(4);
+#if DEBUG_MAPPER001
                 Log.Debug($"PRG bank written. [prgBank={_prgBank}] [RAM Enabled={_prgRAMEnable}]");
+#endif
             }
         }
 

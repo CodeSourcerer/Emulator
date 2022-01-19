@@ -31,5 +31,7 @@ namespace NESEmulator
         public abstract bool ppuMapWrite(ushort addr, out uint mapped_addr, ref byte data);
 
         public abstract void reset();
+
+        public abstract void PowerOn();
     }
 }

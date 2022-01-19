@@ -82,5 +82,10 @@ namespace NESEmulator.Mappers
         {
             
         }
+
+        public override void PowerOn()
+        {
+            
+        }
     }
 }

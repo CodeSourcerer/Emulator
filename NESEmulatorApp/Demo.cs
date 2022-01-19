@@ -109,6 +109,8 @@ namespace NESEmulatorApp
             //string romfile = "tests\\instr_misc\\02-branch_wrap.nes"; // passes
             //string romfile = "tests\\instr_misc\\03-dummy_reads.nes"; // passes
             //string romfile = "tests\\instr_misc\\04-dummy_reads_apu.nes"; // passes - but black screen cause it tests unofficial opcodes too
+            //string romfile = "tests\\ppu_vbl_nmi.nes"; // displays white screen
+            //string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes"; // failed #7 - vbl period too short
 
             // APU tests
             //string romfile = "tests\\APU\\01.len_ctr.nes"; // passes
@@ -145,13 +147,13 @@ namespace NESEmulatorApp
             //string romfile = "tests\\ppu_sprite_hit\\04-flip.nes"; // passes
             //string romfile = "tests\\ppu_sprite_hit\\05-left_clip.nes"; // passes
             //string romfile = "tests\\ppu_sprite_hit\\06-right_edge.nes"; // passes
+            string romfile = "tests\\ppu_sprite_hit\\07-screen_bottom.nes"; // passes
             //string romfile = "tests\\ppu_sprite_hit\\07-screen_bottom.nes"; // passes
             //string romfile = "tests\\ppu_sprite_hit\\08-double_height.nes"; // passes
             //string romfile = "tests\\ppu_sprite_hit\\09-timing.nes"; // 4) Flag set too late for upper-left corner
-            //string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes";
+            //string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes"; // passes
             //string romfile = "tests\\ppu_open_bus\\ppu_open_bus.nes";
             //string romfile = "tests\\nmi_sync\\demo_ntsc.nes";
-            //string romfile = "tests\\ppu_vbl_nmi\\01-vbl_basics.nes"; // passes
 
             if (args.Length > 0 && !string.IsNullOrWhiteSpace(args[0]))
                 romfile = args[0];
