@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using log4net;
 
 namespace NESEmulator
@@ -51,28 +52,29 @@ namespace NESEmulator
         private IBus bus;
 
         #region Emulator vars
-        private byte fetched = 0x00;     // Represents the working input value to the ALU
-        private ushort temp = 0x0000;   // Just a temp var
-        private ushort addr_abs = 0x0000;   // Absolute memory address
-        private sbyte addr_rel = 0x00;     // Relative memory address
-        private byte opcode = 0x00;     // Current instruction
-        private byte cycles = 0;        // Counts how many cycles the instruction has remaining
-        private uint clock_count = 0;        // A global accumulation of the number of clocks
-        private byte _instCycleCount = 0;
-        private ushort _dataPrevCycle = 0; // for cycle operations where previous data obtained is needed
-        private bool _nmiPending = false;
-        private bool _nmiServicing = false;
-        private bool _irqPending = false;
-        private bool _irqDisablePending = false;
-        private bool _irqServicing = false;
-        private byte _irqEnableLatency = 0;
+        private byte   fetched = 0x00;          // Represents the working input value to the ALU
+        private ushort temp = 0x0000;           // Just a temp var
+        private ushort addr_abs = 0x0000;       // Absolute memory address
+        private sbyte  addr_rel = 0x00;         // Relative memory address
+        private byte   opcode = 0x00;           // Current instruction
+        private byte   cycles = 0;              // Counts how many cycles the instruction has remaining
+        private uint   clock_count = 0;         // A global accumulation of the number of clocks
+        private byte   _instCycleCount = 0;
+        private bool   _nmiPending = false;
+        private bool   _nmiServicing = false;
+        private bool   _irqPending = false;
+        private bool   _irqDisablePending = false;
+        private bool   _irqServicing = false;
+        private byte   _irqEnableLatency = 0;
         private ushort _irqVector = ADDR_IRQ;
-        private bool _startCountingIRQs = true;
-        private int  _irqCount = 0;
+        private bool   _startCountingIRQs = true;
+        private int    _irqCount = 0;
         /// <summary>
         /// Intermediate data needed between cycles of an instruction
         /// </summary>
         private Dictionary<string, object> instr_state = new Dictionary<string, object>();
+        private Dictionary<string, byte>   instr_state_bytes = new Dictionary<string, byte>();
+        private Dictionary<string, ushort> instr_state_ushort = new Dictionary<string, ushort>();
 
         private const string STATE_ADDR_MODE_COMPLETED_CYCLE = "opcode_start_cycle";
         #endregion // Emulator vars
@@ -166,14 +168,14 @@ namespace NESEmulator
             this.bus = bus;
         }
 
-#region Register Properties
+        #region Register Properties
         public byte a { get; set; }
         public byte x { get; set; }
         public byte y { get; set; }
         public byte sp { get; set; }
         public ushort pc { get; set; }
         public FLAGS6502 status { get; set; }
-#endregion // Register Properties
+        #endregion // Register Properties
 
 
         /// <summary>
@@ -317,7 +319,7 @@ namespace NESEmulator
                 // Read new PC location from fixed address
                 addr_abs = _irqVector;
                 ushort lo = read(addr_abs);
-                instr_state["lo"] = lo;
+                instr_state_ushort["lo"] = lo;
             }
             else if (cycles == 6)
             {
@@ -326,7 +328,7 @@ namespace NESEmulator
                 // can in the middle of this instruction get hijacked by NMIs and point the PC to the
                 // NMI handler. We do not do cycle-by-cycle emulation currently, so this cannot happen
                 // at this time. It can possibly be done with our method with a little refactoring though....
-                pc = (ushort)((hi << 8) | (ushort)instr_state["lo"]);
+                pc = (ushort)((hi << 8) | instr_state_ushort["lo"]);
                 _irqServicing = false;
             }
 
@@ -382,12 +384,12 @@ namespace NESEmulator
                 // Read new PC location from fixed address
                 addr_abs = ADDR_NMI;
                 ushort lo = read(addr_abs);
-                instr_state["lo"] = lo;
+                instr_state_ushort["lo"] = lo;
             }
             else if (cycles == 6)
             { 
                 ushort hi = read((ushort)(addr_abs + 1));
-                pc = (ushort)((hi << 8) | (ushort)instr_state["lo"]);
+                pc = (ushort)((hi << 8) | instr_state_ushort["lo"]);
                 _nmiServicing = false;
             }
         }
@@ -749,13 +751,23 @@ namespace NESEmulator
             }
         }
 
-#region Flag Methods
-
-        private byte getFlag(FLAGS6502 f)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void clearInstrState()
         {
-            return this.status.HasFlag(f) ? (byte)1 : (byte)0;
+            instr_state.Clear();
+            instr_state_bytes.Clear();
+            instr_state_ushort.Clear();
         }
 
+        #region Flag Methods
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private byte getFlag(FLAGS6502 f)
+        {
+            return status.HasFlag(f) ? (byte)1 : (byte)0;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void setFlag(FLAGS6502 f, bool v)
         {
             if (v)
@@ -768,9 +780,9 @@ namespace NESEmulator
             }
         }
 
-#endregion // Flag Methods
+        #endregion // Flag Methods
 
-#region Bus Methods
+        #region Bus Methods
 
         public override bool Write(ushort addr, byte data)
         {
@@ -790,6 +802,7 @@ namespace NESEmulator
         /// </summary>
         /// <param name="addr">Address of the byte to read</param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private byte read(ushort addr)
         {
             byte dataRead = 0x00;
@@ -809,6 +822,7 @@ namespace NESEmulator
         /// </summary>
         /// <param name="addr">Address to write to</param>
         /// <param name="data">The byte of data to write</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void write(ushort addr, byte data)
         {
             if (addr == 0x4014)
@@ -821,9 +835,9 @@ namespace NESEmulator
                 bus.Write(addr, data);
         }
 
-#endregion // Bus Methods
+        #endregion // Bus Methods
 
-#region Addressing Modes
+        #region Addressing Modes
         /*****
          * The 6502 can address between 0x0000 - 0xFFFF. The high byte is often referred
          * to as the "page", and the low byte is the offset into that page. This implies
@@ -850,10 +864,10 @@ namespace NESEmulator
             switch (cycles)
             {
                 case 0:
-                    instr_state.Clear();
+                    clearInstrState();
                     // Not technically accurate to do here, but it's fine.
                     fetched = a;
-                    instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                    instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                     isComplete = true;
                     break;
                 default:
@@ -878,12 +892,12 @@ namespace NESEmulator
             switch (cycles)
             {
                 case 0:
-                    instr_state.Clear();
+                    clearInstrState();
                     break;
                 case 1:
                     addr_abs = pc++;
                     fetch();
-                    instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                    instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                     isComplete = true;
                     break;
                 default:
@@ -909,7 +923,7 @@ namespace NESEmulator
             switch (cycles)
             {
                 case 0:
-                    instr_state.Clear();
+                    clearInstrState();
                     break;
                 case 1:
                     addr_abs = read(pc);
@@ -917,12 +931,12 @@ namespace NESEmulator
                     addr_abs &= 0x00FF;
                     if (opcode_lookup[opcode].instr_type == CPUInstructionType.Write)
                     {
-                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                         isComplete = true;
                     }
                     break;
                 case 2:
-                    if (instr_state.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
+                    if (instr_state_bytes.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
                     {
                         isComplete = true;
                         break;
@@ -930,7 +944,7 @@ namespace NESEmulator
                     if (opcode_lookup[opcode].instr_type != CPUInstructionType.Write)
                     {
                         fetch();
-                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                     }
                     else
                     {
@@ -960,7 +974,7 @@ namespace NESEmulator
             switch (cycles)
             {
                 case 0:
-                    instr_state.Clear();
+                    clearInstrState();
                     break;
                 case 1:
                     addr_abs = read(pc);
@@ -974,12 +988,12 @@ namespace NESEmulator
                     addr_abs &= 0x00FF;
                     if (opcode_lookup[opcode].instr_type == CPUInstructionType.Write)
                     {
-                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                         isComplete = true;
                     }
                     break;
                 case 3:
-                    if (instr_state.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
+                    if (instr_state_bytes.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
                     {
                         isComplete = true;
                         break;
@@ -988,7 +1002,7 @@ namespace NESEmulator
                     if (opcode_lookup[opcode].instr_type != CPUInstructionType.Write)
                     {
                         fetch();
-                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                     }
                     else
                     {
@@ -1016,7 +1030,7 @@ namespace NESEmulator
             switch (cycles)
             {
                 case 0:
-                    instr_state.Clear();
+                    clearInstrState();
                     break;
                 case 1:
                     addr_abs = read(pc);
@@ -1030,12 +1044,12 @@ namespace NESEmulator
                     addr_abs &= 0x00FF;
                     if (opcode_lookup[opcode].instr_type == CPUInstructionType.Write)
                     {
-                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                         isComplete = true;
                     }
                     break;
                 case 3:
-                    if (instr_state.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
+                    if (instr_state_bytes.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
                     {
                         isComplete = true;
                         break;
@@ -1043,7 +1057,7 @@ namespace NESEmulator
                     if (opcode_lookup[opcode].instr_type != CPUInstructionType.Write)
                     {
                         fetch();
-                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                     }
                     else
                     {
@@ -1073,12 +1087,12 @@ namespace NESEmulator
             switch (cycles)
             {
                 case 0:
-                    instr_state.Clear();
+                    clearInstrState();
                     break;
                 case 1:
                     addr_rel = unchecked((sbyte)read(pc));
                     pc++;
-                    instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                    instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                     isComplete = true;
                     break;
                 default:
@@ -1102,20 +1116,20 @@ namespace NESEmulator
             switch (cycles)
             {
                 case 0:
-                    instr_state.Clear();
+                    clearInstrState();
                     break;
                 case 1:
-                    instr_state["lo"] = (ushort)read(pc);
+                    instr_state_ushort["lo"] = read(pc);
                     pc++;
                     // JSR ends this part early
                     if (opcode_lookup[opcode].operation == JSR)
                     {
-                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                         isComplete = true;
                     }
                     break;
                 case 2:
-                    if (instr_state.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
+                    if (instr_state_bytes.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
                     {
                         isComplete = true;
                         break;
@@ -1123,16 +1137,16 @@ namespace NESEmulator
 
                     ushort hi = read(pc);
                     pc++;
-                    addr_abs = (ushort)((hi << 8) | (ushort)instr_state["lo"]);
+                    addr_abs = (ushort)((hi << 8) | instr_state_ushort["lo"]);
                     if (opcode_lookup[opcode].instr_type == CPUInstructionType.Write ||
                         opcode_lookup[opcode].instr_type == CPUInstructionType.Branch)
                     {
-                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                         isComplete = true;
                     }
                     break;
                 case 3:
-                    if (instr_state.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
+                    if (instr_state_bytes.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
                     {
                         isComplete = true;
                         break;
@@ -1142,7 +1156,7 @@ namespace NESEmulator
                         opcode_lookup[opcode].instr_type == CPUInstructionType.Read)
                     {
                         fetch();
-                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                     }
                     else
                     {
@@ -1172,24 +1186,24 @@ namespace NESEmulator
             switch (cycles)
             {
                 case 0:
-                    instr_state.Clear();
+                    clearInstrState();
                     break;
                 case 1:
-                    instr_state["lo"] = (ushort)read(pc);
+                    instr_state_ushort["lo"] = read(pc);
                     pc++;
                     break;
                 case 2:
                     ushort hi = read(pc);
-                    instr_state["hi"] = hi;
+                    instr_state_ushort["hi"] = hi;
                     pc++;
-                    addr_abs = (ushort)((hi << 8) | (ushort)instr_state["lo"]);
-                    instr_state["addr_eff"] = (ushort)((hi << 8) | (byte)((ushort)instr_state["lo"] + x));
+                    addr_abs = (ushort)((hi << 8) | instr_state_ushort["lo"]);
+                    instr_state_ushort["addr_eff"] = (ushort)((hi << 8) | (byte)(instr_state_ushort["lo"] + x));
                     break;
                 case 3:
                     // Read without page boundary checking
-                    fetched = read((ushort)instr_state["addr_eff"]);
+                    fetched = read(instr_state_ushort["addr_eff"]);
                     addr_abs += x;
-                    instr_state["page_cross"] = (addr_abs & 0xFF00) != (((ushort)instr_state["hi"]) << 8);
+                    instr_state["page_cross"] = (addr_abs & 0xFF00) != ((instr_state_ushort["hi"]) << 8);
                     if ((bool)instr_state["page_cross"] ||
                         opcode_lookup[opcode].instr_type == CPUInstructionType.R_M_W ||
                         opcode_lookup[opcode].instr_type == CPUInstructionType.Write)
@@ -1203,12 +1217,12 @@ namespace NESEmulator
                     else
                     {
                         // We don't need another cycle, end it here.
-                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                         isComplete = true;
                     }
                     break;
                 case 4:
-                    if (instr_state.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
+                    if (instr_state_bytes.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
                     {
                         isComplete = true;
                         break;
@@ -1223,7 +1237,7 @@ namespace NESEmulator
                             // Read again from correct address
                             fetched = read(addr_abs);
                         }
-                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                     }
                     else
                     {
@@ -1254,26 +1268,26 @@ namespace NESEmulator
             switch (cycles)
             {
                 case 0:
-                    instr_state.Clear();
+                    clearInstrState();
                     break;
                 case 1:
-                    instr_state["lo"] = (ushort)read(pc);
+                    instr_state_ushort["lo"] = read(pc);
                     pc++;
                     break;
                 case 2:
                     ushort hi = read(pc);
-                    instr_state["hi"] = hi;
+                    instr_state_ushort["hi"] = hi;
                     pc++;
-                    addr_abs = (ushort)((hi << 8) | (ushort)instr_state["lo"]);
-                    instr_state["addr_eff"] = (ushort)((hi << 8) | (byte)((ushort)instr_state["lo"] + y));
+                    addr_abs = (ushort)((hi << 8) | instr_state_ushort["lo"]);
+                    instr_state_ushort["addr_eff"] = (ushort)((hi << 8) | (byte)(instr_state_ushort["lo"] + y));
                     break;
                 case 3:
                     // read from effective address, before checking if we crossed page boundary
                     //Log.Debug($"[{clock_count}] ABY read effective address (cycle 3) [opcode={opcode:X2}] [addr_eff={(ushort)instr_state["addr_eff"]:X4}]"); 
-                    fetched = read((ushort)instr_state["addr_eff"]);
+                    fetched = read(instr_state_ushort["addr_eff"]);
                     // did we cross a page boundary?
                     addr_abs += y;
-                    instr_state["page_cross"] = (addr_abs & 0xFF00) != (((ushort)instr_state["hi"]) << 8);
+                    instr_state["page_cross"] = (addr_abs & 0xFF00) != ((instr_state_ushort["hi"]) << 8);
                     if ((bool)instr_state["page_cross"] ||
                         opcode_lookup[opcode].instr_type == CPUInstructionType.R_M_W ||
                         opcode_lookup[opcode].instr_type == CPUInstructionType.Write)
@@ -1287,12 +1301,12 @@ namespace NESEmulator
                     else
                     {
                         // We don't need another cycle, end it here.
-                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                         isComplete = true;
                     }
                     break;
                 case 4:
-                    if (instr_state.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
+                    if (instr_state_bytes.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
                     {
                         isComplete = true;
                         break;
@@ -1308,7 +1322,7 @@ namespace NESEmulator
                             // Read again from correct address
                             fetched = read(addr_abs);
                         }
-                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                     }
                     else
                     {
@@ -1344,36 +1358,36 @@ namespace NESEmulator
             switch (cycles)
             {
                 case 0:
-                    instr_state.Clear();
+                    clearInstrState();
                     break;
                 case 1:
                     // Fetch pointer address low
-                    instr_state["ptr_lo"] = (ushort)read(pc);
+                    instr_state_ushort["ptr_lo"] = read(pc);
                     pc++;
                     break;
                 case 2:
                     // Fetch pointer address high
                     ushort hi = read(pc);
                     pc++;
-                    instr_state["ptr"] = (ushort)((hi << 8) | (ushort)instr_state["ptr_lo"]);
+                    instr_state_ushort["ptr"] = (ushort)((hi << 8) | instr_state_ushort["ptr_lo"]);
                     break;
                 case 3:
-                    instr_state["addr_lo"] = (ushort)read((ushort)instr_state["ptr"]);
+                    instr_state_ushort["addr_lo"] = read(instr_state_ushort["ptr"]);
                     break;
                 case 4:
-                    ushort lo = (ushort)instr_state["addr_lo"];
-                    if ((ushort)instr_state["ptr_lo"] == 0x00FF)
+                    ushort lo = instr_state_ushort["addr_lo"];
+                    if (instr_state_ushort["ptr_lo"] == 0x00FF)
                     {
                         // Simulate page boundary hardware bug
-                        addr_abs = (ushort)((read((ushort)((ushort)instr_state["ptr"] & 0xFF00)) << 8) | lo);
+                        addr_abs = (ushort)((read((ushort)(instr_state_ushort["ptr"] & 0xFF00)) << 8) | lo);
                     }
                     else
                     {
                         // Normal behavior
-                        addr_abs = (ushort)((read((ushort)((ushort)instr_state["ptr"] + 1)) << 8) | lo);
+                        addr_abs = (ushort)((read((ushort)(instr_state_ushort["ptr"] + 1)) << 8) | lo);
                     }
                     pc = addr_abs;
-                    instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                    instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                     isComplete = true;
                     break;
                 default:
@@ -1398,32 +1412,32 @@ namespace NESEmulator
             switch (cycles)
             {
                 case 0:
-                    instr_state.Clear();
+                    clearInstrState();
                     break;
                 case 1:
                     // fetch pointer address, increment PC
-                    instr_state["ptr"] = (ushort)read(pc);
+                    instr_state_ushort["ptr"] = read(pc);
                     pc++;
                     break;
                 case 2:
                     // Read from address
-                    read((ushort)instr_state["ptr"]);
+                    read(instr_state_ushort["ptr"]);
                     break;
                 case 3:
                     // fetch effective address low
-                    var ptr = (ushort)((ushort)instr_state["ptr"] + x);
-                    instr_state["addr_eff_lo"] = (ushort)read((ushort)(ptr & 0x00FF));
+                    var ptr = (ushort)(instr_state_ushort["ptr"] + x);
+                    instr_state_ushort["addr_eff_lo"] = read((ushort)(ptr & 0x00FF));
                     break;
                 case 4:
-                    var ptr2 = (ushort)((ushort)instr_state["ptr"] + x + 1);
+                    var ptr2 = (ushort)(instr_state_ushort["ptr"] + x + 1);
                     // fetch effective address hi
                     ushort hi = read((ushort)(ptr2 & 0x00FF));
-                    addr_abs = (ushort)((hi << 8) | (ushort)instr_state["addr_eff_lo"]);
+                    addr_abs = (ushort)((hi << 8) | instr_state_ushort["addr_eff_lo"]);
                     break;
                 case 5:
                     if (opcode_lookup[opcode].instr_type != CPUInstructionType.Write)
                         fetch();
-                    instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                    instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                     isComplete = true;
                     break;
                 default:
@@ -1449,27 +1463,27 @@ namespace NESEmulator
             switch (cycles)
             {
                 case 0:
-                    instr_state.Clear();
+                    clearInstrState();
                     break;
                 case 1:
                     // fetch pointer address, increment PC
-                    instr_state["ptr"] = (ushort)read(pc);
+                    instr_state_ushort["ptr"] = read(pc);
                     pc++;
                     break;
                 case 2:
                     // Fetch effective address low
-                    instr_state["addr_eff_lo"] = (ushort)read((ushort)instr_state["ptr"]);
+                    instr_state_bytes["addr_eff_lo"] = read(instr_state_ushort["ptr"]);
                     break;
                 case 3:
                     // fetch effective address high
-                    ushort hi = (ushort)((ushort)instr_state["ptr"] + 1);
-                    instr_state["addr_eff_hi"] = (ushort)read((ushort)(hi & 0x00FF));
-                    addr_abs = (ushort)((ushort)instr_state["addr_eff_hi"] << 8 | (ushort)instr_state["addr_eff_lo"]);
-                    instr_state["addr_eff_lo"] = (byte)((ushort)instr_state["addr_eff_lo"] + y);
+                    ushort hi = (ushort)(instr_state_ushort["ptr"] + 1);
+                    instr_state_ushort["addr_eff_hi"] = read((ushort)(hi & 0x00FF));
+                    addr_abs = (ushort)(instr_state_ushort["addr_eff_hi"] << 8 | instr_state_bytes["addr_eff_lo"]);
+                    instr_state_bytes["addr_eff_lo"] = (byte)(instr_state_bytes["addr_eff_lo"] + y);
                     break;
                 case 4:
                     // Read from effective address
-                    var addr_eff = (ushort)((ushort)instr_state["addr_eff_hi"] << 8 | (byte)instr_state["addr_eff_lo"]);
+                    var addr_eff = (ushort)(instr_state_ushort["addr_eff_hi"] << 8 | instr_state_bytes["addr_eff_lo"]);
                     //Log.Debug($"[{clock_count}] IZY read effective address (cycle 4) [opcode={opcode:X2}] [addr_eff={addr_eff:X4}]");
                     fetched = read(addr_eff);
                     // did we cross a page boundary?
@@ -1490,12 +1504,12 @@ namespace NESEmulator
                     {
                         // address did not cross page boundary
                         addr_abs = addr_eff;
-                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                         isComplete = true;
                     }
                     break;
                 case 5:
-                    if (instr_state.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
+                    if (instr_state_bytes.ContainsKey(STATE_ADDR_MODE_COMPLETED_CYCLE))
                     {
                         isComplete = true;
                         break;
@@ -1510,7 +1524,7 @@ namespace NESEmulator
                             //Log.Debug($"[{clock_count}] Reading after page-crossed IZY instruction (cycle 5) [opcode={opcode:X2}] [addr_abs={addr_abs:X4}]");
                             fetched = read(addr_abs);
                         }
-                        instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
+                        instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE] = cycles;
                         isComplete = true;
                     }
                     else
@@ -1552,7 +1566,7 @@ namespace NESEmulator
         private byte ADC()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             // This is a read instruction, so everything should be done on the last cycle.
             if (cycles == opcodeStartCycle)
@@ -1594,7 +1608,7 @@ namespace NESEmulator
         private byte SBC()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             // This is a read instruction, so everything should be done on the last cycle.
             if (cycles == opcodeStartCycle)
@@ -1635,7 +1649,7 @@ namespace NESEmulator
         private byte AND()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             // This is a read instruction, so everything should be done on the last cycle.
             if (cycles == opcodeStartCycle)
@@ -1662,7 +1676,7 @@ namespace NESEmulator
         private byte ASL()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             if (cycles == opcodeStartCycle + 1)
             {
@@ -1698,7 +1712,7 @@ namespace NESEmulator
         private byte LSR()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             if (cycles == opcodeStartCycle + 1)
             {
@@ -1734,7 +1748,7 @@ namespace NESEmulator
         private byte ROL()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             if (cycles == opcodeStartCycle + 1)
             {
@@ -1770,7 +1784,7 @@ namespace NESEmulator
         private byte ROR()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             if (cycles == opcodeStartCycle + 1)
             {
@@ -1809,7 +1823,7 @@ namespace NESEmulator
         private byte BIT()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             // This is a read instruction, so everything should be done on the last cycle.
             if (cycles == opcodeStartCycle)
@@ -1835,7 +1849,7 @@ namespace NESEmulator
         private byte EOR()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             // This is a read instruction, so everything should be done on the last cycle.
             if (cycles == opcodeStartCycle)
@@ -1862,7 +1876,7 @@ namespace NESEmulator
         private byte ORA()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             // This is a read instruction, so everything should be done on the last cycle.
             if (cycles == opcodeStartCycle)
@@ -1889,7 +1903,7 @@ namespace NESEmulator
         private byte BCC()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             if (cycles == opcodeStartCycle)
             {
@@ -1928,7 +1942,7 @@ namespace NESEmulator
         private byte BCS()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             if (cycles == opcodeStartCycle)
             {
@@ -1966,7 +1980,7 @@ namespace NESEmulator
         private byte BEQ()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             if (cycles == opcodeStartCycle)
             {
@@ -2004,7 +2018,7 @@ namespace NESEmulator
         private byte BMI()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             if (cycles == opcodeStartCycle)
             {
@@ -2042,7 +2056,7 @@ namespace NESEmulator
         private byte BNE()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             if (cycles == opcodeStartCycle)
             {
@@ -2079,7 +2093,7 @@ namespace NESEmulator
         private byte BPL()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             if (cycles == opcodeStartCycle)
             {
@@ -2117,7 +2131,7 @@ namespace NESEmulator
         private byte BVC()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             if (cycles == opcodeStartCycle)
             {
@@ -2155,7 +2169,7 @@ namespace NESEmulator
         private byte BVS()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             if (cycles == opcodeStartCycle)
             {
@@ -2195,7 +2209,7 @@ namespace NESEmulator
         private byte BRK()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
             if (cycles == opcodeStartCycle)
             {
                 _irqVector = ADDR_IRQ;
@@ -2238,12 +2252,12 @@ namespace NESEmulator
             }
             else if (cycles == opcodeStartCycle + 4)
             {
-                instr_state["lo"] = read(_irqVector);
+                instr_state_bytes["lo"] = read(_irqVector);
             }
             else if (cycles == opcodeStartCycle + 5)
             {
                 byte hi = read((ushort)(_irqVector + 1));
-                pc = (ushort)((hi << 8) | (byte)instr_state["lo"]);
+                pc = (ushort)((hi << 8) | instr_state_bytes["lo"]);
             }
             return 0;
         }
@@ -2381,6 +2395,7 @@ namespace NESEmulator
         }
         #endregion // Set Instructions
 
+        #region Compare Instructions
         /// <summary>
         /// Instruction: Compare Accumulator
         /// Function:    C <- A >= M      Z <- (A - M) == 0
@@ -2390,7 +2405,7 @@ namespace NESEmulator
         private byte CMP()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             // This is a read instruction, so everything should be done on the last cycle.
             if (cycles == opcodeStartCycle)
@@ -2412,7 +2427,7 @@ namespace NESEmulator
         private byte CPX()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             // This is a read instruction, so everything should be done on the last cycle.
             if (cycles == opcodeStartCycle)
@@ -2434,7 +2449,7 @@ namespace NESEmulator
         private byte CPY()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             // This is a read instruction, so everything should be done on the last cycle.
             if (cycles == opcodeStartCycle)
@@ -2446,6 +2461,7 @@ namespace NESEmulator
             }
             return 0;
         }
+        #endregion // Compare Instructions
 
         /// <summary>
         /// Instruction: Decrement Value at Memory Location
@@ -2456,7 +2472,7 @@ namespace NESEmulator
         private byte DEC()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             if (cycles == opcodeStartCycle + 1)
             {
@@ -2517,7 +2533,7 @@ namespace NESEmulator
         private byte INC()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             if (cycles == opcodeStartCycle + 1)
             {
@@ -2599,7 +2615,7 @@ namespace NESEmulator
         private byte JSR()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            //byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             if (cycles == 3)
             {
@@ -2612,7 +2628,7 @@ namespace NESEmulator
             else if (cycles == 5)
             {
                 byte hi = read(pc);
-                addr_abs = (ushort)((hi << 8) | (ushort)instr_state["lo"]);
+                addr_abs = (ushort)((hi << 8) | instr_state_ushort["lo"]);
                 pc = addr_abs;
             }
 
@@ -2630,7 +2646,7 @@ namespace NESEmulator
         private byte LDA()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             // This is a read instruction, so everything should be done on the last cycle.
             if (cycles == opcodeStartCycle)
@@ -2651,7 +2667,7 @@ namespace NESEmulator
         private byte LDX()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             // This is a read instruction, so everything should be done on the last cycle.
             if (cycles == opcodeStartCycle)
@@ -2672,7 +2688,7 @@ namespace NESEmulator
         private byte LDY()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             // This is a read instruction, so everything should be done on the last cycle.
             if (cycles == opcodeStartCycle)
@@ -2865,7 +2881,7 @@ namespace NESEmulator
             return 0;
         }
 
-#region Store instructions
+        #region Store instructions
 
         /// <summary>
         /// Instruction: Store Accumulator at Address
@@ -2876,7 +2892,7 @@ namespace NESEmulator
         private byte STA()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             // This is a write instruction, so everything should be done on the last cycle.
             if (cycles == opcodeStartCycle)
@@ -2895,7 +2911,7 @@ namespace NESEmulator
         private byte STX()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             // This is a write instruction, so everything should be done on the last cycle.
             if (cycles == opcodeStartCycle)
@@ -2914,7 +2930,7 @@ namespace NESEmulator
         private byte STY()
         {
             // Which cycle did the addressing mode operations end?
-            byte opcodeStartCycle = (byte)instr_state[STATE_ADDR_MODE_COMPLETED_CYCLE];
+            byte opcodeStartCycle = instr_state_bytes[STATE_ADDR_MODE_COMPLETED_CYCLE];
 
             // This is a write instruction, so everything should be done on the last cycle.
             if (cycles == opcodeStartCycle)
@@ -2924,9 +2940,9 @@ namespace NESEmulator
             return 0;
         }
 
-#endregion // Store instructions
+        #endregion // Store instructions
 
-#region Transfer instructions
+        #region Transfer instructions
 
         /// <summary>
         /// Instruction: Transfer Accumulator to X Register
@@ -3052,7 +3068,7 @@ namespace NESEmulator
             return 0;
         }
 
-#endregion // Transfer instructions
+        #endregion // Transfer instructions
 
         /// <summary>
         /// All "unofficial" opcodes will be routed here.
@@ -3326,6 +3342,7 @@ namespace NESEmulator
             };
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private byte push(byte data)
         {
             write((ushort)(ADDR_STACK + sp), data);
@@ -3333,6 +3350,7 @@ namespace NESEmulator
             return sp;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private byte pop()
         {
             sp++;
@@ -3340,6 +3358,7 @@ namespace NESEmulator
             return data;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void testAndSet(FLAGS6502 flag, ushort data)
         {
             switch (flag)

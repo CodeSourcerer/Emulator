@@ -87,22 +87,22 @@ namespace NESEmulatorApp
             //string romfile = "tests\\smb3.nes";
             //string romfile = "tests\\capt_america.nes";
             //string romfile = "tests\\Abadox.nes";
-            //string romfile = "tests\\BurgerTime.nes";
+            string romfile = "tests\\BurgerTime.nes";
             //string romfile = "tests\\ice_climber.nes";
             //string romfile = "tests\\pacman-namco.nes";
             //string romfile = "tests\\ducktales.nes";
             // Mapper 1
             //string romfile = "tests\\young_indy.nes";
             //string romfile = "tests\\zelda.nes";
-            string romfile = "tests\\zeldaII.nes";
+            //string romfile = "tests\\zeldaII.nes";
             //string romfile = "tests\\megaman2.nes";
 
             // Test roms
             //string romfile = "tests\\nestest.nes";
             //string romfile = "tests\\instr_test_v5\\official_only.nes"; // passes
-            //string romfile = "tests\\1.Branch_Basics.nes"; // passes
-            //string romfile = "tests\\2.Backward_Branch.nes"; // passes
-            //string romfile = "tests\\3.Forward_Branch.nes";
+            //string romfile = "tests\\branch_timing_tests\\1.Branch_Basics.nes"; // passes
+            //string romfile = "tests\\branch_timing_tests\\2.Backward_Branch.nes"; // passes
+            //string romfile = "tests\\branch_timing_tests\\3.Forward_Branch.nes"; // passes
             //string romfile = "tests\\instr_timing\\1-instr_timing.nes"; // passes except for illegal opcodes
             //string romfile = "tests\\instr_timing\\2-branch_timing.nes"; // passes
             //string romfile = "tests\\instr_misc\\01-abs_x_wrap.nes"; // passes
@@ -147,7 +147,7 @@ namespace NESEmulatorApp
             //string romfile = "tests\\ppu_sprite_hit\\04-flip.nes"; // passes
             //string romfile = "tests\\ppu_sprite_hit\\05-left_clip.nes"; // passes
             //string romfile = "tests\\ppu_sprite_hit\\06-right_edge.nes"; // passes
-            string romfile = "tests\\ppu_sprite_hit\\07-screen_bottom.nes"; // passes
+            //string romfile = "tests\\ppu_sprite_hit\\07-screen_bottom.nes"; // passes
             //string romfile = "tests\\ppu_sprite_hit\\07-screen_bottom.nes"; // passes
             //string romfile = "tests\\ppu_sprite_hit\\08-double_height.nes"; // passes
             //string romfile = "tests\\ppu_sprite_hit\\09-timing.nes"; // 4) Flag set too late for upper-left corner
@@ -317,6 +317,9 @@ namespace NESEmulatorApp
 
             // Draw rendered output
             pge.DrawSprite(0, 0, nesBus.PPU.GetScreen(), 1);
+
+            pge.DrawString(0, 245, "X, Z - A, B", Pixel.WHITE);
+            pge.DrawString(0, 260, "A, S - START, SELECT", Pixel.WHITE);
 
             // Draw Ram Page 0x00
             //DrawRam(2, 2, 0x0000, 16, 16);
