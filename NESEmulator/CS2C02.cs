@@ -651,15 +651,7 @@ namespace NESEmulator
 
                 if (!ignorePaletteRange && (addr >= 0x3F00 && addr <= 0x3FFF))  // Palette memory range
                 {
-                    // Mask bottom 5 bits
-                    tmpaddr = (ushort)(addr & 0x001F);
-
-                    if (tmpaddr == 0x0010) tmpaddr = 0x0000;
-                    if (tmpaddr == 0x0014) tmpaddr = 0x0004;
-                    if (tmpaddr == 0x0018) tmpaddr = 0x0008;
-                    if (tmpaddr == 0x001C) tmpaddr = 0x000C;
-
-                    data = (byte)(_palette[tmpaddr] & (_mask.GrayScale ? 0x30 : 0x3F));
+                    data = getPaletteData(addr);
                 }
             }
 
@@ -741,6 +733,27 @@ namespace NESEmulator
         }
 
 #endregion // Bus Communications
+
+        private byte getPaletteData(ushort addr)
+        {
+            byte data = 0;
+            ushort tmpaddr = addr;
+
+            if (addr >= 0x3F00 && addr <= 0x3FFF)  // Palette memory range
+            {
+                // Mask bottom 5 bits
+                tmpaddr = (ushort)(addr & 0x001F);
+
+                if (tmpaddr == 0x0010) tmpaddr = 0x0000;
+                if (tmpaddr == 0x0014) tmpaddr = 0x0004;
+                if (tmpaddr == 0x0018) tmpaddr = 0x0008;
+                if (tmpaddr == 0x001C) tmpaddr = 0x000C;
+
+                data = (byte)(_palette[tmpaddr] & (_mask.GrayScale ? 0x30 : 0x3F));
+            }
+
+            return data;
+        }
 
         public void ConnectCartridge(Cartridge cartridge)
         {
@@ -1092,7 +1105,7 @@ namespace NESEmulator
             // "palette << 2" - Each palette is 4 bytes in size
             // "pixel"        - Each pixel index is either 0, 1, 2 or 3
             // "& 0x3F"       - Stops us reading beyond the bounds of the palScreen array
-            return _palScreen[ppuRead((ushort)(ADDR_PALETTE + (palette << 2) + pixel)) & MAX_PALETTE];
+            return _palScreen[getPaletteData((ushort)(ADDR_PALETTE + (palette << 2) + pixel)) & MAX_PALETTE];
 
             // Note: We dont access _palette directly here, instead we know that ppuRead()
             // will map the address onto the seperate small RAM attached to the PPU bus.
