@@ -6,7 +6,7 @@ using NESEmulator.Util;
 
 namespace NESEmulator.Mappers
 {
-    public class Mapper_004 : Mapper, IScanlineCounterMapper
+    public class Mapper_004 : Mapper, IScanlineCounterMapper, IInterruptingDevice
     {
         private static new readonly ILog Log = LogManager.GetLogger(typeof(Mapper_004));
 
@@ -15,6 +15,7 @@ namespace NESEmulator.Mappers
         public override bool PRGRAMEnable { get; protected set; }
 
         public override bool HasScanlineCounter { get => true; }
+        public bool IRQActive { get; set; }
 
         private byte _irqReload;
         private byte _irqCounter;
@@ -27,12 +28,12 @@ namespace NESEmulator.Mappers
 
         private int PRGROMBankMode
         {
-            get => (_bankSelect & 0x40) >> 6;
+            get => (_bankSelect >> 6) & 1;
         }
 
         private int CHRInversion
         {
-            get => (_bankSelect & 0x80) >> 7;
+            get => (_bankSelect >> 7);
         }
 
         public Mapper_004(Cartridge cartridge, byte prgBanks, byte chrBanks)
@@ -112,8 +113,9 @@ namespace NESEmulator.Mappers
                 _register[_targetRegister] = data;
                 if (_targetRegister == 0 || _targetRegister == 1)
                     _register[_targetRegister] &= 0xFE;
-
+#if DEBUG_MAPPER_004
                 Log.Debug($"Register[{_targetRegister}]={data:X2}");
+#endif
                 updateCHRBankOffsets();
                 updatePRGBankOffsets();
                 return true;
@@ -124,7 +126,9 @@ namespace NESEmulator.Mappers
             {
                 if (!cartridge.UseFourScreen)
                 {
+#if DEBUG_MAPPER_004
                     Log.Debug($"Write: [MirrorMode={data & 1}]");
+#endif
                     if ((data & 1) == 0)
                         cartridge.mirror = Cartridge.Mirror.VERTICAL;
                     else
@@ -161,8 +165,8 @@ namespace NESEmulator.Mappers
             if (addr <= 0xFFFF && (addr & 1) == 0)
             {
                 _irqEnable = false;
+                IRQActive = false;
                 //Log.Debug($"IRQEnable={_irqEnable}");
-                //_irqActive = false;
                 return true;
             }
 
@@ -311,18 +315,19 @@ namespace NESEmulator.Mappers
             if (_irqCounter == 0)
             {
                 _irqCounter = _irqReload;
-                cartridge.Mapper_InvokeInterrupt(this, new InterruptEventArgs(InterruptType.CLEAR_IRQ));
+                //cartridge.Mapper_InvokeInterrupt(this, new InterruptEventArgs(InterruptType.CLEAR_IRQ));
                 //Log.Debug("IRQCounter reloaded");
             }
             else
             {
                 _irqCounter--;
-                if (_irqCounter == 0 && _irqEnable)
-                {
-                    //Log.Debug("Triggering interrupt");
-                    cartridge.Mapper_InvokeInterrupt(this, new InterruptEventArgs(InterruptType.IRQ));
-                    //_irqEnable = false; // ??
-                }
+            }
+
+            if (_irqCounter == 0 && _irqEnable)
+            {
+                //Log.Debug("Triggering interrupt");
+                IRQActive = true;
+                //_irqEnable = false; // ??
             }
         }
     }

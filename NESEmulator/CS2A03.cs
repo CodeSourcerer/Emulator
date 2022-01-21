@@ -10,11 +10,12 @@ using NESEmulator.Util;
 
 namespace NESEmulator
 {
-    public class CS2A03 : InterruptingBusDevice
+    public class CS2A03 : IInterruptingDevice, BusDevice
     {
         public BusDeviceType DeviceType => BusDeviceType.APU;
-        public event InterruptingDeviceHandler RaiseInterrupt;
         public const int SOUND_BUFFER_SIZE_MS   = 10;
+
+        public bool IRQActive { get => _frameCounter.IRQActive || _dmcChannel.IRQActive; }
 
         private static ILog Log = LogManager.GetLogger(typeof(CS2A03));
         private const float  CLOCK_NTSC_HZ      = 1789773.0f;
@@ -57,7 +58,7 @@ namespace NESEmulator
         private bool _frameCounterWritten;      // frame counter not written right away, so we need this
         private byte _frameCounterCycleWait;    // 3 when write occurs on APU cycle, 4 otherwise.
         private byte _frameCounterData;
-        private bool _frameInterruptOccurred;
+        //private bool _frameInterruptOccurred;
 
         public CS2A03()
         {
@@ -83,12 +84,6 @@ namespace NESEmulator
             // Clock frame counter every CPU cycle
             if ((clockCounter % 3) == 0)
             {
-                //if (_cpuClockCounter < 29780) // I don't know why I had this, but it breaks the APU len_table test
-                //{
-                //    ++_cpuClockCounter;
-                //    return;
-                //}
-
                 // Check if we need to do our special case frame counter write handling
                 if (_frameCounterWritten)
                 {
@@ -101,29 +96,25 @@ namespace NESEmulator
 
                 _frameCounter.Clock(_cpuClockCounter);
 
-                if (_frameCounter.FrameInterrupt && !_frameCounter.InterruptInhibit)
-                {
-                    // Sending IRQs rapid-fire via the event system causes stuff to really slow down, so
-                    // we'll just send it once. The CPU will have to pretend once an IRQ is raised, that
-                    // the device is continually asserting it.
-                    if (!_frameInterruptOccurred)
-                    {
-                        IRQ();
-                        _frameInterruptOccurred = true;
-#if DEBUG_FRAME_COUNTER
-                        Log.Debug($"[{_cpuClockCounter}] Frame counter raised interrupt");
-#endif
-                    }
-                }
-                else if (!_frameCounter.FrameInterrupt && _frameInterruptOccurred)
-                {
-                    _bus.CPU.ClearIRQ();
-                    _frameInterruptOccurred = false;
-                }
-                else
-                {
-                    _frameInterruptOccurred = false;
-                }
+                //if (_frameCounter.FrameInterrupt && !_frameCounter.InterruptInhibit)
+                //{
+                //                    if (!_frameInterruptOccurred)
+                //                    {
+                //                        _frameInterruptOccurred = true;
+                //#if DEBUG_FRAME_COUNTER
+                //                        Log.Debug($"[{_cpuClockCounter}] Frame counter raised interrupt");
+                //#endif
+                //                    }
+                //                }
+                //                else if (!_frameCounter.FrameInterrupt && _frameInterruptOccurred)
+                //                {
+                //                    _bus.CPU.ClearIRQ();
+                //                    _frameInterruptOccurred = false;
+                //                }
+                //                else
+                //                {
+                //                    _frameInterruptOccurred = false;
+                //}
 
                 ++_cpuClockCounter;
             }
@@ -204,7 +195,8 @@ namespace NESEmulator
                     _frameCounter.FrameInterrupt = false;
                     //RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.CLEAR_IRQ));
                     // Interrupt is ack'd this way, so we can stop pestering the CPU now.
-                    _bus.CPU.ClearIRQ();
+                    //_bus.CPU.ClearIRQ();
+                    _frameCounter.IRQActive = false;
 #if DEBUG_FRAME_COUNTER
                     Log.Debug($"[{_cpuClockCounter}] APU Status Read - IRQ Cleared");
 #endif
@@ -278,7 +270,8 @@ namespace NESEmulator
                 if (_dmcChannel.InterruptFlag)
                 {
                     _dmcChannel.InterruptFlag = false;
-                    _bus.CPU.ClearIRQ();
+                    _dmcChannel.IRQActive = false;
+                    //_bus.CPU.ClearIRQ();
                     //Log.Debug("DMC IRQ Cleared");
                 }
                 //Log.Debug($"[{_cpuClockCounter}] Status written [data={data}] [1={_pulseChannel1.Enabled},2={_pulseChannel2.Enabled},T={_triangleChannel.Enabled},N={_noiseChannel.Enabled},D={_dmcChannel.Enabled}]");
@@ -293,7 +286,8 @@ namespace NESEmulator
                 if (_frameCounter.InterruptInhibit && _frameCounter.FrameInterrupt)
                 {
                     _frameCounter.FrameInterrupt = false;
-                    _bus.CPU.ClearIRQ();
+                    //_bus.CPU.ClearIRQ();
+                    _frameCounter.IRQActive = false;
 #if DEBUG_FRAME_COUNTER
                     Log.Debug($"[{_cpuClockCounter}] Interrupt Inhibit set  - Cleared IRQ");
 #endif
@@ -329,16 +323,17 @@ namespace NESEmulator
         /// <summary>
         /// This allows the APU to signal an interrupt to the CPU
         /// </summary>
-        public void IRQ()
-        {
-            //RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.IRQ));
-            _bus.CPU.SignalIRQ();
-        }
+        //public void IRQ()
+        //{
+        //    //RaiseInterrupt?.Invoke(this, new InterruptEventArgs(InterruptType.IRQ));
+        //    _bus.CPU.SignalIRQ();
 
-        public void ClearIRQ()
-        {
-            _bus.CPU.ClearIRQ();
-        }
+        //}
+
+        //public void ClearIRQ()
+        //{
+        //    _bus.CPU.ClearIRQ();
+        //}
 
         public bool DMAInProgress() => ((CS6502)_bus?.GetDevice(BusDeviceType.CPU)).DMATransfer;
 
@@ -385,7 +380,8 @@ namespace NESEmulator
             if (_frameCounter.InterruptInhibit && _frameCounter.FrameInterrupt)
             {
                 _frameCounter.FrameInterrupt = false;
-                _bus.CPU.ClearIRQ();
+                _frameCounter.IRQActive = false;
+                //_bus.CPU.ClearIRQ();
                 Log.Debug($"[{_cpuClockCounter}] I enabled - IRQ Cleared");
             }
             _frameCounter.Mode = (_frameCounterData.TestBit(7) ? SequenceMode.FiveStep : SequenceMode.FourStep);

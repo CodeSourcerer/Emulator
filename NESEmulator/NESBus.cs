@@ -13,6 +13,7 @@ namespace NESEmulator
         private static readonly ILog Log = LogManager.GetLogger(typeof(NESBus));
 
         private List<BusDevice> _busDeviceList;
+        private List<IInterruptingDevice> _interruptingDevices;
         private ulong _systemClockCounter;
         private bool _cartConflicts;
 
@@ -31,39 +32,21 @@ namespace NESEmulator
             CPU = new CS6502();
             Controller = new NESController();
             _busDeviceList = new List<BusDevice>(new BusDevice[] { PPU, CPU, RAM, Controller, APU });
-            
+            _interruptingDevices = getInterruptingDevices();
+
             // Ugly hack, but events are just too slow.
             CPU.ConnectBus(this);
             PPU.ConnectBus(this);
             APU.ConnectBus(this);
-
-            wireBusDeviceEvents();
         }
 
-        private void wireBusDeviceEvents()
+        private List<IInterruptingDevice> getInterruptingDevices()
         {
-            List<InterruptingBusDevice> interruptingDevices = _busDeviceList.FindAll((bd) => bd is InterruptingBusDevice)
-                                                                            .ConvertAll((bd) => (InterruptingBusDevice)bd);
-            var interruptableBusDevices = getInterruptableDevices();
+            var interruptingBusDevices = from device in _busDeviceList
+                                         where device is IInterruptingDevice
+                                         select (IInterruptingDevice)device;
 
-            foreach (var device in interruptableBusDevices)
-            {
-                foreach (var intDevice in interruptingDevices)
-                {
-                    intDevice.RaiseInterrupt += device.HandleInterrupt;
-                    Log.Debug($"Added device {intDevice.DeviceType} as interrupting device");
-                }
-            }
-        }
-
-
-        private IEnumerable<InterruptableBusDevice> getInterruptableDevices()
-        {
-            var interruptableBusDevices = from device in _busDeviceList
-                                          where device is InterruptableBusDevice
-                                          select (InterruptableBusDevice)device;
-
-            return interruptableBusDevices;
+            return interruptingBusDevices.ToList();
         }
 
         public byte Read(ushort addr, bool readOnly = false)
@@ -120,13 +103,14 @@ namespace NESEmulator
             _busDeviceList.Insert(0, cartridge);
             PPU.ConnectCartridge(cartridge);
 
-            var interruptableBusDevices = getInterruptableDevices();
+            _interruptingDevices = getInterruptingDevices();
+            //var interruptableBusDevices = getInterruptableDevices();
 
-            foreach (var device in interruptableBusDevices)
-            {
-                cartridge.RaiseInterrupt += device.HandleInterrupt;
-                Log.Debug($"Added device {cartridge.DeviceType} as interrupting device");
-            }
+            //foreach (var device in interruptableBusDevices)
+            //{
+            //    cartridge.RaiseInterrupt += device.HandleInterrupt;
+            //    Log.Debug($"Added device {cartridge.DeviceType} as interrupting device");
+            //}
 
             _cartConflicts = cartridge.HasBusConflicts;
 
@@ -159,6 +143,11 @@ namespace NESEmulator
             _busDeviceList.ForEach(device => device.PowerOn());
 
             _systemClockCounter = 0;
+        }
+
+        public bool IsDeviceAssertingIRQ()
+        {
+            return _interruptingDevices.Any(d => d.IRQActive);
         }
     }
 }

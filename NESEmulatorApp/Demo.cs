@@ -84,10 +84,10 @@ namespace NESEmulatorApp
 
             //string romfile = "tests\\smb_2.nes";
             //string romfile = "tests\\smb2.nes";
-            //string romfile = "tests\\smb3.nes";
+            string romfile = "tests\\smb3.nes";
             //string romfile = "tests\\capt_america.nes";
             //string romfile = "tests\\Abadox.nes";
-            string romfile = "tests\\BurgerTime.nes";
+            //string romfile = "tests\\BurgerTime.nes";
             //string romfile = "tests\\ice_climber.nes";
             //string romfile = "tests\\pacman-namco.nes";
             //string romfile = "tests\\ducktales.nes";
@@ -238,7 +238,11 @@ namespace NESEmulatorApp
                     break;
 
                 case Key.R:
+                    bool wasRunning = runEmulation;
+                    runEmulation = false;
                     nesBus.Reset();
+                    nesBus.PPU.FrameComplete = false;
+                    runEmulation = wasRunning;
                     break;
 
                 case Key.P:
@@ -250,10 +254,6 @@ namespace NESEmulatorApp
                     {
                         nesBus.clock();
                     } while (!nesBus.PPU.FrameComplete);
-                    do
-                    {
-                        nesBus.clock();
-                    } while (!nesBus.CPU.isComplete());
                     nesBus.PPU.FrameComplete = false;
                     break;
 
@@ -313,13 +313,13 @@ namespace NESEmulatorApp
                 }
             }
 
-            pge.DrawString(280, 2, $"FPS: {_fps}", Pixel.WHITE);
+            pge.DrawString(360, 2, $"FPS: {_fps}", Pixel.WHITE);
 
             // Draw rendered output
             pge.DrawSprite(0, 0, nesBus.PPU.GetScreen(), 1);
 
-            pge.DrawString(0, 245, "X, Z - A, B", Pixel.WHITE);
-            pge.DrawString(0, 260, "A, S - START, SELECT", Pixel.WHITE);
+            pge.DrawString(0, 265, "X, Z - A, B", Pixel.WHITE);
+            pge.DrawString(0, 280, "A, S - START, SELECT", Pixel.WHITE);
 
             // Draw Ram Page 0x00
             //DrawRam(2, 2, 0x0000, 16, 16);

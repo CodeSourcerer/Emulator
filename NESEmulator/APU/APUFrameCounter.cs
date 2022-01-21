@@ -10,11 +10,12 @@ namespace NESEmulator.APU
     public enum SequenceMode { FourStep, FiveStep }
     public enum SequenceAction { QuarterFrame, HalfFrame, Interrupt }
 
-    public class APUFrameCounter
+    public class APUFrameCounter : IInterruptingDevice
     {
         private static ILog Log = LogManager.GetLogger(typeof(APUFrameCounter));
 
         public bool InterruptInhibit { get; set; }
+        public bool IRQActive { get; set; }
 
         public bool FrameInterrupt;
 
@@ -107,6 +108,7 @@ namespace NESEmulator.APU
                                 if (!InterruptInhibit)
                                 {
                                     FrameInterrupt = true;
+                                    IRQActive = true;
 #if DEBUG_FRAME_COUNTER
                                     Log.Debug($"[_clockCounter={_clockCounter}] Set Frame Interrupt");
 #endif

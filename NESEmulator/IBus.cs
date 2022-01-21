@@ -7,5 +7,7 @@ namespace NESEmulator
         void Write(ushort addr, byte data);
         void Reset();
         void PowerOn();
+
+        bool IsDeviceAssertingIRQ();
     }
 }

@@ -7,7 +7,7 @@ using log4net;
 
 namespace NESEmulator
 {
-    public class Cartridge : InterruptingBusDevice
+    public class Cartridge : IInterruptingDevice, BusDevice
     {
         private static readonly ILog Log = LogManager.GetLogger(typeof(Cartridge));
 
@@ -46,6 +46,7 @@ namespace NESEmulator
         public ulong ThisClockCycle { get; private set; }
         public bool HasBusConflicts { get => mapper.HasBusConflicts; }
         public bool UsesScanlineCounter { get => mapper.HasScanlineCounter; }
+        public bool IRQActive { get => (mapper is IInterruptingDevice) ? ((IInterruptingDevice)mapper).IRQActive : false; }
 
         private NESBus _bus;
 
@@ -57,8 +58,6 @@ namespace NESEmulator
             PRGROM = new byte[32 * 1024];
             PRGRAM = new byte[32 * 1024];
         }
-
-        public event InterruptingDeviceHandler RaiseInterrupt;
 
         #region Bus Interface
         /// <summary>
@@ -283,12 +282,6 @@ namespace NESEmulator
 
             if (mapper != null)
                 ImageValid = true;
-        }
-
-        public void Mapper_InvokeInterrupt(object sender, InterruptEventArgs e)
-        {
-            //Log.Debug("Interrupt invoked from mapper");
-            RaiseInterrupt.Invoke(sender, e);
         }
     }
 }

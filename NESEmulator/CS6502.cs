@@ -42,11 +42,11 @@ namespace NESEmulator
         N = (1 << 7)
     }
 
-    public class CS6502 : InterruptableBusDevice
+    public class CS6502 : BusDevice
     {
         private static readonly ILog Log = LogManager.GetLogger(typeof(CS6502));
 
-        public override BusDeviceType DeviceType { get { return BusDeviceType.CPU; } }
+        public BusDeviceType DeviceType { get { return BusDeviceType.CPU; } }
 
         private List<Instruction> opcode_lookup;
         private IBus bus;
@@ -78,6 +78,10 @@ namespace NESEmulator
 
         private const string STATE_ADDR_MODE_COMPLETED_CYCLE = "opcode_start_cycle";
         #endregion // Emulator vars
+
+        #region Debugging
+        public bool ServicingIRQ { get => _irqServicing; }
+        #endregion // Debugging
 
         #region Well-Known Addresses
 
@@ -141,28 +145,6 @@ namespace NESEmulator
         public void SignalIRQ() => _irqPending = true;
         public void ClearIRQ() => _irqPending = false;
 
-        public override void HandleInterrupt(object sender, InterruptEventArgs e)
-        {
-            //if (!(sender is CS2A03) && !(sender is CS2C02 && e.Interrupt == InterruptType.NMI))
-            //    Log.Debug($"Handling {e.Interrupt} from {sender}");
-            switch (e.Interrupt)
-            {
-                case InterruptType.NMI:
-                    _nmiPending = true;
-                    break;
-
-                case InterruptType.IRQ:
-                    _irqPending = true;
-                    //Log.Debug($"[{clock_count}] IRQ signal received");
-                    break;
-
-                case InterruptType.CLEAR_IRQ:
-                    _irqPending = false;
-                    //Log.Debug($"[{clock_count}] Clear IRQ signal received");
-                    break;
-            }
-        }
-
         public void ConnectBus(IBus bus)
         {
             this.bus = bus;
@@ -190,9 +172,11 @@ namespace NESEmulator
         /// memory to start executing from. Typically the programmer would set the value
         /// at location 0xFFFC at compile time.
         /// </remarks>
-        public override void Reset()
+        public void Reset()
         {
             // Reset DMA
+            cycles   = 0;
+            _instCycleCount = 0;
             _dmaAddr = 0;
             _dmaData = 0;
             _dmaPage = 0;
@@ -224,7 +208,7 @@ namespace NESEmulator
             clock_count = 0;
         }
 
-        public override void PowerOn()
+        public void PowerOn()
         {
             // https://wiki.nesdev.org/w/index.php?title=CPU_power_up_state
             // "P = $34"
@@ -271,6 +255,7 @@ namespace NESEmulator
 
             if (cycles == 0)
             {
+                //Log.Debug($"[{clock_count}] Servicing IRQ");
                 _irqVector = ADDR_IRQ;
                 if (_nmiPending)
                 {
@@ -279,7 +264,6 @@ namespace NESEmulator
                 }
                 // IRQ cycles
                 _instCycleCount = 7;
-                //_irqServicing = true;
                 instr_state.Clear();
             }
             else if (cycles == 2)
@@ -324,23 +308,9 @@ namespace NESEmulator
             else if (cycles == 6)
             {
                 ushort hi = read((ushort)(addr_abs + 1));
-                // NOTE: It is my understanding that on the original hardware, the vector address
-                // can in the middle of this instruction get hijacked by NMIs and point the PC to the
-                // NMI handler. We do not do cycle-by-cycle emulation currently, so this cannot happen
-                // at this time. It can possibly be done with our method with a little refactoring though....
                 pc = (ushort)((hi << 8) | instr_state_ushort["lo"]);
                 _irqServicing = false;
             }
-
-            //if (_nmiPending && pollForIRQ(true) && cycles < 5)
-            //{
-            //    // An NMI has hijacked the IRQ/BRK vector. Set PC to NMI vector.
-            //    addr_abs = ADDR_NMI;
-            //    ushort lo = read(addr_abs);
-            //    ushort hi = read((ushort)(addr_abs + 1));
-            //    pc = (ushort)((hi << 8) | lo);
-            //}
-
         }
 
         /// <summary>
@@ -404,7 +374,7 @@ namespace NESEmulator
         private bool pollForIRQ(bool midInstructionCycle = false)
         {
             // OMG!! I know you don't want to be interrupted, Mr. CPU - but I JUST asked for an IRQ!!
-            if (getFlag(FLAGS6502.I) == 1 && _irqPending && _irqDisablePending)
+            if (getFlag(FLAGS6502.I) == 1 && bus.IsDeviceAssertingIRQ() && _irqDisablePending)
             {
                 if (!midInstructionCycle)
                     _irqDisablePending = false;
@@ -413,7 +383,7 @@ namespace NESEmulator
             }
             else if (getFlag(FLAGS6502.I) == 0)
             {
-                if (_irqPending && _irqEnableLatency == 0)
+                if (bus.IsDeviceAssertingIRQ() && _irqEnableLatency == 0)
                 {
                     return true;
                 }
@@ -446,14 +416,14 @@ namespace NESEmulator
         /// the instruction. When it reaches 0, the instruction is complete, and
         /// the next one is ready to be executed.
         /// </remarks>
-        public override void Clock(ulong clockCounter)
+        public void Clock(ulong clockCounter)
         {
             if (clockCounter % 3 != 0)
                 return;
 
             clock_count++;
 
-            // Read in another code-base that instructions don't start executing until after cpu cycles, so here we go.
+            // Read in another code-base that instructions don't start executing until after 7 cpu cycles, so here we go.
             if (clock_count < 8) return;
 
             if (DMATransfer)
@@ -743,6 +713,7 @@ namespace NESEmulator
         {
             if (clockCounter % 6 == 0)
             {
+                Log.Debug($"[{clock_count}] Reading byte for DMC");
                 ExternalMemoryReader.Buffer = read(ExternalMemoryReader.MemoryPtr);
                 ExternalMemoryReader.BufferReady = true;
                 //this.cycles = ExternalMemoryReader.CyclesToComplete;
@@ -784,13 +755,13 @@ namespace NESEmulator
 
         #region Bus Methods
 
-        public override bool Write(ushort addr, byte data)
+        public bool Write(ushort addr, byte data)
         {
             // Ignore since we call BUS' Write(), which calls this.
             return false;
         }
 
-        public override bool Read(ushort addr, out byte data, bool readOnly = false)
+        public bool Read(ushort addr, out byte data, bool readOnly = false)
         {
             // Ignore since we call BUS' Read(), which calls this.
             data = 0;

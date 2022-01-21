@@ -9,7 +9,7 @@ namespace NESEmulator
     /// <summary>
     /// This represents the NES' Picture Processing Unit (PPU) 2C02
     /// </summary>
-    public class CS2C02 : InterruptingBusDevice
+    public class CS2C02 : IInterruptingDevice, BusDevice
     {
         private static readonly ILog Log = LogManager.GetLogger(typeof(CS2C02));
 
@@ -30,12 +30,15 @@ namespace NESEmulator
 
         public BusDeviceType DeviceType => BusDeviceType.PPU;
 
-        public event InterruptingDeviceHandler RaiseInterrupt;
+        //public event InterruptingDeviceHandler RaiseInterrupt;
+        public bool IRQActive { get; set; }
 
         public event EventHandler DrawSprites;
 
         private ulong _currentClockCycle;
 
+        // TODO: This is connected to the PPU's bus, so I think it would be better
+        // to make this a BusDevice and attach to _ppuBus.
         private NESBus _nesBus;
 
         private PPUStatus _status;
@@ -51,7 +54,7 @@ namespace NESEmulator
         private byte _addressLatch;
         private byte _ppuDataBuffer;
 
-        private Sprite _screen = new Sprite(SCREEN_WIDTH, SCREEN_HEIGHT);
+        private Sprite _screen;
 
         // Pixel "dot" position information
         private short  _scanline;
@@ -71,8 +74,6 @@ namespace NESEmulator
         private byte[][] _tblName = new byte[2][];
         private Sprite[] _nameTable = { new Sprite(SCREEN_WIDTH, SCREEN_HEIGHT), new Sprite(SCREEN_WIDTH, SCREEN_HEIGHT) };
 
-        // TODO: This is connected to the PPU's bus, so I think it would be better
-        // to make this a BusDevice and attach to _ppuBus.
         private byte[][] _tblPattern = new byte[2][];
         private Sprite[] _patternTable = { new Sprite(128, 128), new Sprite(128, 128) };
 
@@ -104,10 +105,14 @@ namespace NESEmulator
         private List<PPUCycleNode>[] _cycleOperations;
         private Random _random;
 
+        // Debugging
+        private Dictionary<int, PPUEvent> _ppuFrameEvents = new Dictionary<int, PPUEvent>();
+        private bool _drawFullFrame = true;
+
         public CS2C02()
         {
             _random = new Random();
-
+            _screen = new Sprite(_drawFullFrame ? (ushort)(CYCLES - 1) : SCREEN_WIDTH, _drawFullFrame ? (ushort)(SCANLINES - 1) : SCREEN_HEIGHT);
             _status = new PPUStatus();
             // https://wiki.nesdev.org/w/index.php?title=PPU_power_up_state
             _status.reg.SetBit(7, true); // VBL set
@@ -449,6 +454,27 @@ namespace NESEmulator
 
             if (addr >= ADDR_PPU_MIN && addr <= ADDR_PPU_MAX)
             {
+                int dot = _scanline * CYCLES + _cycle;
+                Pixel debugColor = (addr & 0x0007) switch
+                {
+                    0x0000 => Pixel.RED,
+                    0x0001 => new Pixel(142, 51, 255, 255),
+                    0x0003 => new Pixel(255, 132, 224, 255),
+                    0x0004 => Pixel.YELLOW,
+                    0x0005 => Pixel.GREEN,
+                    0x0006 => Pixel.BLUE,
+                    0x0007 => Pixel.DARK_RED
+                };
+                _ppuFrameEvents[dot] = new PPUEvent()
+                {
+                    EventType = PPUEventType.PPURegisterWrite,
+                    Address = addr,
+                    Data = data,
+                    Scanline = _scanline,
+                    Cycle = _cycle,
+                    Color = debugColor
+                };
+
                 addr &= 0x0007;
                 dataWritten = true;
                 _prevWrittenValue = data;
@@ -460,7 +486,6 @@ namespace NESEmulator
                         // https://wiki.nesdev.org/w/index.php?title=PPU_power_up_state
                         // TODO: This should only apply after a RESET - the way I wrote this was after power on. Oops.
                         //if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
-
 #if DEBUG_VBL
                         if (((PPUControl)data).EnableNMI != _control.EnableNMI)
                         {
@@ -469,10 +494,12 @@ namespace NESEmulator
                             Log.Debug($"[{_currentClockCycle / 3}] {nmiEnabled} NMI");
                         }
 #endif
+                        bool nmiPreviouslyEnabled = _control.EnableNMI;
                         _control.reg = data;
                         _tram_addr.NameTableX = _control.NameTableX;
                         _tram_addr.NameTableY = _control.NameTableY;
-                        checkAndRaiseNMI();
+                        if (!nmiPreviouslyEnabled)
+                            checkAndRaiseNMI();
 #if DEBUG_PPU
                         Log.Debug($"[PPU: {_currentClockCycle}] PPUCTRL written. Nametable = {_control.reg & 3}");
 #endif
@@ -509,7 +536,6 @@ namespace NESEmulator
                         // https://wiki.nesdev.org/w/index.php?title=PPU_power_up_state
                         // TODO: This should only apply after a RESET - the way I wrote this was after power on. Oops.
                         //if (_currentClockCycle <= WARMUP_CYCLES_AFTER_RESET) break;
-
                         if (_addressLatch == 0)
                         {
                             // First write to scroll register contains X offset in pixel space which we split into
@@ -547,8 +573,8 @@ namespace NESEmulator
                             // Writing to the PPU is unwise during rendering as the PPU will maintain the vram address
                             // automatically while rendering the scanline position.
                             _tram_addr.reg = (ushort)((_tram_addr.reg & 0xFF00) | data);
-                            _vramWritePending = true;
-                            //_vram_addr = _tram_addr;
+                            //_vramWritePending = true;
+                            _vram_addr = _tram_addr;
                             _addressLatch = 0;
                         }
                         break;
@@ -637,15 +663,15 @@ namespace NESEmulator
                 }
             }
 
-            if ((addr & 0x1000) > 0)
-            {
-                if (_currentClockCycle - _lastA12HighCycle >= 15)
-                {
-                    //Console.WriteLine("A12 0 -> 1");
-                    DrawSprites?.Invoke(this, EventArgs.Empty);
-                }
-                _lastA12HighCycle = _currentClockCycle;
-            }
+            //if ((addr < 0x3000) && (addr & 0x1000) > 0)
+            //{
+            //    if (_currentClockCycle - _lastA12HighCycle >= 15)
+            //    {
+            //        //Log.Debug($"[PPU: {_currentClockCycle}] [_framCounter={_frameCounter}] [_scanline={_scanline}] [_cycle={_cycle}] [addr={addr:X4}] A12 0 -> 1");
+            //        DrawSprites?.Invoke(this, EventArgs.Empty);
+            //    }
+            //    _lastA12HighCycle = _currentClockCycle;
+            //}
 
             return data;
         }
@@ -729,15 +755,15 @@ namespace NESEmulator
             _currentClockCycle = clockCounter;
 
             // Apparently a 3 dot delay when writing an address? 
-            if (_vramWritePending)
-            {
-                if (_vramWriteDelay-- == 0)
-                {
-                    _vramWritePending = false;
-                    _vramWriteDelay = 3;
-                    _vram_addr = _tram_addr;
-                }
-            }
+            //if (_vramWritePending)
+            //{
+            //    if (_vramWriteDelay-- == 0)
+            //    {
+            //        _vramWritePending = false;
+            //        _vramWriteDelay = 3;
+            //        _vram_addr = _tram_addr;
+            //    }
+            //}
 
             //Log.Debug($"[PPU: {clockCounter}] [_scanline={_scanline}] [_cycle={_cycle}] [_frameCounter={_frameCounter}]");
             if (_cycle == 0 && _scanline == 0)
@@ -745,6 +771,7 @@ namespace NESEmulator
                 // Should be 89,342 or 89,341
                 //Log.Debug($"Frame took {clockCounter - _firstFrameCycle} PPU clocks");
                 _firstFrameCycle = clockCounter;
+                _ppuFrameEvents.Clear();
             }
             // As we progress through scanlines and cycles, the PPU is effectively
             // a state machine going through the motions of fetching background 
@@ -779,6 +806,10 @@ namespace NESEmulator
                         // we can work with while the scanline scans the row.
                         evaluateVisibleSpritesForScanline();
                     }
+                }
+                if (_cycle == 290)
+                {
+                    DrawSprites?.Invoke(this, EventArgs.Empty);
                 }
 
                 //if (_cycle > 256 && _cycle <= 320)
@@ -825,7 +856,7 @@ namespace NESEmulator
                 //}
 
                 // On _scanline 261, this will get skipped because the cycle operation will have advanced us to the next frame!
-                if (_cycle == 340)
+                if (_cycle == 338)
                 {
                     for (byte currSpr = 0; currSpr < 8; currSpr++)
                     {
@@ -1008,19 +1039,46 @@ namespace NESEmulator
 
             // Now we have a final pixel color, and a palette for this cycle of the current scanline. Let's at
             // long last, draw it
-            if ((_cycle - 1) >= 0 && (_scanline >= 0 && _scanline <= 239))
+            if (!_drawFullFrame)
             {
-                _screen.SetPixel((uint)(_cycle - 1), (ushort)_scanline, GetColorFromPaletteRam(palette, pixel));
-#if SPRITE_ZERO_DEBUG
-                //if (_spriteZeroBeingRendered)
-                //{
-                //    _screen.SetPixel((uint)(_cycle - 1), (ushort)_scanline, Pixel.YELLOW);
-                //}
-                if (_spriteZeroHitPossible && _spriteZeroBeingRendered && _status.SpriteZeroHit)
+                if ((_cycle - 1) >= 0 && (_scanline >= 0 && _scanline <= 239))
                 {
-                    _screen.SetPixel((uint)(_cycle - 1), (ushort)_scanline, Pixel.MAGENTA);
-                }
+                    _screen.SetPixel((uint)(_cycle - 1), (ushort)_scanline, GetColorFromPaletteRam(palette, pixel));
+                    if (_ppuFrameEvents.TryGetValue(_scanline * CYCLES + _cycle, out PPUEvent ppuEvent))
+                    {
+                        _screen.SetPixel((uint)(_cycle - 1), (ushort)_scanline, ppuEvent.Color);
+                    }
+#if SPRITE_ZERO_DEBUG
+                    //if (_spriteZeroBeingRendered)
+                    //{
+                    //    _screen.SetPixel((uint)(_cycle - 1), (ushort)_scanline, Pixel.YELLOW);
+                    //}
+                    if (_spriteZeroHitPossible && _spriteZeroBeingRendered && _status.SpriteZeroHit)
+                    {
+                        _screen.SetPixel((uint)(_cycle - 1), (ushort)_scanline, Pixel.MAGENTA);
+                    }
 #endif
+                }
+            }
+            else
+            {
+                _screen.SetPixel((uint)_cycle, (ushort)_scanline, GetColorFromPaletteRam(palette, pixel));
+                if (_ppuFrameEvents.TryGetValue(_scanline * CYCLES + _cycle, out PPUEvent ppuEvent))
+                {
+                    _screen.SetPixel((uint)(_cycle - 1), (ushort)_scanline, ppuEvent.Color);
+                }
+                if (_nesBus.CPU.ServicingIRQ)
+                {
+                    // Add event to inspect later.
+                    _ppuFrameEvents[_scanline * CYCLES + _cycle] = new PPUEvent()
+                    {
+                        EventType = PPUEventType.IRQ,
+                        Scanline = _scanline,
+                        Cycle = _cycle,
+                        Color = new Pixel(255, 130, 36, 255)
+                    };
+                    _screen.SetPixel((uint)(_cycle - 1), (ushort)_scanline, new Pixel(255, 130, 36, 255));
+                }
             }
 
             advanceCycle();
@@ -1477,8 +1535,8 @@ namespace NESEmulator
 
         private void resetSpriteDataForScanline()
         {
-            foreach (var sl in SecondaryOAM)
-                sl.Fill(0xFF);
+            for (int i = 0; i < 8; i++)
+                SecondaryOAM[i].Fill(0xFF);
 
             _spriteCurrCount = 0;
 

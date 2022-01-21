@@ -6,7 +6,7 @@ using NESEmulator.Util;
 
 namespace NESEmulator.Channels
 {
-    public class DMCChannel : Channel
+    public class DMCChannel : Channel, IInterruptingDevice
     {
         private const ushort ADDR_FLAGSANDRATE  = 0x4010;
         private const ushort ADDR_DIRECTLOAD    = 0x4011;
@@ -35,6 +35,7 @@ namespace NESEmulator.Channels
             }
         }
 
+        public bool IRQActive { get; set; }
         public byte FlagsAndRate { get; set; }
 
         public bool IRQEnable { get; set; }
@@ -121,6 +122,7 @@ namespace NESEmulator.Channels
         /// <param name="clockCycles"></param>
         public void Clock(ulong clockCycles)
         {
+            return;
             MemoryReader memReader = _apu.GetMemoryReader();
             if (memReader.BufferReady)
                 _sampleBuffer = memReader.Buffer;
@@ -129,7 +131,8 @@ namespace NESEmulator.Channels
             {
                 if (!_interruptOccurred)
                 {
-                    _apu.IRQ();
+                    //_apu.IRQ();
+                    IRQActive = true;
                     _interruptOccurred = true;
                     //Log.Debug("DMC IRQ");
                 }
@@ -163,7 +166,8 @@ namespace NESEmulator.Channels
                     if (!IRQEnable)
                     {
                         InterruptFlag = false;
-                        _apu.ClearIRQ();
+                        //_apu.ClearIRQ();
+                        IRQActive = false;
                         //Log.Debug("DMC IRQ Disabled");
                     }
                     //Log.Debug($"DMC Channel written: [IRQEnable={IRQEnable}] [Loop={Loop}] [RateIndex={RateIndex:X2}]");
