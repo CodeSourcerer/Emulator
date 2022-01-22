@@ -27,6 +27,8 @@ namespace NESEmulator
             Controller2 = 1
         }
 
+        private int controllerNum;
+        private bool strobe = false;
         public byte[] ControllerState { get; private set; }
         private byte[] _controller_state;
 
@@ -38,7 +40,11 @@ namespace NESEmulator
 
         public void Clock(ulong clockCounter)
         {
-            
+            if (strobe)
+            {
+                _controller_state[0] = ControllerState[0];
+                _controller_state[1] = ControllerState[1];
+            }
         }
 
         public bool Read(ushort addr, out byte data, bool readOnly = false)
@@ -49,11 +55,22 @@ namespace NESEmulator
             if (addr == 0x4016 || addr == 0x4017)
             {
                 int controllerNum = addr & 0x0001;
-                // We OR with 0x40 to support the "open bus behavior" with the controller, required for Paper Boy
-                data = (byte)(0x40 | ((_controller_state[controllerNum] & 0x80) > 0 ? 1 : 0));
-                if (!readOnly)
-                    _controller_state[controllerNum] <<= 1;
-                // _controller_state[controllerNum] |= 0x01;
+
+                if (controllerNum == 1)
+                {
+                    // show controller 2 as disconnected
+                    data = 0x40;
+                }
+                else
+                {
+                    // We OR with 0x40 to support the "open bus behavior" with the controller, required for Paper Boy
+                    data = (byte)(0x40 | ((_controller_state[controllerNum] & 0x80) > 0 ? 1 : 0));
+                    if (!readOnly)
+                    {
+                        _controller_state[controllerNum] <<= 1;
+                        _controller_state[controllerNum] |= 1;
+                    }
+                }
                 dataRead = true;
             }
 
@@ -64,10 +81,9 @@ namespace NESEmulator
         {
             bool dataWritten = false;
 
-            if (addr == 0x4016 || addr == 0x4017)
+            if (addr == 0x4016)
             {
-                int controllerNum = addr & 0x0001;
-                _controller_state[controllerNum] = ControllerState[controllerNum];
+                strobe = (data & 1) == 1;
                 //dataWritten = true;
             }
 
